@@ -1,0 +1,10 @@
+{
+  "name": "p-and-l-root",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npm --prefix Revenue run dev",
+    "build": "npm --prefix Revenue run build",
+    "preview": "npm --prefix Revenue run preview"
+  }
+}

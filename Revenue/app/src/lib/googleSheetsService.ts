@@ -1,0 +1,515 @@
+import type { Project, ProjectDraft, PaymentType, PhaseType } from "./models";
+import { computeAttpDetails } from "./mockData";
+
+export interface GoogleSheetConfig {
+  sheetUrl: string;
+  sheetName?: string;
+  autoSync?: boolean;
+  lastSyncedAt?: string;
+}
+
+export interface GoogleSheetCollegeItem {
+  id: string;
+  college_name: string;
+  project_code: string;
+  college_code?: string;
+  academic_year: string;
+  passing_year: string;
+  course_stream?: string;
+  domain_of_training?: string;
+  type_of_project?: string;
+  mou_signed_date?: string;
+  training_start_date?: string;
+  training_end_date?: string;
+  student_count: number;
+  cost_per_student: number;
+  total_cost_value: number;
+  gst_cost: number;
+  hours_planned: number;
+  payment_type: PaymentType;
+  attp_percentage?: string;
+  invoice_count: number;
+  additional_notes?: string;
+  raw_row?: Record<string, string>;
+}
+
+const STORAGE_CONFIG_KEY = "google_sheet_sync_config_v1";
+const STORAGE_CACHED_ITEMS_KEY = "google_sheet_cached_colleges_v1";
+
+/**
+ * Extracts Google Spreadsheet ID from a shared URL or returns the ID if already clean.
+ */
+export function extractSpreadsheetId(urlOrId: string): string | null {
+  if (!urlOrId) return null;
+  const trimmed = urlOrId.trim();
+
+  // If already an ID
+  if (/^[a-zA-Z0-9-_]{20,60}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Handle https://docs.google.com/spreadsheets/d/{ID}/...
+  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    return match[1];
+  }
+
+  return null;
+}
+
+/**
+ * Builds standard public Google Sheet CSV export endpoint.
+ */
+export function buildGoogleSheetCsvUrl(sheetUrlOrId: string, sheetName = ""): string {
+  const sheetId = extractSpreadsheetId(sheetUrlOrId);
+  if (!sheetId) {
+    // If it's already a direct CSV or Apps Script URL, return as is
+    return sheetUrlOrId.trim();
+  }
+
+  const base = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
+  if (sheetName && sheetName.trim()) {
+    return `${base}&sheet=${encodeURIComponent(sheetName.trim())}`;
+  }
+  return base;
+}
+
+/**
+ * Robust CSV parser that handles quotes, line breaks inside cells, and commas.
+ */
+export function parseCSV(text: string): string[][] {
+  const p: string[][] = [];
+  let row: string[] = [""];
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    const next = text[i + 1];
+
+    if (c === '"') {
+      if (inQuotes && next === '"') {
+        row[row.length - 1] += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (c === "," && !inQuotes) {
+      row.push("");
+    } else if ((c === "\r" || c === "\n") && !inQuotes) {
+      if (c === "\r" && next === "\n") {
+        i++;
+      }
+      p.push(row);
+      row = [""];
+    } else {
+      row[row.length - 1] += c;
+    }
+  }
+
+  if (row.length > 1 || (row.length === 1 && row[0] !== "")) {
+    p.push(row);
+  }
+
+  return p.filter((r) => r.some((cell) => cell.trim().length > 0));
+}
+
+/**
+ * Cleans numeric strings (removes ₹, $, commas, spaces)
+ */
+function parseCleanNumber(val: any, fallback = 0): number {
+  if (val === null || val === undefined) return fallback;
+  const str = String(val).replace(/[₹$,\s%]/g, "").trim();
+  const num = parseFloat(str);
+  return isNaN(num) ? fallback : num;
+}
+
+/**
+ * Normalizes dates to YYYY-MM-DD
+ */
+function normalizeDate(raw: any): string {
+  if (!raw) return "";
+  const str = String(raw).trim();
+  if (!str) return "";
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{4})$/);
+  if (dmyMatch) {
+    const [, day, month, year] = dmyMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+
+  // Try Date.parse
+  try {
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+  } catch {
+    // Ignore error
+  }
+
+  return str;
+}
+
+export const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw/edit?usp=sharing";
+
+/**
+ * Normalizes payment types (FNF, ATP, ATTP, EMI) from sheet notations like AT, AP, ATT, ATTT, EMI-8
+ */
+function normalizePaymentType(raw: any): PaymentType {
+  const str = String(raw || "").toUpperCase().trim();
+  if (str.includes("FNF") || str.includes("FULL") || str === "100") return "FNF";
+  if (str.startsWith("EMI")) return "EMI";
+  if (str.includes("ATTP") || str.includes("ATTT") || str.includes("ATT") || str.includes("MILESTONE")) return "ATTP";
+  if (str === "AT" || str === "AP" || str.includes("ATP")) return "ATP";
+  return "ATP";
+}
+
+/**
+ * Matches header name loosely against potential column headers
+ */
+function findColumnIndex(headers: string[], ...candidates: string[]): number {
+  const normHeaders = headers.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  for (const cand of candidates) {
+    const normCand = cand.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const idx = normHeaders.findIndex((h) => h === normCand || h.includes(normCand) || normCand.includes(h));
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+/**
+ * Converts parsed spreadsheet rows into clean GoogleSheetCollegeItem objects
+ * fetching ONLY what is needed for Add College & Update College forms!
+ */
+export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[] {
+  if (!rows || rows.length < 2) return [];
+
+  const headers = rows[0].map((h) => h.trim());
+
+  // Find column indices based on user's exact spreadsheet headers
+  const colProjCode = findColumnIndex(headers, "project code", "projectcode", "college project", "code");
+  const colCollegeName = findColumnIndex(headers, "name of the college", "college name", "collegename", "name");
+  const colCollegeCode = findColumnIndex(headers, "college code", "collegecode");
+  const colYear = findColumnIndex(headers, "year", "passing year", "batch year");
+  const colCourse = findColumnIndex(headers, "course/stream", "course", "stream", "department");
+  const colDomain = findColumnIndex(headers, "domain of training", "domain", "training domain");
+  const colTypeProj = findColumnIndex(headers, "type of project", "project type");
+  const colAcademicYear = findColumnIndex(headers, "academic year", "academicyear");
+  const colMouDate = findColumnIndex(headers, "mou signed date", "mou date", "mou signed");
+  const colStartDate = findColumnIndex(headers, "training start date", "start date", "starting date");
+  const colEndDate = findColumnIndex(headers, "training end date", "end date");
+  const colStudents = findColumnIndex(headers, "no of students", "students", "student count", "no. of students");
+  const colCostPerStudent = findColumnIndex(headers, "cost per student", "cost/student", "student cost");
+  const colTotalValue = findColumnIndex(headers, "total contract value", "total cost value", "contract value", "total value");
+  const colGstValue = findColumnIndex(headers, "total contract value (incl gst)", "total contract value (incl. gst)", "gst cost", "total with gst");
+  const colHoursPlanned = findColumnIndex(headers, "hrs/batch", "hours/batch", "hours planned", "hrs planned", "hours");
+  const colPaymentType = findColumnIndex(headers, "type of payment", "payment type", "payment plan");
+  const colPaymentPct = findColumnIndex(headers, "% of payment", "percentage of payment", "payment percentage", "attp percentage");
+  const colInvoices = findColumnIndex(headers, "no of invoices", "no. of invoices", "invoice count", "invoices");
+
+  const items: GoogleSheetCollegeItem[] = [];
+
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || row.length === 0) continue;
+
+    const collegeName = (colCollegeName !== -1 ? row[colCollegeName] : row[2] || "").trim();
+    const projectCode = (colProjCode !== -1 ? row[colProjCode] : row[1] || "").trim();
+
+    // Skip empty rows
+    if (!collegeName && !projectCode) continue;
+
+    const studentCount = parseCleanNumber(colStudents !== -1 ? row[colStudents] : row[13], 0);
+    const costPerStudent = parseCleanNumber(colCostPerStudent !== -1 ? row[colCostPerStudent] : row[14], 0);
+    
+    let totalValue = parseCleanNumber(colTotalValue !== -1 ? row[colTotalValue] : row[15], 0);
+    if (totalValue === 0 && studentCount > 0 && costPerStudent > 0) {
+      totalValue = studentCount * costPerStudent;
+    }
+
+    let gstValue = parseCleanNumber(colGstValue !== -1 ? row[colGstValue] : row[16], 0);
+    if (gstValue === 0 && totalValue > 0) {
+      gstValue = totalValue * 1.18;
+    }
+
+    const rawYear = (colYear !== -1 ? row[colYear] : row[4] || "").trim();
+    let passingYear = "2026";
+    if (rawYear.match(/^\d{4}$/)) {
+      passingYear = rawYear;
+    } else if (rawYear.toLowerCase().includes("202")) {
+      const ym = rawYear.match(/202\d/);
+      if (ym) passingYear = ym[0];
+    } else if (rawYear.includes("1st")) {
+      passingYear = "2027";
+    } else if (rawYear.includes("2nd")) {
+      passingYear = "2026";
+    } else if (rawYear.includes("3rd")) {
+      passingYear = "2025";
+    } else if (rawYear.includes("4th")) {
+      passingYear = "2024";
+    }
+
+    const rawAcadYear = (colAcademicYear !== -1 ? row[colAcademicYear] : row[8] || "").trim();
+    let academicYear = "4th Year";
+    if (rawAcadYear) {
+      if (rawAcadYear.toLowerCase().includes("1st")) academicYear = "1st Year";
+      else if (rawAcadYear.toLowerCase().includes("2nd")) academicYear = "2nd Year";
+      else if (rawAcadYear.toLowerCase().includes("3rd")) academicYear = "3rd Year";
+      else if (rawAcadYear.toLowerCase().includes("4th")) academicYear = "4th Year";
+      else if (rawYear && (rawYear.includes("1st") || rawYear.includes("2nd") || rawYear.includes("3rd") || rawYear.includes("4th"))) {
+        academicYear = `${rawYear} Year`;
+      } else {
+        academicYear = rawAcadYear;
+      }
+    }
+
+    const startDate = normalizeDate(colStartDate !== -1 ? row[colStartDate] : row[11]);
+    const endDate = normalizeDate(colEndDate !== -1 ? row[colEndDate] : row[12]);
+    const hoursPlanned = parseCleanNumber(colHoursPlanned !== -1 ? row[colHoursPlanned] : row[17], 40);
+
+    const rawPayType = colPaymentType !== -1 ? row[colPaymentType] : row[18];
+    const paymentType = normalizePaymentType(rawPayType);
+    
+    const rawPct = (colPaymentPct !== -1 ? row[colPaymentPct] : row[19] || "").trim();
+    let attpPercentage = "50%";
+    if (rawPct.includes("25")) attpPercentage = "25%";
+    else if (rawPct.includes("33") || rawPct.includes("30-30-40") || rawPct.includes("20-40-40")) attpPercentage = "33.34%";
+    else if (rawPct.includes("50")) attpPercentage = "50%";
+    else if (rawPct.includes("75")) attpPercentage = "75%";
+    else if (rawPct.includes("100")) attpPercentage = "100%";
+    else if (rawPct) {
+      attpPercentage = rawPct.includes("%") ? rawPct : `${rawPct}%`;
+    }
+
+    let invoiceCount = parseCleanNumber(colInvoices !== -1 ? row[colInvoices] : row[20], 0);
+    
+    // If EMI with number like EMI 12, extract 12
+    if (paymentType === "EMI" && invoiceCount <= 0) {
+      const emiMatch = String(rawPayType || rawPct).match(/\d+/);
+      invoiceCount = emiMatch ? parseInt(emiMatch[0], 10) : 5;
+    } else if (invoiceCount <= 0) {
+      if (paymentType === "FNF") invoiceCount = 1;
+      else if (paymentType === "ATP") invoiceCount = 2;
+      else if (paymentType === "ATTP") {
+        invoiceCount = computeAttpDetails(attpPercentage).invoiceCount;
+      } else if (paymentType === "EMI") {
+        invoiceCount = 5;
+      }
+    }
+
+    const courseStream = colCourse !== -1 ? (row[colCourse] || "").trim() : "";
+    const domain = colDomain !== -1 ? (row[colDomain] || "").trim() : "";
+    const typeProj = colTypeProj !== -1 ? (row[colTypeProj] || "").trim() : "";
+    const mouDate = colMouDate !== -1 ? normalizeDate(row[colMouDate]) : "";
+    const collegeCode = colCollegeCode !== -1 ? (row[colCollegeCode] || "").trim() : "";
+
+    // Build extra notes from remaining metadata
+    const extraNotesArr: string[] = [];
+    if (courseStream) extraNotesArr.push(`Course/Stream: ${courseStream}`);
+    if (domain) extraNotesArr.push(`Training Domain: ${domain}`);
+    if (typeProj) extraNotesArr.push(`Project Type: ${typeProj}`);
+    if (mouDate) extraNotesArr.push(`MOU Signed: ${mouDate}`);
+
+    const id = `gsheet-${projectCode || collegeName.toLowerCase().replace(/[^a-z0-9]/g, "-") || r}`;
+
+    items.push({
+      id,
+      college_name: collegeName || `College ${r}`,
+      project_code: projectCode || `PRJ-${String(r).padStart(3, "0")}`,
+      college_code: collegeCode,
+      academic_year: academicYear,
+      passing_year: passingYear,
+      course_stream: courseStream,
+      domain_of_training: domain,
+      type_of_project: typeProj,
+      mou_signed_date: mouDate,
+      training_start_date: startDate,
+      training_end_date: endDate,
+      student_count: studentCount,
+      cost_per_student: costPerStudent,
+      total_cost_value: totalValue,
+      gst_cost: gstValue,
+      hours_planned: hoursPlanned,
+      payment_type: paymentType,
+      attp_percentage: attpPercentage,
+      invoice_count: invoiceCount,
+      additional_notes: extraNotesArr.join(" | "),
+    });
+  }
+
+  return items;
+}
+
+/**
+ * Fetches Google Sheet CSV directly via browser fetch()
+ */
+export async function fetchGoogleSheetData(sheetUrlOrId: string, sheetName = ""): Promise<GoogleSheetCollegeItem[]> {
+  const csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, sheetName);
+  
+  const response = await fetch(csvUrl, {
+    method: "GET",
+    headers: {
+      "Accept": "text/csv,text/plain,*/*",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch spreadsheet. Status: ${response.status} (${response.statusText}). Make sure the Google Sheet sharing is set to "Anyone with the link can view".`);
+  }
+
+  const csvText = await response.text();
+  const rows = parseCSV(csvText);
+  
+  if (rows.length < 2) {
+    throw new Error("Spreadsheet returned no data rows. Please verify your sheet link and tab name.");
+  }
+
+  return mapRowsToCollegeItems(rows);
+}
+
+/**
+ * Converts a GoogleSheetCollegeItem into a Project entity
+ */
+export function convertSheetItemToProject(item: GoogleSheetCollegeItem): Project {
+  return {
+    id: item.id || `proj-${Date.now()}`,
+    college_name: item.college_name,
+    project_code: item.project_code,
+    academic_year: item.academic_year,
+    passing_year: item.passing_year,
+    student_count: item.student_count,
+    cost_per_student: item.cost_per_student,
+    total_cost_value: item.total_cost_value,
+    gst_cost: item.gst_cost,
+    phases: [
+      {
+        id: `p-${item.id}-1`,
+        phase: "Phase 1",
+        startDate: item.training_start_date || new Date().toISOString().slice(0, 10),
+        endDate: item.training_end_date || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+        hoursPlanned: item.hours_planned,
+        hoursGiven: item.hours_planned,
+        trainingCost: item.total_cost_value,
+        paymentType: item.payment_type,
+        attpPercentage: item.attp_percentage,
+        invoiceCount: item.invoice_count,
+      },
+    ],
+    hours_planned: item.hours_planned,
+    hours_given: item.hours_planned,
+    training_cost: item.total_cost_value,
+    payment_type: item.payment_type,
+    attp_percentage: item.attp_percentage,
+    installment_count: item.invoice_count,
+    invoice_count: item.invoice_count,
+    invoice_raised: 0,
+    invoice_received: 0,
+    additional_notes: item.additional_notes,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Converts a GoogleSheetCollegeItem into a ProjectDraft for Add College / Step 2 & 3
+ */
+export function convertSheetItemToDraft(item: GoogleSheetCollegeItem): ProjectDraft {
+  return {
+    collegeName: item.college_name,
+    projectCode: item.project_code,
+    academicYear: item.academic_year,
+    passingYear: item.passing_year,
+    studentCount: String(item.student_count || ""),
+    costPerStudent: String(item.cost_per_student || ""),
+    totalCostValue: String(item.total_cost_value || ""),
+    gstCost: String(item.gst_cost || ""),
+    manualTotal: false,
+    manualGst: false,
+    additionalNotes: item.additional_notes || "",
+    selectedPhase: "Phase 1",
+    phaseStartDate: item.training_start_date || "",
+    phaseEndDate: item.training_end_date || "",
+    hoursPlanned: String(item.hours_planned || 40),
+    hoursGiven: String(item.hours_planned || 40),
+    trainingCost: String(item.total_cost_value || ""),
+    paymentType: item.payment_type,
+    attpPercentage: item.attp_percentage || "50%",
+    installmentCount: String(item.invoice_count || 1),
+    invoiceCount: String(item.invoice_count || 1),
+    invoiceRaised: "0",
+    phases: [
+      {
+        id: "phase-1",
+        phase: "Phase 1",
+        startDate: item.training_start_date || "",
+        endDate: item.training_end_date || "",
+        hoursPlanned: item.hours_planned || 40,
+        hoursGiven: item.hours_planned || 40,
+        trainingCost: item.total_cost_value || 0,
+        paymentType: item.payment_type,
+        attpPercentage: item.attp_percentage,
+        invoiceCount: item.invoice_count,
+      },
+    ],
+  };
+}
+
+/**
+ * LocalStorage Helpers for Google Sheet Config & Cached Items
+ */
+export function loadSavedSheetConfig(): GoogleSheetConfig {
+  const envUrl = (import.meta as any).env?.VITE_DEFAULT_GOOGLE_SHEET_URL || DEFAULT_SHEET_URL;
+  const envSheetName = (import.meta as any).env?.VITE_DEFAULT_GOOGLE_SHEET_NAME || "";
+
+  try {
+    const raw = localStorage.getItem(STORAGE_CONFIG_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        sheetUrl: parsed.sheetUrl || envUrl,
+        sheetName: parsed.sheetName || envSheetName,
+        autoSync: parsed.autoSync !== false,
+        lastSyncedAt: parsed.lastSyncedAt,
+      };
+    }
+  } catch (e) {
+    console.warn("Failed to load sheet config from storage", e);
+  }
+  return {
+    sheetUrl: envUrl,
+    sheetName: envSheetName,
+    autoSync: true,
+  };
+}
+
+export function saveSheetConfig(config: GoogleSheetConfig): void {
+  try {
+    localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(config));
+  } catch (e) {
+    console.error("Failed to save sheet config", e);
+  }
+}
+
+export function loadCachedSheetItems(): GoogleSheetCollegeItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_CACHED_ITEMS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn("Failed to load cached sheet items", e);
+  }
+  return [];
+}
+
+export function saveCachedSheetItems(items: GoogleSheetCollegeItem[]): void {
+  try {
+    localStorage.setItem(STORAGE_CACHED_ITEMS_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error("Failed to save cached sheet items", e);
+  }
+}

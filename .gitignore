@@ -1,0 +1,11 @@
+node_modules/
+dist/
+Revenue/dist/
+Revenue/node_modules/
+.env
+.env.local
+Revenue/.env
+Revenue/.env.local
+.vercel/
+Revenue/.vercel/
+*.log

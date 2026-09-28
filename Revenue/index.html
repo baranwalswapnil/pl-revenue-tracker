@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1e285d">
+  <title>Company Finance & P&L Tracking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+      --bg-app: #f4f6fb;
+      --bg-card: #ffffff;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-gradient: linear-gradient(135deg, #2563eb 0%, #4338ca 100%);
+      --hero-gradient: linear-gradient(135deg, #1e285d 0%, #2f3e9e 50%, #4c40bf 100%);
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --text-sub: #94a3b8;
+      --border-light: #e2e8f0;
+      --border-focus: #3b82f6;
+      --green: #16a34a;
+      --green-bg: #e7f7ed;
+      --green-border: #bbf7d0;
+      --amber: #b45309;
+      --amber-bg: #fef3c7;
+      --amber-border: #fde68a;
+      --blue: #1d4ed8;
+      --blue-bg: #eff6ff;
+      --blue-border: #bfdbfe;
+      --purple: #7e22ce;
+      --purple-bg: #f3e8ff;
+      --purple-border: #e9d5ff;
+      --red: #dc2626;
+      --red-bg: #fee2e2;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 18px;
+      --shadow-sm: 0 2px 6px rgba(15, 23, 42, 0.04);
+      --shadow-md: 0 6px 18px rgba(15, 23, 42, 0.06);
+      --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.09);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-sans); background: var(--bg-app); color: var(--text-main); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+    button, input, select, textarea { font-family: inherit; font-size: inherit; }
+    button { cursor: pointer; border: none; background: none; }
+    .layout-root { min-height: 100vh; display: flex; flex-direction: column; }
+    .topbar { height: 72px; background: var(--bg-card); border-bottom: 1px solid var(--border-light); position: sticky; top: 0; z-index: 50; }
+    .topbar-inner { max-width: 1340px; margin: 0 auto; padding: 0 28px; height: 100%; display: flex; align-items: center; justify-content: space-between; }
+    .brand-group { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+    .brand-logo { width: 42px; height: 42px; border-radius: var(--radius-md); background: var(--primary-gradient); display: grid; place-items: center; color: white; font-weight: 800; font-size: 20px; box-shadow: 0 4px 12px rgba(37,99,235,0.35); }
+    .brand-title { font-size: 16px; font-weight: 700; color: var(--text-main); }
+    .brand-subtitle { font-size: 11.5px; color: var(--text-muted); }
+    .back-btn-link { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--primary); background: var(--blue-bg); padding: 8px 16px; border-radius: var(--radius-md); border: 1px solid var(--blue-border); transition: 0.2s; }
+    .back-btn-link:hover { background: #dbeafe; color: #1e40af; }
+    .user-pill { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border-light); padding: 4px 12px 4px 4px; border-radius: 20px; background: white; font-size: 13.5px; font-weight: 600; }
+    .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white; display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+    .content-wrap { max-width: 1340px; width: 100%; margin: 0 auto; padding: 28px 28px 64px; flex: 1; }
+    .hero-banner { background: var(--hero-gradient); color: white; border-radius: var(--radius-lg); padding: 26px 32px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; position: relative; overflow: hidden; box-shadow: 0 8px 24px rgba(30,40,93,0.15); }
+    .hero-title { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+    .hero-subtitle { font-size: 13px; color: rgba(255,255,255,0.8); }
+    .action-cards-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-bottom: 24px; }
+    .action-card { background: white; border-radius: 20px; border: 1px solid var(--border-light); padding: 26px 30px; min-height: 180px; display: flex; align-items: center; justify-content: space-between; position: relative; overflow: hidden; box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04); cursor: pointer; transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1); }
+    .action-card:hover { transform: translateY(-3px); }
+    .action-card.add-bg { background: linear-gradient(135deg, #ffffff 40%, #f0f7ff 100%); border-color: #dbeafe; }
+    .action-card.add-bg:hover { border-color: #93c5fd; box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12); }
+    .action-card.update-bg { background: linear-gradient(135deg, #ffffff 40%, #f8f6ff 100%); border-color: #ede9fe; }
+    .action-card.update-bg:hover { border-color: #c4b5fd; box-shadow: 0 12px 28px rgba(124, 58, 237, 0.12); }
+    .action-card-content { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 20px; z-index: 2; flex: 1; max-width: 460px; height: 100%; }
+    .action-card-header { display: flex; align-items: flex-start; gap: 16px; }
+    .action-card-icon { width: 52px; height: 52px; border-radius: 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.25s ease; }
+    .action-card:hover .action-card-icon { transform: scale(1.05); }
+    .icon-blue { background: #eff6ff; color: var(--primary); border: 1px solid #bfdbfe; box-shadow: 0 3px 10px rgba(37,99,235,0.1); }
+    .icon-purple { background: #f5f3ff; color: #7c3aed; border: 1px solid #ddd6fe; box-shadow: 0 3px 10px rgba(124,58,237,0.1); }
+    .action-card-title { font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; margin-bottom: 4px; }
+    .action-card-desc { font-size: 13.5px; color: var(--text-muted); line-height: 1.45; }
+    .action-card-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border-radius: 10px; font-size: 14px; font-weight: 600; color: white; width: fit-content; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+    .btn-blue { background: #1d4ed8; box-shadow: 0 4px 14px rgba(29, 78, 216, 0.25); }
+    .btn-blue:hover { background: #1e40af; box-shadow: 0 6px 18px rgba(29, 78, 216, 0.38); transform: translateX(3px); }
+    .btn-purple { background: #5b21b6; box-shadow: 0 4px 14px rgba(91, 33, 182, 0.25); }
+    .btn-purple:hover { background: #4c1d95; box-shadow: 0 6px 18px rgba(91, 33, 182, 0.38); transform: translateX(3px); }
+    .action-card-art { position: absolute; right: 15px; bottom: 0; width: 170px; height: 135px; pointer-events: none; z-index: 1; opacity: 0.9; transition: transform 0.35s ease; }
+    .action-card:hover .action-card-art { transform: scale(1.04) translateY(-2px); }
+    .card-panel { background: white; border-radius: var(--radius-lg); border: 1px solid var(--border-light); box-shadow: var(--shadow-sm); overflow: hidden; padding: 24px 28px; display: flex; flex-direction: column; gap: 20px; }
+    .panel-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+    .panel-title { font-size: 18px; font-weight: 700; color: var(--text-main); }
+    .panel-subtitle { font-size: 12.5px; color: var(--text-muted); }
+    .search-input { height: 38px; width: 280px; padding: 0 14px; border-radius: var(--radius-md); border: 1px solid var(--border-light); background: #f8fafc; font-size: 13px; }
+    .search-input:focus { outline: none; background: white; border-color: var(--primary); }
+    .table-wrapper { overflow-x: auto; border: 1px solid var(--border-light); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    th { background: #f8fafc; padding: 14px 18px; font-weight: 600; font-size: 12px; color: #475569; border-bottom: 1px solid var(--border-light); }
+    td { padding: 16px 18px; border-bottom: 1px solid #edf2f7; color: #334155; vertical-align: middle; }
+    tr:hover { background: #f8fafc; }
+    .badge { display: inline-block; padding: 5px 12px; border-radius: 20px; font-weight: 600; font-size: 12.5px; }
+    .badge-green { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+    .badge-amber { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+    .badge-blue { background: var(--blue-bg); color: var(--blue); border: 1px solid var(--blue-border); }
+    .icon-btn-action { width: 32px; height: 32px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; margin: 0 2px; }
+    .btn-view { background: var(--blue-bg); color: var(--primary); }
+    .btn-edit { background: #f1f5f9; color: #475569; }
+    .btn-delete { background: var(--red-bg); color: var(--red); }
+    .form-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .form-group { display: flex; flex-direction: column; gap: 7px; }
+    .form-label { font-size: 12.5px; font-weight: 600; color: #334155; }
+    .input-ctrl, .select-ctrl { height: 44px; padding: 0 14px; border-radius: var(--radius-md); border: 1px solid var(--border-light); background: white; font-size: 13.5px; width: 100%; }
+    .input-ctrl:focus, .select-ctrl:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+    textarea { padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid var(--border-light); background: white; font-size: 13.5px; width: 100%; resize: vertical; }
+    .calc-boxes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .calc-card { padding: 18px 22px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 10px; }
+    .calc-blue { background: #edf4fe; border: 1px solid #d0e1fd; }
+    .calc-green { background: #eaf8f1; border: 1px solid #bbf0d7; }
+    .calc-title { font-size: 14.5px; font-weight: 700; }
+    .calc-formula { font-size: 11.5px; color: var(--text-muted); }
+    .calc-val { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .calc-val-green { color: #0f766e; }
+    .btn-primary-grad { background: var(--primary-gradient); color: white; padding: 10px 24px; border-radius: var(--radius-md); font-weight: 600; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 14px rgba(37,99,235,0.3); }
+    .btn-reset { background: #f8fafc; border: 1px solid var(--border-light); color: var(--text-muted); padding: 10px 20px; border-radius: var(--radius-md); font-weight: 600; font-size: 13.5px; }
+    .form-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 1px solid var(--border-light); }
+    .step-header-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .step-num-pill { width: 28px; height: 28px; border-radius: 50%; background: var(--primary-gradient); color: white; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+    .step-num-title { font-size: 16px; font-weight: 700; }
+    .step-notice { margin-left: auto; font-size: 12px; color: #6366f1; background: #f5f3ff; padding: 4px 12px; border-radius: 20px; border: 1px solid #ede9fe; }
+    .invoices-auto-box { background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: var(--radius-md); padding: 14px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .invoices-num { font-size: 32px; font-weight: 800; color: #5b21b6; }
+    .stats-4-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .stat-card-box { background: #f8fafc; border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+    .stat-card-label { font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+    .stat-card-val { font-size: 17px; font-weight: 700; color: var(--text-main); }
+    .health-grid-3 { display: grid; grid-template-columns: 220px 1.4fr 1fr; gap: 24px; }
+    .gauge-card { background: #f8fafc; border: 1px solid var(--border-light); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; }
+    .gauge-center-text { position: absolute; text-align: center; }
+    .gauge-num { font-size: 28px; font-weight: 800; color: var(--text-main); display: block; }
+    .gauge-lbl { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .formula-card { background: #f8fafc; border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .formula-line { display: flex; justify-content: space-between; font-size: 13px; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; }
+    .legend-card { background: #f8fafc; border: 1px solid var(--border-light); border-radius: var(--radius-md); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .legend-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+    .search-modal { background: white; border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); width: 100%; max-width: 620px; overflow: hidden; display: flex; flex-direction: column; }
+    .result-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border-light); border-radius: var(--radius-md); margin-bottom: 8px; cursor: pointer; transition: 0.15s; }
+    .result-item:hover { background: #f0f7ff; border-color: #bfdbfe; }
+    .btn-attp-opt { flex: 1; padding: 7px 4px; background: #ffffff; border: 1.5px solid var(--border-light); border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; cursor: pointer; transition: 0.2s; color: var(--text-main); text-align: center; }
+    .btn-attp-opt:hover { background: #eff6ff; border-color: #93c5fd; }
+    .btn-attp-opt.active { background: #eff6ff; border-color: var(--primary); color: var(--primary); box-shadow: 0 2px 8px rgba(37,99,235,0.18); }
+    .page-section[hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="layout-root">
+    <!-- Topbar Header -->
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand-group" id="brandHome">
+          <div class="brand-logo">CF</div>
+          <div>
+            <div class="brand-title">Company Finance</div>
+            <div class="brand-subtitle">Estimation & Tracking</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px;">
+        </div>
+      </div>
+    </header>
+
+    <div class="content-wrap">
+      <!-- Step 1: Main Dashboard -->
+      <section id="viewStep1" class="page-section">
+        <div class="action-cards-grid">
+          <div class="action-card add-bg" id="cardAddCollege" role="button">
+            <div class="action-card-content">
+              <div class="action-card-header">
+                <div class="action-card-icon icon-blue">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2l10 5H2l10-5z" />
+                    <circle cx="18.5" cy="5.5" r="4.5" fill="#2563eb" stroke="white" stroke-width="1.5" />
+                    <path d="M18.5 3.5v4M16.5 5.5h4" stroke="white" stroke-width="1.5" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="action-card-title">Add College</h2>
+                  <p class="action-card-desc">Add new college, project details and estimate financials including GST.</p>
+                </div>
+              </div>
+              <button class="action-card-btn btn-blue" id="btnOpenAdd">+ Add College &rarr;</button>
+            </div>
+            <div class="action-card-art" aria-hidden="true">
+              <svg viewBox="0 0 170 140" fill="none" style="width:100%; height:100%;">
+                <path d="M25 50 L85 18 L145 50 Z" fill="#93c5fd" fill-opacity="0.45" />
+                <rect x="30" y="50" width="110" height="9" rx="2" fill="#60a5fa" fill-opacity="0.35" />
+                <rect x="38" y="65" width="12" height="48" rx="2" fill="#60a5fa" fill-opacity="0.3" />
+                <rect x="66" y="65" width="12" height="48" rx="2" fill="#60a5fa" fill-opacity="0.3" />
+                <rect x="94" y="65" width="12" height="48" rx="2" fill="#60a5fa" fill-opacity="0.3" />
+                <rect x="122" y="65" width="12" height="48" rx="2" fill="#60a5fa" fill-opacity="0.3" />
+                <rect x="22" y="113" width="126" height="12" rx="3" fill="#93c5fd" fill-opacity="0.45" />
+                <circle cx="132" cy="98" r="20" fill="#dbeafe" stroke="#60a5fa" stroke-width="3" />
+                <path d="M132 88 v20 M122 98 h20" stroke="#2563eb" stroke-width="3.5" stroke-linecap="round" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="action-card update-bg" id="cardUpdateCollege" role="button">
+            <div class="action-card-content">
+              <div class="action-card-header">
+                <div class="action-card-icon icon-purple">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M12 2l10 5H2l10-5z" />
+                    <circle cx="18.5" cy="5.5" r="4.5" fill="#7c3aed" stroke="white" stroke-width="1.5" />
+                    <path d="M16 4.5l3.5 3.5M19 4l-4 4" stroke="white" stroke-width="1.5" stroke-linecap="round" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="action-card-title">Update College</h2>
+                  <p class="action-card-desc">Update existing college details, training phases and financials.</p>
+                </div>
+              </div>
+              <button class="action-card-btn btn-purple" id="btnOpenUpdate">Update College &rarr;</button>
+            </div>
+            <div class="action-card-art" aria-hidden="true">
+              <svg viewBox="0 0 170 140" fill="none" style="width:100%; height:100%;">
+                <path d="M25 50 L85 18 L145 50 Z" fill="#c4b5fd" fill-opacity="0.45" />
+                <rect x="30" y="50" width="110" height="9" rx="2" fill="#a78bfa" fill-opacity="0.35" />
+                <rect x="38" y="65" width="12" height="48" rx="2" fill="#a78bfa" fill-opacity="0.3" />
+                <rect x="66" y="65" width="12" height="48" rx="2" fill="#a78bfa" fill-opacity="0.3" />
+                <rect x="94" y="65" width="12" height="48" rx="2" fill="#a78bfa" fill-opacity="0.3" />
+                <rect x="122" y="65" width="12" height="48" rx="2" fill="#a78bfa" fill-opacity="0.3" />
+                <rect x="22" y="113" width="126" height="12" rx="3" fill="#c4b5fd" fill-opacity="0.45" />
+                <circle cx="132" cy="98" r="20" fill="#ede9fe" stroke="#a78bfa" stroke-width="3" />
+                <path d="M125 105 l3.5 -10.5 l9 -9 l3.5 3.5 l-9 9 z" fill="#7c3aed" />
+                <path d="M135 87 l2.5 2.5" stroke="white" stroke-width="1.5" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div class="panel-header">
+            <div id="tableHeaderInfo" style="cursor:pointer;" title="Click to view Health Report">
+              <h2 class="panel-title">College Projects Overview</h2>
+              <p class="panel-subtitle">View and manage all college projects, costs and invoice status</p>
+            </div>
+            <input type="text" class="search-input" id="tableSearch" placeholder="Search by college name or project code...">
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Project Code</th>
+                  <th style="text-align:right;">Total Cost Value (₹)</th>
+                  <th style="text-align:right;">Total Cost Value with GST (₹)</th>
+                  <th style="text-align:center;">Invoice Raised (₹)</th>
+                  <th style="text-align:center;">Invoice to be Raised (₹)</th>
+                  <th style="text-align:center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="projectsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 2: New Entry -->
+      <section id="viewStep2" class="page-section" hidden>
+        <div class="hero-banner">
+          <div>
+            <h1 class="hero-title">New Entry</h1>
+            <p class="hero-subtitle">Add college project details and estimate financials</p>
+          </div>
+          <button class="back-btn-link" style="color:white; background:rgba(255,255,255,0.2);" data-to-step="step1">&larr; Back to Dashboard</button>
+        </div>
+        <div class="card-panel">
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label class="form-label">College Name *</label>
+              <input type="text" id="s2CollegeName" class="input-ctrl" placeholder="Select or enter college name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">College Project *</label>
+              <input type="text" id="s2ProjectCode" class="input-ctrl" placeholder="Enter project name / code">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Academic Year *</label>
+              <select id="s2AcademicYear" class="select-ctrl">
+                <option>1st Year</option>
+                <option>2nd Year</option>
+                <option>3rd Year</option>
+                <option>4th Year</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label class="form-label">Passing Year *</label>
+              <select id="s2PassingYear" class="select-ctrl">
+                <option>2026</option>
+                <option>2027</option>
+                <option>2028</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">No. of Students *</label>
+              <input type="number" id="s2Students" class="input-ctrl" placeholder="120" value="120">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cost Per Student (₹) *</label>
+              <input type="number" id="s2Cost" class="input-ctrl" placeholder="5000" value="5000">
+            </div>
+          </div>
+          <div class="calc-boxes-grid">
+            <div class="calc-card calc-blue">
+              <div>
+                <div class="calc-title">Total Cost Value with GST</div>
+              </div>
+              <div class="calc-val" id="s2TotalVal">₹ 6,00,000</div>
+            </div>
+            <div class="calc-card calc-green">
+              <div>
+                <div class="calc-title">Total Estimated Cost with GST</div>
+              </div>
+              <div class="calc-val calc-val-green" id="s2GstVal">₹ 7,08,000</div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Additional Notes (Optional)</label>
+            <textarea rows="3" id="s2Notes" placeholder="Add any additional details, requirements or notes..."></textarea>
+          </div>
+          <div class="form-foot">
+            <button class="btn-reset" id="btnResetS2">&#8635; Reset</button>
+            <button class="btn-primary-grad" id="btnProceedS3">Next: Training Phase &rarr;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 3: Training Phase Entry -->
+      <section id="viewStep3" class="page-section" hidden>
+        <div class="hero-banner">
+          <div>
+            <h1 class="hero-title">Training Phase Entry</h1>
+            <p class="hero-subtitle">Add training phase details, hours, cost and payment plan</p>
+          </div>
+          <button class="back-btn-link" style="color:white; background:rgba(255,255,255,0.2);" data-to-step="step2">&larr; Back to Step 2</button>
+        </div>
+        <div class="card-panel">
+          <!-- Step 1 -->
+          <div class="step-header-row">
+            <div class="step-num-pill">1</div>
+            <div class="step-num-title">Training Phase & Timeline</div>
+            <div class="step-notice">&#9432; Select phase and set the training start and end dates.</div>
+          </div>
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label class="form-label">Training Phase *</label>
+              <select id="s3PhaseSelect" class="select-ctrl">
+                <option value="Phase 1">Phase 1</option>
+                <option value="Phase 2">Phase 2</option>
+                <option value="Phase 3">Phase 3</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Starting Date *</label>
+              <input type="date" id="s3StartDate" class="input-ctrl" value="2026-01-01">
+            </div>
+            <div class="form-group">
+              <label class="form-label">End Date *</label>
+              <input type="date" id="s3EndDate" class="input-ctrl" value="2026-01-31">
+            </div>
+          </div>
+          <!-- Step 2 -->
+          <div class="step-header-row" style="margin-top:16px;">
+            <div class="step-num-pill">2</div>
+            <div class="step-num-title">Training Details</div>
+            <div class="step-notice">&#9432; Enter planned hours, completed hours and training cost for the selected phase.</div>
+          </div>
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label class="form-label">No. of Hours (To be given) *</label>
+              <input type="number" id="s3HoursPlanned" class="input-ctrl" value="40">
+            </div>
+            <div class="form-group">
+              <label class="form-label">No. of Hours (Given) *</label>
+              <input type="number" id="s3HoursGiven" class="input-ctrl" value="35">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Training Cost (₹) *</label>
+              <input type="number" id="s3TrainingCost" class="input-ctrl" value="500000">
+            </div>
+          </div>
+          <!-- Step 3 -->
+          <div class="step-header-row" style="margin-top:16px;">
+            <div class="step-num-pill">3</div>
+            <div class="step-num-title">Payment Plan</div>
+            <div class="step-notice">&#9432; Select payment type to automatically set number of invoices.</div>
+          </div>
+          <div class="form-grid-3" style="align-items:end;">
+            <div class="form-group">
+              <label class="form-label">Select Payment Type *</label>
+              <select id="s3PaymentType" class="select-ctrl">
+                <option value="FNF">FNF (100%) - Full & Final</option>
+                <option value="ATP">ATP (50%) - Advance + Final</option>
+                <option value="ATTP">ATTP (Customisable 25%, 50%, 75%, 100%)</option>
+                <option value="EMI" selected>EMI (Installments)</option>
+              </select>
+            </div>
+            <div class="form-group" id="s3InstallmentGroup">
+              <label class="form-label">Select No. of Installments *</label>
+              <select id="s3InstallmentCount" class="select-ctrl">
+                <option value="2">2 Installments</option>
+                <option value="3">3 Installments</option>
+                <option value="4">4 Installments</option>
+                <option value="5" selected>5 Installments</option>
+                <option value="6">6 Installments</option>
+              </select>
+            </div>
+            <div class="form-group" id="s3AttpGroup" style="display:none;">
+              <label class="form-label">Customise ATTP Milestone % *</label>
+              <div class="attp-pct-buttons" style="display:flex; gap:6px;">
+                <button type="button" class="btn-attp-opt" data-pct="25" data-inv="4">25% (4 Inv)</button>
+                <button type="button" class="btn-attp-opt active" data-pct="50" data-inv="2">50% (2 Inv)</button>
+                <button type="button" class="btn-attp-opt" data-pct="75" data-inv="2">75% (2 Inv)</button>
+                <button type="button" class="btn-attp-opt" data-pct="100" data-inv="1">100% (1 Inv)</button>
+              </div>
+            </div>
+            <div class="invoices-auto-box">
+              <span style="font-size:12px; font-weight:700; color:#6d28d9;">No. of Invoices (Auto)</span>
+              <span class="invoices-num" id="s3AutoInvoiceNum">5</span>
+              <span style="font-size:11px; color:#7c3aed;" id="s3AutoInvoiceSub">Based on selected payment type</span>
+            </div>
+          </div>
+          <div class="form-foot" style="margin-top:20px;">
+            <button class="btn-reset" id="btnResetS3">&#8635; Reset</button>
+            <button class="btn-primary-grad" id="btnSubmitS3">Submit & View Health Report &rarr;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 4: Health Report & Project Overview -->
+      <section id="viewStep4" class="page-section" hidden>
+        <div class="hero-banner">
+          <div>
+            <h1 class="hero-title">Project Overview & Health Report</h1>
+            <p class="hero-subtitle">College, project and training details with financial summary</p>
+          </div>
+          <button class="back-btn-link" style="color:white; background:rgba(255,255,255,0.2);" data-to-step="step1">&larr; Back to Dashboard</button>
+        </div>
+        <!-- Overview stats -->
+        <div class="card-panel">
+          <div class="panel-title">Project Overview</div>
+          <div class="stats-4-grid">
+            <div class="stat-card-box">
+              <span class="stat-card-label">College Name</span>
+              <strong class="stat-card-val" id="hrCollege">Dr. DY Patil Institute</strong>
+              <small style="color:var(--text-sub);" id="hrCode">DYP-001</small>
+            </div>
+            <div class="stat-card-box">
+              <span class="stat-card-label">Academic Year</span>
+              <strong class="stat-card-val" id="hrYear">2025 - 2026</strong>
+            </div>
+            <div class="stat-card-box">
+              <span class="stat-card-label">No. of Students</span>
+              <strong class="stat-card-val" id="hrStudents">120</strong>
+            </div>
+            <div class="stat-card-box">
+              <span class="stat-card-label">Total Contract Value</span>
+              <strong class="stat-card-val" id="hrContract">₹ 6,00,000</strong>
+            </div>
+          </div>
+        </div>
+        <!-- Financial summary -->
+        <div class="card-panel" style="margin-top:20px;">
+          <div class="panel-title">Financial Summary</div>
+          <div class="stats-4-grid">
+            <div class="stat-card-box" style="background:#eff6ff;">
+              <span class="stat-card-label">Total Training Cost</span>
+              <strong class="stat-card-val" id="hrTraining">₹ 5,00,000</strong>
+            </div>
+            <div class="stat-card-box" style="background:#ecfdf5;">
+              <span class="stat-card-label">Total Contract Value</span>
+              <strong class="stat-card-val" id="hrContract2">₹ 6,00,000</strong>
+            </div>
+            <div class="stat-card-box" style="background:#f5f3ff;">
+              <span class="stat-card-label">Training Cost with GST</span>
+              <strong class="stat-card-val" id="hrTrainingGst">₹ 5,90,000</strong>
+            </div>
+            <div class="stat-card-box" style="background:#f0fdfa;">
+              <span class="stat-card-label">Contract Value with GST</span>
+              <strong class="stat-card-val" id="hrContractGst">₹ 7,08,000</strong>
+            </div>
+          </div>
+        </div>
+        <!-- Health Report Circular Dashboard -->
+        <div class="card-panel" style="margin-top:20px;">
+          <div class="panel-title">Health Report</div>
+          <div class="health-grid-3" style="grid-template-columns: 240px 1fr;">
+            <!-- Gauge -->
+            <div class="gauge-card">
+              <svg width="150" height="150" viewBox="0 0 150 150">
+                <circle cx="75" cy="75" r="60" stroke="#e2e8f0" stroke-width="12" fill="none"></circle>
+                <circle id="gaugeRing" cx="75" cy="75" r="60" stroke="#16a34a" stroke-width="12" fill="none" stroke-dasharray="376.99" stroke-dashoffset="100" stroke-linecap="round" transform="rotate(-90 75 75)"></circle>
+              </svg>
+              <div class="gauge-center-text">
+                <span class="gauge-num" id="gaugeVal">16.8%</span>
+                <span class="gauge-lbl">Health Score</span>
+              </div>
+            </div>
+            <!-- Formula breakdown -->
+            <div class="formula-card">
+              <div class="formula-line"><span>Total Contract Value</span><strong id="fContract">₹ 6,00,000</strong></div>
+              <div class="formula-line"><span>Total Trainee Cost</span><strong id="fTraining">₹ 5,00,000</strong></div>
+              <div class="formula-line"><span>Difference (Contract Value - Trainee Cost)</span><strong id="fDiff" style="color:var(--green);">+₹ 1,00,000</strong></div>
+              <div class="formula-line"><span>Final Health Score</span><span class="badge badge-green" id="fScoreBadge">16.8%</span></div>
+            </div>
+          </div>
+          <div class="form-foot">
+            <button class="btn-reset" data-to-step="step1">&larr; Return to Dashboard</button>
+            <button class="btn-primary-grad" id="btnSaveHealth">Save & Return to Dashboard</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Search Modal for Step 5 -->
+  <div class="modal-overlay" id="updateSearchModal" hidden>
+    <div class="search-modal">
+      <div style="background:var(--hero-gradient); color:white; padding:20px 24px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h2 style="font-size:18px; font-weight:700;">Update College / Project</h2>
+          <p style="font-size:12px; color:rgba(255,255,255,0.8);">Search and select a college or project to update the details.</p>
+        </div>
+        <button id="btnCloseModal" style="color:white; font-size:22px;">&times;</button>
+      </div>
+      <div style="padding:18px 24px 8px;">
+        <label style="font-size:12.5px; font-weight:700;">Search College or Project *</label>
+        <input type="text" id="modalSearchInput" class="input-ctrl" style="margin-top:6px;" placeholder="e.g. DYP, PCCOE, College of Engineering...">
+      </div>
+      <div style="padding:10px 24px 20px; max-height:300px; overflow-y:auto;" id="modalResultsList"></div>
+    </div>
+  </div>
+
+  <script>
+    const INITIAL_DATA = [
+      { id: "1", college_name: "Dr. DY Patil Institute", project_code: "DYPIEMR-001", academic_year: "4th Year", passing_year: "2026", student_count: 120, cost_per_student: 4166.67, total_cost_value: 500000, gst_cost: 590000, training_cost: 500000, invoice_raised: 300000, payment_type: "EMI", invoice_count: 5 },
+      { id: "2", college_name: "Pimpri Chinchwad College", project_code: "PCCOE-002", academic_year: "3rd Year", passing_year: "2026", student_count: 70, cost_per_student: 5000, total_cost_value: 350000, gst_cost: 413000, training_cost: 320000, invoice_raised: 413000, payment_type: "ATP", invoice_count: 2 },
+      { id: "3", college_name: "Rajarshi Shahu College", project_code: "RSCOE-003", academic_year: "3rd Year", passing_year: "2026", student_count: 100, cost_per_student: 4200, total_cost_value: 420000, gst_cost: 495600, training_cost: 390000, invoice_raised: 200000, payment_type: "EMI", invoice_count: 4 },
+      { id: "4", college_name: "Vishwakarma Institute", project_code: "VIIT-004", academic_year: "4th Year", passing_year: "2026", student_count: 150, cost_per_student: 4000, total_cost_value: 600000, gst_cost: 708000, training_cost: 550000, invoice_raised: 0, payment_type: "ATTP", invoice_count: 3 },
+      { id: "5", college_name: "MIT Academy of Engineering", project_code: "MITAOE-005", academic_year: "2nd Year", passing_year: "2026", student_count: 55, cost_per_student: 5000, total_cost_value: 275000, gst_cost: 324500, training_cost: 250000, invoice_raised: 150000, payment_type: "ATP", invoice_count: 2 },
+      { id: "6", college_name: "Sinhgad College", project_code: "SCTR-006", academic_year: "3rd Year", passing_year: "2026", student_count: 120, cost_per_student: 4000, total_cost_value: 480000, gst_cost: 566400, training_cost: 440000, invoice_raised: 500000, payment_type: "EMI", invoice_count: 4 },
+      { id: "7", college_name: "AISSMS College", project_code: "AISSMS-007", academic_year: "1st Year", passing_year: "2026", student_count: 80, cost_per_student: 4000, total_cost_value: 320000, gst_cost: 377600, training_cost: 300000, invoice_raised: 0, payment_type: "FNF", invoice_count: 1 },
+      { id: "8", college_name: "College of Engineering Pune", project_code: "COEP-008", academic_year: "4th Year", passing_year: "2026", student_count: 150, cost_per_student: 5000, total_cost_value: 750000, gst_cost: 885000, training_cost: 680000, invoice_raised: 600000, payment_type: "EMI", invoice_count: 5 }
+    ];
+
+    let projects = JSON.parse(localStorage.getItem("company_finance_projects_v3") || "null") || INITIAL_DATA;
+    let currentProject = projects[0];
+
+    const money = (val) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(val) || 0);
+
+    function saveProjects() {
+      localStorage.setItem("company_finance_projects_v3", JSON.stringify(projects));
+      renderTable();
+    }
+
+    function switchStep(stepId, push = true) {
+      document.querySelectorAll(".page-section").forEach(sec => sec.hidden = true);
+      const target = document.getElementById("view" + stepId.charAt(0).toUpperCase() + stepId.slice(1));
+      if (target) target.hidden = false;
+      if (push) {
+        const hash = stepId === "step1" ? "" : "#" + stepId;
+        try {
+          history.pushState({ step: stepId }, "", window.location.pathname + hash);
+        } catch(e) {}
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    window.addEventListener("popstate", (e) => {
+      const step = e.state?.step || (window.location.hash ? window.location.hash.replace("#", "") : "step1");
+      switchStep(step, false);
+    });
+
+    function renderTable(filterQuery = "") {
+      const q = filterQuery.toLowerCase();
+      const filtered = projects.filter(p => p.college_name.toLowerCase().includes(q) || p.project_code.toLowerCase().includes(q));
+      const tbody = document.getElementById("projectsTableBody");
+      tbody.innerHTML = filtered.map((p, idx) => {
+        const pending = Math.max(0, p.gst_cost - p.invoice_raised);
+        return `<tr style="cursor:pointer;" onclick="viewHealthReport('${p.id}')" title="Click to view Health Report for ${p.college_name}">
+          <td>${idx + 1}</td>
+          <td><strong>${p.project_code}</strong><br><small style="color:var(--text-muted);">${p.college_name}</small></td>
+          <td style="text-align:right;">${money(p.total_cost_value)}</td>
+          <td style="text-align:right; font-weight:600;">${money(p.gst_cost)}</td>
+          <td style="text-align:center;"><span class="badge badge-green">${money(p.invoice_raised)}</span></td>
+          <td style="text-align:center;"><span class="badge badge-amber">${money(pending)}</span></td>
+          <td style="text-align:center;">
+            <button class="icon-btn-action btn-view" title="View Health Report" onclick="event.stopPropagation(); viewHealthReport('${p.id}')">&#128065;</button>
+            <button class="icon-btn-action btn-edit" title="Edit College" onclick="event.stopPropagation(); editProject('${p.id}')">&#9998;</button>
+            <button class="icon-btn-action btn-delete" title="Delete College" onclick="event.stopPropagation(); deleteProject('${p.id}')">&#128465;</button>
+          </td>
+        </tr>`;
+      }).join("");
+    }
+
+    function viewHealthReport(id) {
+      currentProject = projects.find(p => p.id === id) || projects[0];
+      const training = Number(currentProject.training_cost) || 500000;
+      const contract = Number(currentProject.total_cost_value) || 600000;
+      const diff = contract - training;
+      const score = Math.abs(contract > 0 ? (diff / contract) * 100 : 0).toFixed(1);
+
+      document.getElementById("hrCollege").textContent = currentProject.college_name;
+      document.getElementById("hrCode").textContent = currentProject.project_code;
+      document.getElementById("hrYear").textContent = currentProject.academic_year;
+      document.getElementById("hrStudents").textContent = currentProject.student_count;
+      document.getElementById("hrContract").textContent = money(contract);
+      document.getElementById("hrTraining").textContent = money(training);
+      document.getElementById("hrContract2").textContent = money(contract);
+      document.getElementById("hrTrainingGst").textContent = money(training * 1.18);
+      document.getElementById("hrContractGst").textContent = money(contract * 1.18);
+
+      document.getElementById("gaugeVal").textContent = score + "%";
+      document.getElementById("fTraining").textContent = money(training);
+      document.getElementById("fContract").textContent = money(contract);
+      document.getElementById("fDiff").textContent = (diff >= 0 ? "+" : "-") + money(Math.abs(diff));
+      document.getElementById("fDiff").style.color = diff >= 0 ? "var(--green)" : "var(--red)";
+      document.getElementById("fScoreBadge").textContent = score + "%";
+
+      const circ = 2 * Math.PI * 60;
+      const offset = circ - (Math.min(100, Math.max(10, score)) / 100) * circ;
+      document.getElementById("gaugeRing").style.strokeDashoffset = offset;
+
+      switchStep("step4");
+    }
+
+    function editProject(id) {
+      currentProject = projects.find(p => p.id === id) || projects[0];
+      document.getElementById("s2CollegeName").value = currentProject.college_name;
+      document.getElementById("s2ProjectCode").value = currentProject.project_code;
+      document.getElementById("s2AcademicYear").value = currentProject.academic_year;
+      document.getElementById("s2PassingYear").value = currentProject.passing_year || "2026";
+      document.getElementById("s2Students").value = currentProject.student_count;
+      document.getElementById("s2Cost").value = currentProject.cost_per_student;
+      calcS2();
+      switchStep("step2");
+    }
+
+    function deleteProject(id) {
+      if (confirm("Are you sure you want to delete this project?")) {
+        projects = projects.filter(p => p.id !== id);
+        saveProjects();
+      }
+    }
+
+    function calcS2() {
+      const students = Number(document.getElementById("s2Students").value) || 0;
+      const cost = Number(document.getElementById("s2Cost").value) || 0;
+      const total = students * cost;
+      document.getElementById("s2TotalVal").textContent = money(total);
+      document.getElementById("s2GstVal").textContent = money(total * 1.18);
+    }
+
+    function renderModalResults(q = "") {
+      const filtered = projects.filter(p => p.college_name.toLowerCase().includes(q.toLowerCase()) || p.project_code.toLowerCase().includes(q.toLowerCase()));
+      const container = document.getElementById("modalResultsList");
+      container.innerHTML = filtered.map(p => `
+        <div class="result-item" onclick="selectFromModal('${p.id}')">
+          <div>
+            <strong style="font-size:14.5px;">${p.project_code}</strong>
+            <div style="font-size:12.5px; color:var(--text-muted);">${p.college_name}</div>
+          </div>
+          <span class="badge badge-blue">Select &rarr;</span>
+        </div>
+      `).join("");
+    }
+
+    function selectFromModal(id) {
+      document.getElementById("updateSearchModal").hidden = true;
+      editProject(id);
+    }
+
+    // Event Listeners
+    document.getElementById("brandHome").addEventListener("click", () => switchStep("step1"));
+    document.querySelectorAll("[data-to-step]").forEach(btn => {
+      btn.addEventListener("click", () => switchStep(btn.dataset.toStep));
+    });
+
+    document.getElementById("btnOpenAdd").addEventListener("click", () => {
+      document.getElementById("s2CollegeName").value = "";
+      document.getElementById("s2ProjectCode").value = "";
+      document.getElementById("s2Students").value = "";
+      document.getElementById("s2Cost").value = "";
+      calcS2();
+      switchStep("step2");
+    });
+
+    document.getElementById("btnOpenUpdate").addEventListener("click", () => {
+      document.getElementById("updateSearchModal").hidden = false;
+      document.getElementById("modalSearchInput").value = "";
+      renderModalResults();
+      document.getElementById("modalSearchInput").focus();
+    });
+
+    document.getElementById("btnCloseModal").addEventListener("click", () => {
+      document.getElementById("updateSearchModal").hidden = true;
+    });
+
+    document.getElementById("modalSearchInput").addEventListener("input", (e) => {
+      renderModalResults(e.target.value);
+    });
+
+    document.getElementById("tableSearch").addEventListener("input", (e) => {
+      renderTable(e.target.value);
+    });
+
+    document.getElementById("s2Students").addEventListener("input", calcS2);
+    document.getElementById("s2Cost").addEventListener("input", calcS2);
+
+    document.getElementById("btnResetS2").addEventListener("click", () => {
+      document.getElementById("s2CollegeName").value = "";
+      document.getElementById("s2ProjectCode").value = "";
+      document.getElementById("s2Students").value = "";
+      document.getElementById("s2Cost").value = "";
+      calcS2();
+    });
+
+    document.getElementById("btnProceedS3").addEventListener("click", () => {
+      const college = document.getElementById("s2CollegeName").value.trim();
+      const code = document.getElementById("s2ProjectCode").value.trim();
+      if (!college || !code) {
+        alert("Please enter College Name and College Project Code.");
+        return;
+      }
+      switchStep("step3");
+    });
+
+    let currentAttpPct = "50";
+
+    document.querySelectorAll(".btn-attp-opt").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".btn-attp-opt").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        currentAttpPct = btn.dataset.pct;
+        const inv = Number(btn.dataset.inv) || 2;
+        document.getElementById("s3AutoInvoiceNum").textContent = inv;
+        document.getElementById("s3AutoInvoiceSub").textContent = `${currentAttpPct}% Milestone Plan`;
+      });
+    });
+
+    document.getElementById("s3PaymentType").addEventListener("change", (e) => {
+      const type = e.target.value;
+      const instGroup = document.getElementById("s3InstallmentGroup");
+      const attpGroup = document.getElementById("s3AttpGroup");
+      const subLabel = document.getElementById("s3AutoInvoiceSub");
+
+      if (type === "FNF") {
+        instGroup.style.display = "none";
+        attpGroup.style.display = "none";
+        document.getElementById("s3AutoInvoiceNum").textContent = "1";
+        subLabel.textContent = "100% Single Milestone";
+      } else if (type === "ATP") {
+        instGroup.style.display = "none";
+        attpGroup.style.display = "none";
+        document.getElementById("s3AutoInvoiceNum").textContent = "2";
+        subLabel.textContent = "50% Advance + 50% Final";
+      } else if (type === "ATTP") {
+        instGroup.style.display = "none";
+        attpGroup.style.display = "flex";
+        const activeBtn = document.querySelector(".btn-attp-opt.active");
+        const inv = activeBtn ? Number(activeBtn.dataset.inv) : 2;
+        document.getElementById("s3AutoInvoiceNum").textContent = inv;
+        subLabel.textContent = `${currentAttpPct}% Milestone Plan`;
+      } else if (type === "EMI") {
+        instGroup.style.display = "flex";
+        attpGroup.style.display = "none";
+        document.getElementById("s3AutoInvoiceNum").textContent = document.getElementById("s3InstallmentCount").value;
+        subLabel.textContent = "Fixed Installment Plan";
+      }
+    });
+
+    document.getElementById("s3InstallmentCount").addEventListener("change", (e) => {
+      document.getElementById("s3AutoInvoiceNum").textContent = e.target.value;
+    });
+
+    document.getElementById("btnResetS3").addEventListener("click", () => {
+      document.getElementById("s3HoursPlanned").value = "40";
+      document.getElementById("s3HoursGiven").value = "0";
+      document.getElementById("s3TrainingCost").value = "50000";
+    });
+
+    document.getElementById("btnSubmitS3").addEventListener("click", () => {
+      const college = document.getElementById("s2CollegeName").value.trim() || "Dr. DY Patil Institute";
+      const code = document.getElementById("s2ProjectCode").value.trim() || "DYPIEMR-001";
+      const students = Number(document.getElementById("s2Students").value) || 120;
+      const cost = Number(document.getElementById("s2Cost").value) || 5000;
+      const training = Number(document.getElementById("s3TrainingCost").value) || 500000;
+      const newP = {
+        id: "p-" + Date.now(),
+        college_name: college,
+        project_code: code,
+        academic_year: document.getElementById("s2AcademicYear").value,
+        passing_year: document.getElementById("s2PassingYear").value,
+        student_count: students,
+        cost_per_student: cost,
+        total_cost_value: students * cost,
+        gst_cost: (students * cost) * 1.18,
+        training_cost: training,
+        invoice_raised: 0,
+        payment_type: document.getElementById("s3PaymentType").value,
+        invoice_count: Number(document.getElementById("s3AutoInvoiceNum").textContent) || 5
+      };
+      projects.unshift(newP);
+      saveProjects();
+      viewHealthReport(newP.id);
+    });
+
+    document.getElementById("btnSaveHealth").addEventListener("click", () => {
+      alert("Project saved to register!");
+      switchStep("step1");
+    });
+
+    document.getElementById("tableHeaderInfo").addEventListener("click", () => {
+      if (projects.length > 0) {
+        viewHealthReport(projects[0].id);
+      }
+    });
+
+    // Initial load
+    renderTable();
+  </script>
+</body>
+</html>
