@@ -1,9 +1,4 @@
 {
-  "framework": "vite",
-  "installCommand": "cd Revenue && npm install",
-  "buildCommand": "cd Revenue && npm run build",
-  "outputDirectory": "Revenue/dist",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
 }
