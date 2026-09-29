@@ -215,8 +215,15 @@ function findColumnIndex(headers: string[], ...candidates: string[]): number {
   const normHeaders = headers.map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
   for (const cand of candidates) {
     const normCand = cand.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const idx = normHeaders.findIndex((h) => h === normCand || h.includes(normCand) || normCand.includes(h));
-    if (idx !== -1) return idx;
+    if (!normCand) continue;
+
+    // 1. Exact match first
+    const exactIdx = normHeaders.findIndex((h) => h === normCand);
+    if (exactIdx !== -1) return exactIdx;
+
+    // 2. Substring match (ensuring header is non-empty to avoid matching empty columns)
+    const partialIdx = normHeaders.findIndex((h) => h.length > 0 && (h.includes(normCand) || normCand.includes(h)));
+    if (partialIdx !== -1) return partialIdx;
   }
   return -1;
 }
@@ -228,7 +235,9 @@ function findColumnIndex(headers: string[], ...candidates: string[]): number {
 export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[] {
   if (!rows || rows.length < 2) return [];
 
-  const headers = rows[0].map((h) => h.trim());
+  const headerRowIdx = rows.findIndex((r) => r.some((cell) => cell.toLowerCase().includes("college") || cell.toLowerCase().includes("project")));
+  const effectiveHeaderRow = headerRowIdx !== -1 ? headerRowIdx : 0;
+  const headers = rows[effectiveHeaderRow].map((h) => h.trim());
 
   // Find column indices based on user's exact spreadsheet headers
   const colProjCode = findColumnIndex(headers, "project code", "projectcode", "college project", "code");
@@ -470,7 +479,19 @@ export function parseReceivedValue(
 export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoiceTrackerItem[] {
   if (!rows || rows.length < 2) return [];
 
-  const headers = rows[0].map((h) => h.trim());
+  // Find the actual header row (supports metadata or blank top rows)
+  const headerRowIdx = rows.findIndex((r) =>
+    r.some(
+      (cell) =>
+        cell.toLowerCase().includes("project_code") ||
+        cell.toLowerCase().includes("project code") ||
+        cell.toLowerCase().includes("invoice_code") ||
+        cell.toLowerCase().includes("invoice_no")
+    )
+  );
+
+  const effectiveHeaderRow = headerRowIdx !== -1 ? headerRowIdx : 0;
+  const headers = rows[effectiveHeaderRow].map((h) => h.trim());
 
   const colProjCode = findColumnIndex(headers, "project_code", "project code", "projectcode", "college project", "code");
   const colInvoiceNo = findColumnIndex(headers, "invoice_no", "invoice no", "invoiceno", "invoice number", "installment");
@@ -480,7 +501,7 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
   const colTotalVal = findColumnIndex(headers, "total_contract_value", "total contract value", "contract value", "total value");
   const colPayPct = findColumnIndex(headers, "payment_percentage", "payment percentage", "payment %", "% of payment");
   const colMouAmt = findColumnIndex(headers, "amount_from_mou", "amount from mou", "mou amount", "planned amount");
-  const colAmtRaised = findColumnIndex(headers, "amount_raised", "amount raised", "invoice amount", "raised amount", "amount");
+  const colAmtRaised = findColumnIndex(headers, "amount_raised", "amount raised", "invoice amount", "raised amount");
   const colDateRaised = findColumnIndex(headers, "date_raised", "date raised", "raised date", "invoice date");
   const colInvoiceCode = findColumnIndex(headers, "invoice_code", "invoice code", "invoice no.", "invoice id");
   const colInvoiceType = findColumnIndex(headers, "invoice_type", "invoice type", "type");
@@ -494,95 +515,48 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
 
   const items: GoogleSheetInvoiceTrackerItem[] = [];
 
-  for (let r = 1; r < rows.length; r++) {
+  for (let r = effectiveHeaderRow + 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row || row.length === 0) continue;
 
-    let projectCode = "";
-    let collegeName = "";
-    let invoiceNo = r;
-    let payType: PaymentType = "ATP";
-    let studentCount = 0;
-    let costPerStudent = 0;
-    let totalContractValue = 0;
-    let payPct = 0;
-    let amountFromMou = 0;
-    let amountRaised = 0;
-    let dateRaised = "";
-    let invoiceCode = "";
-    let invoiceType = "";
-    let status = "";
-    let remarks = "";
-    let gaInvoiceCode = "";
-    let printed = "";
-    let rawReceived = "";
-    let receivedAmount = 0;
-    let tdsStatus = "";
-
-    // Check if the row matches the specific Google Sheet column layout
-    // (where col 8 has date e.g. 03/04/2024, col 7 has amount e.g. ₹868,480, col 9 has invoice code e.g. GAPL/PI/24-25/01)
-    const isShiftedLayout =
-      row.length >= 10 &&
-      Boolean(row[8] && /\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}/.test(row[8])) &&
-      Boolean(row[9] && /GAPL|GCAPL|INV|PI|TI|CI/i.test(row[9]));
-
-    if (isShiftedLayout) {
-      projectCode = (row[0] || "").trim();
-      invoiceNo = parseCleanNumber(row[1], r);
-      payType = normalizePaymentType(row[2]);
-      studentCount = parseCleanNumber(row[3], 0);
-      totalContractValue = parseCleanNumber(row[4], 0);
-      payPct = parseCleanNumber(row[5], 0);
-      amountFromMou = parseCleanNumber(row[6], 0);
-      amountRaised = parseCleanNumber(row[7], amountFromMou);
-      dateRaised = normalizeDate(row[8]);
-      invoiceCode = (row[9] || "").trim() || `INV-${String(invoiceNo).padStart(2, "0")}`;
-      invoiceType = (row[10] || "").trim(); // PI, TI, CI
-      status = (row[11] || "").trim();      // Received, Processed, Raised, TI for PI
-      remarks = (row[12] || "").trim();
-      gaInvoiceCode = (row[13] || "").trim();
-      printed = (row[14] || "").trim();
-      receivedAmount = parseCleanNumber(row[15], 0);
-      tdsStatus = (row[16] || "").trim();
-      collegeName = (row[18] || row[17] || "").trim();
-      rawReceived = status;
-    } else {
-      // Standard header-based matching fallback
-      projectCode = colProjCode !== -1 ? (row[colProjCode] || "").trim() : "";
-      collegeName = colCollegeName !== -1 ? (row[colCollegeName] || "").trim() : "";
-      invoiceNo = parseCleanNumber(colInvoiceNo !== -1 ? row[colInvoiceNo] : "", r);
-      payType = normalizePaymentType(colPayType !== -1 ? row[colPayType] : "");
-      studentCount = parseCleanNumber(colStudents !== -1 ? row[colStudents] : "", 0);
-      costPerStudent = parseCleanNumber(colCostPerStudent !== -1 ? row[colCostPerStudent] : "", 0);
-      totalContractValue = parseCleanNumber(colTotalVal !== -1 ? row[colTotalVal] : "", 0);
-      payPct = parseCleanNumber(colPayPct !== -1 ? row[colPayPct] : "", 0);
-      amountFromMou = parseCleanNumber(colMouAmt !== -1 ? row[colMouAmt] : "", 0);
-      amountRaised = parseCleanNumber(colAmtRaised !== -1 ? row[colAmtRaised] : "", amountFromMou);
-      dateRaised = normalizeDate(colDateRaised !== -1 ? row[colDateRaised] : "");
-      invoiceCode = (colInvoiceCode !== -1 ? (row[colInvoiceCode] || "").trim() : "") || `INV-${String(invoiceNo).padStart(2, "0")}`;
-      invoiceType = colInvoiceType !== -1 ? (row[colInvoiceType] || "").trim() : "";
-      status = colStatus !== -1 ? (row[colStatus] || "").trim() : "";
-      remarks = colRemarks !== -1 ? (row[colRemarks] || "").trim() : "";
-      gaInvoiceCode = colGaCode !== -1 ? (row[colGaCode] || "").trim() : "";
-      printed = colPrinted !== -1 ? (row[colPrinted] || "").trim() : "";
-      rawReceived = colReceived !== -1 ? (row[colReceived] || "").trim() : "";
-      tdsStatus = colTdsStatus !== -1 ? (row[colTdsStatus] || "").trim() : "";
-    }
+    const projectCode = colProjCode !== -1 ? (row[colProjCode] || "").trim() : "";
+    const collegeName = colCollegeName !== -1 ? (row[colCollegeName] || "").trim() : "";
 
     if (!projectCode && !collegeName) continue;
+
+    const invoiceNo = parseCleanNumber(colInvoiceNo !== -1 ? row[colInvoiceNo] : "", r);
+    const payType = normalizePaymentType(colPayType !== -1 ? row[colPayType] : "");
+    const studentCount = parseCleanNumber(colStudents !== -1 ? row[colStudents] : "", 0);
+    const costPerStudent = parseCleanNumber(colCostPerStudent !== -1 ? row[colCostPerStudent] : "", 0);
+    let totalContractValue = parseCleanNumber(colTotalVal !== -1 ? row[colTotalVal] : "", 0);
+
+    const payPct = parseCleanNumber(colPayPct !== -1 ? row[colPayPct] : "", 0);
+    const amountFromMou = parseCleanNumber(colMouAmt !== -1 ? row[colMouAmt] : "", 0);
+    let amountRaised = parseCleanNumber(colAmtRaised !== -1 ? row[colAmtRaised] : "", amountFromMou);
+    if (amountRaised === 0 && amountFromMou > 0) {
+      amountRaised = amountFromMou;
+    }
 
     if (totalContractValue === 0 && studentCount > 0 && costPerStudent > 0) {
       totalContractValue = studentCount * costPerStudent;
     }
-    if (amountRaised === 0 && amountFromMou > 0) {
-      amountRaised = amountFromMou;
-    }
+
+    const dateRaised = normalizeDate(colDateRaised !== -1 ? row[colDateRaised] : "");
+    const invoiceCode = (colInvoiceCode !== -1 ? (row[colInvoiceCode] || "").trim() : "") || `INV-${String(invoiceNo).padStart(2, "0")}`;
+    const invoiceType = colInvoiceType !== -1 ? (row[colInvoiceType] || "").trim() : "";
+    const status = colStatus !== -1 ? (row[colStatus] || "").trim() : "";
+    const remarks = colRemarks !== -1 ? (row[colRemarks] || "").trim() : "";
+    const gaInvoiceCode = colGaCode !== -1 ? (row[colGaCode] || "").trim() : "";
+    const printed = colPrinted !== -1 ? (row[colPrinted] || "").trim() : "";
+    const rawReceived = colReceived !== -1 ? (row[colReceived] || "").trim() : "";
+    const tdsStatus = colTdsStatus !== -1 ? (row[colTdsStatus] || "").trim() : "";
 
     const typeLower = (invoiceType || "").toLowerCase();
     const statusLower = (status || "").toLowerCase();
     const recLower = (rawReceived || "").toLowerCase();
 
     const parsedRec = parseReceivedValue(rawReceived, amountRaised);
+    const parsedRawReceivedNum = parseCleanNumber(rawReceived, 0);
 
     // 1. Check if Received / Collected (supports "received", "recieved", "paid", "cleared", "yes", etc.)
     const isReceived = Boolean(
@@ -598,12 +572,12 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
       recLower === "y" ||
       recLower === "true" ||
       parsedRec.isReceived ||
-      receivedAmount > 0
+      parsedRawReceivedNum > 0
     );
 
     const finalReceivedAmount = isReceived
-      ? receivedAmount > 0
-        ? receivedAmount
+      ? parsedRawReceivedNum > 0
+        ? parsedRawReceivedNum
         : parsedRec.receivedAmount > 0
         ? parsedRec.receivedAmount
         : amountRaised || amountFromMou
@@ -617,11 +591,11 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
       statusLower.includes("process") ||
       statusLower.includes("raise") ||
       statusLower.includes("pend") ||
+      statusLower.includes("hold") ||
+      statusLower.includes("ti for pi") ||
       typeLower.includes("process") ||
       typeLower.includes("raise") ||
-      typeLower.includes("pend") ||
       (amountRaised > 0 && dateRaised.length > 0) ||
-      (dateRaised && dateRaised.length > 0) ||
       amountRaised > 0
     );
 
