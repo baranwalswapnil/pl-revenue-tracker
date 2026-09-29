@@ -671,7 +671,7 @@ function doPost(e) {
     }
     
     var colSno = getColIdx(["sno", "s.no", "serial", "srno"]);
-    var colProjCode = getColIdx(["projectcode", "project code", "code"]);
+    var colProjCode = getColIdx(["projectcode", "project code", "college project", "code"]);
     var colCollegeName = getColIdx(["nameofthecollege", "college name", "collegename", "name"]);
     var colCollegeCode = getColIdx(["collegecode", "college code"]);
     var colYear = getColIdx(["year", "passingyear", "batch"]);

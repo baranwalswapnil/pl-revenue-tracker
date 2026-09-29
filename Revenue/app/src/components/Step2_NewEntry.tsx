@@ -110,7 +110,7 @@ export const Step2_NewEntry: React.FC<Step2NewEntryProps> = ({
       return;
     }
     if (!draft.projectCode.trim()) {
-      alert("Please enter a valid College Project / Project Code.");
+      alert("Please enter a valid Project Code.");
       return;
     }
     onSaveEntry(proceed);
@@ -185,7 +185,7 @@ export const Step2_NewEntry: React.FC<Step2NewEntryProps> = ({
 
       {/* Main Form Box */}
       <form onSubmit={(e) => handleSubmit(e, true)} className="entry-form-card" autoComplete="off">
-        {/* Row 1: College Name, College Project, Academic Year */}
+        {/* Row 1: College Name, Project Code, Academic Year */}
         <div className="form-fields-grid grid-cols-3">
           <div className="form-field-group">
             <label className="field-label-text" htmlFor="collegeName">
@@ -212,7 +212,7 @@ export const Step2_NewEntry: React.FC<Step2NewEntryProps> = ({
           <div className="form-field-group">
             <label className="field-label-text" htmlFor="projectCode">
               <FileText size={15} className="label-icon" />
-              <span>College Project <span className="req-star">*</span></span>
+              <span>Project Code <span className="req-star">*</span></span>
             </label>
             <input
               type="text"
@@ -224,7 +224,7 @@ export const Step2_NewEntry: React.FC<Step2NewEntryProps> = ({
               data-lpignore="true"
               data-form-type="other"
               className="styled-input-control"
-              placeholder="Enter project name / code"
+              placeholder="Enter project code (e.g. DYPIEMR-001)"
               value={draft.projectCode}
               onChange={(e) => onUpdateDraft({ projectCode: e.target.value })}
               required
