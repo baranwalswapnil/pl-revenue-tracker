@@ -738,13 +738,36 @@ export const computeAttpDetails = (input: string | number | undefined | null): {
   };
 };
 
+export function addDaysToDateStr(dateStr: string | undefined, days: number): string {
+  if (!dateStr || !dateStr.trim()) return "";
+  try {
+    const parts = dateStr.trim().split(/[-T/]/);
+    if (parts.length >= 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+        const d = new Date(year, month, day);
+        d.setDate(d.getDate() + days);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const dt = String(d.getDate()).padStart(2, "0");
+        return `${y}-${m}-${dt}`;
+      }
+    }
+  } catch {}
+  return dateStr;
+}
+
 export const generateMilestoneInvoices = (
   paymentType: PaymentType,
   attpPercentage: string | undefined,
   installmentCount: number | string | undefined,
   totalAmount: number,
   existingInvoices?: InvoiceMilestone[],
-  existingRaisedAmount?: number
+  existingRaisedAmount?: number,
+  startDateStr?: string,
+  endDateStr?: string
 ): InvoiceMilestone[] => {
   let count = 1;
   let percentages: { label: string; pct: number }[] = [];
@@ -820,15 +843,30 @@ export const generateMilestoneInvoices = (
 
     if (existingInvoices && existingInvoices.length === percentages.length && existing) {
       isRaised = Boolean(existing.isRaised);
-      dateRaised = existing.dateRaised || (isRaised ? new Date().toISOString().slice(0, 10) : "");
+      dateRaised = existing.dateRaised || "";
       isReceived = Boolean(existing.isReceived);
-      dateReceived = existing.dateReceived || (isReceived ? new Date().toISOString().slice(0, 10) : "");
+      dateReceived = existing.dateReceived || "";
     } else if (targetRaised > 0) {
       if (accumulatedRaised + itemAmount <= targetRaised + 50 || (idx === 0 && targetRaised >= itemAmount * 0.4)) {
         isRaised = true;
-        dateRaised = new Date().toISOString().slice(0, 10);
+        dateRaised = startDateStr || new Date().toISOString().slice(0, 10);
         accumulatedRaised += itemAmount;
       }
+    }
+
+    // Default scheduled date if not set
+    if (!dateRaised && startDateStr) {
+      if (percentages.length === 1) {
+        dateRaised = startDateStr;
+      } else if (percentages.length === 2) {
+        dateRaised = idx === 0 ? startDateStr : (endDateStr || addDaysToDateStr(startDateStr, 30));
+      } else {
+        dateRaised = addDaysToDateStr(startDateStr, idx * 30);
+      }
+    }
+
+    if (isReceived && !dateReceived && dateRaised) {
+      dateReceived = addDaysToDateStr(dateRaised, 15);
     }
 
     return {

@@ -197,7 +197,10 @@ export function calculatePeriodOutstanding(
   let outstandingAmount = 0;
 
   projects.forEach((proj) => {
-    // Retrieve or generate project milestone invoices
+    const projStartDate = proj.phases?.[0]?.startDate || proj.created_at;
+    const projEndDate = proj.phases?.[0]?.endDate;
+
+    // Retrieve or generate project milestone invoices with timeline awareness
     const projectInvoices: InvoiceMilestone[] =
       proj.invoices && proj.invoices.length > 0
         ? proj.invoices
@@ -207,7 +210,9 @@ export function calculatePeriodOutstanding(
             proj.installment_count,
             proj.gst_cost,
             undefined,
-            proj.invoice_raised
+            proj.invoice_raised,
+            projStartDate,
+            projEndDate
           );
 
     projectInvoices.forEach((inv, idx) => {
@@ -218,7 +223,7 @@ export function calculatePeriodOutstanding(
       const isRelevantForPeriod =
         isRaisedInPeriod ||
         isReceivedInPeriod ||
-        (!inv.dateRaised && isDateInPeriod(proj.phases?.[0]?.startDate || proj.created_at, period));
+        (!inv.dateRaised && isDateInPeriod(projStartDate, period));
 
       if (isRelevantForPeriod) {
         const isActuallyReceived = Boolean(inv.isReceived || (inv.dateReceived && inv.dateReceived.trim().length > 0));
@@ -233,17 +238,18 @@ export function calculatePeriodOutstanding(
 
         const pendingBal = isActuallyReceived ? 0 : inv.amount;
 
-        if (isRaisedInPeriod && isActuallyRaised) {
+        if (isActuallyRaised && (isRaisedInPeriod || !inv.dateRaised)) {
           raisedCount++;
           raisedAmount += inv.amount;
         }
 
-        if (isReceivedInPeriod && isActuallyReceived) {
+        if (isActuallyReceived && (isReceivedInPeriod || !inv.dateReceived)) {
           receivedCount++;
           receivedAmount += inv.amount;
         }
 
-        if (isActuallyRaised && !isActuallyReceived) {
+        // Outstanding for this period: any invoice active in this period that is not yet received
+        if (!isActuallyReceived) {
           outstandingCount++;
           outstandingAmount += inv.amount;
         }
