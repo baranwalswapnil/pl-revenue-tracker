@@ -329,30 +329,9 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
         </div>
       </div>
 
-      {/* 4 SUMMARY KPI CARDS */}
+      {/* 3 SUMMARY KPI CARDS */}
       <div className="outstanding-kpi-grid">
-        {/* Card 1: Raised Invoices */}
-        <div className="kpi-card raised-kpi-card">
-          <div className="kpi-card-inner">
-            <div className="kpi-header-row">
-              <span className="kpi-title">Invoices Raised</span>
-              <span className="kpi-badge-icon raised-badge-icon">
-                <CheckCircle2 size={18} />
-              </span>
-            </div>
-            <div className="kpi-value-row">
-              <span className="kpi-amount">{formatINR(summary.raisedAmount)}</span>
-            </div>
-            <div className="kpi-footer-row">
-              <span className="kpi-count-text">
-                <strong>{summary.raisedCount}</strong> invoice{summary.raisedCount === 1 ? "" : "s"} raised
-              </span>
-              <span className="kpi-period-tag">{currentPeriod.label}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Received Invoices */}
+        {/* Card 1: Received Invoices */}
         <div className="kpi-card received-kpi-card">
           <div className="kpi-card-inner">
             <div className="kpi-header-row">
@@ -375,7 +354,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
           </div>
         </div>
 
-        {/* Card 3: Outstanding Balance */}
+        {/* Card 2: Outstanding Balance */}
         <div className="kpi-card outstanding-kpi-card">
           <div className="kpi-card-inner">
             <div className="kpi-header-row">
@@ -398,7 +377,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
           </div>
         </div>
 
-        {/* Card 4: Total Invoices in Scope */}
+        {/* Card 3: Total Invoices in Scope */}
         <div className="kpi-card total-kpi-card">
           <div className="kpi-card-inner">
             <div className="kpi-header-row">

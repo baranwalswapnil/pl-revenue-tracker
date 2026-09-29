@@ -249,19 +249,23 @@ export function calculatePeriodOutstanding(
           invDateReceived.length > 0
         );
 
-        // 2. Check if Processed / Raised (matches "processed", "raised", "pending", dateRaised, amountRaised)
+        // 2. Check if Processed / Raised (matches "processed", "raised", "pending", "hold", "ti for pi", dateRaised, amountRaised)
+        // Only explicitly Raised and Processed invoices should be counted in Outstanding / Pending Balance
         const isActuallyRaised = Boolean(
           isActuallyReceived ||
           inv.isRaised ||
           invTypeLower.includes("process") ||
           invTypeLower.includes("raise") ||
           invTypeLower.includes("pend") ||
+          invTypeLower.includes("hold") ||
+          invTypeLower.includes("ti for pi") ||
           invStatusLower.includes("process") ||
           invStatusLower.includes("raise") ||
           invStatusLower.includes("pend") ||
+          invStatusLower.includes("hold") ||
+          invStatusLower.includes("ti for pi") ||
           (inv.dateRaised && inv.dateRaised.trim().length > 0) ||
-          (inv.amountRaised && inv.amountRaised > 0) ||
-          inv.amount > 0
+          (inv.amountRaised && inv.amountRaised > 0)
         );
 
         let status: "Received" | "Pending Payment" | "Unraised" = "Unraised";
@@ -272,7 +276,7 @@ export function calculatePeriodOutstanding(
         }
 
         const milestoneAmt = inv.amountRaised || inv.amount || 0;
-        const pendingBal = isActuallyReceived ? 0 : milestoneAmt;
+        const pendingBal = isActuallyReceived ? 0 : (isActuallyRaised ? milestoneAmt : 0);
 
         if (isActuallyRaised) {
           raisedCount++;
@@ -283,7 +287,7 @@ export function calculatePeriodOutstanding(
           receivedCount++;
           receivedAmount += milestoneAmt;
         } else if (isActuallyRaised) {
-          // Processed / Raised comes in Outstanding / Pending Balance
+          // ONLY Processed / Raised invoices come in Outstanding / Pending Balance
           outstandingCount++;
           outstandingAmount += milestoneAmt;
         }
