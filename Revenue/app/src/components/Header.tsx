@@ -81,9 +81,10 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {selectedCollegeName && currentView !== "dashboard" && (
-            <div className="active-college-pill">
+          {selectedCollegeName && currentView !== "dashboard" && currentView !== "outstanding" && (
+            <div className="active-college-pill" title={`Currently working on: ${selectedCollegeName}`}>
               <span className="live-status-dot"></span>
+              <span style={{ color: "var(--text-muted)", fontWeight: 500, fontSize: "12px" }}>College:</span>
               <span className="active-college-name">{selectedCollegeName}</span>
             </div>
           )}

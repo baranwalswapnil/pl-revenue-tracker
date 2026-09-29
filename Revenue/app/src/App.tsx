@@ -456,7 +456,9 @@ export function App() {
         currentView={currentView}
         onBackToDashboard={() => navigateTo("dashboard")}
         selectedCollegeName={
-          currentView === "new-entry"
+          currentView === "outstanding"
+            ? undefined
+            : currentView === "new-entry"
             ? draft.collegeName || "New College"
             : currentView === "training-phase"
             ? draft.collegeName || "Training Phase"
