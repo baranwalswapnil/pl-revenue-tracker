@@ -494,11 +494,12 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  */
 
 /**
- * Run this function ONCE inside Apps Script editor to authorize Drive permissions:
+ * Run this function ONCE inside Apps Script editor to authorize Drive WRITE permissions:
  */
 function authorizeDrive() {
-  var root = DriveApp.getRootFolder();
-  Logger.log("Drive authorized successfully! Root folder: " + root.getName());
+  var testFile = DriveApp.createFile("temp_auth_check.txt", "Drive write permission test");
+  testFile.setTrashed(true);
+  Logger.log("Google Drive WRITE permission successfully authorized!");
 }
 
 function doGet(e) {
