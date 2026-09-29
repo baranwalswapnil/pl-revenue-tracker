@@ -516,14 +516,57 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
     const tdsStatus = colTdsStatus !== -1 ? (row[colTdsStatus] || "").trim() : "";
 
     const rawReceived = colReceived !== -1 ? (row[colReceived] || "").trim() : "";
-    const { isReceived, receivedAmount, dateReceived } = parseReceivedValue(rawReceived, amountRaised);
+    const typeLower = (invoiceType || "").toLowerCase();
+    const statusLower = (status || "").toLowerCase();
+    const recLower = (rawReceived || "").toLowerCase();
 
-    const isRaised = Boolean(
-      (amountRaised > 0 && dateRaised) ||
-      (status && status.toLowerCase().includes("raised")) ||
-      isReceived ||
-      (dateRaised && dateRaised.length > 0)
+    const parsedRec = parseReceivedValue(rawReceived, amountRaised);
+
+    // 1. Check if Received / Collected (supports "received", "recieved", "paid", "cleared", "yes", etc.)
+    const isReceived = Boolean(
+      typeLower.includes("rec") || // "received" or "recieved"
+      typeLower.includes("paid") ||
+      typeLower.includes("clear") ||
+      statusLower.includes("rec") ||
+      statusLower.includes("paid") ||
+      statusLower.includes("clear") ||
+      recLower.includes("rec") ||
+      recLower.includes("paid") ||
+      recLower.includes("clear") ||
+      recLower.includes("yes") ||
+      recLower === "y" ||
+      recLower === "true" ||
+      parsedRec.isReceived
     );
+
+    const receivedAmount = isReceived
+      ? parsedRec.receivedAmount > 0
+        ? parsedRec.receivedAmount
+        : amountRaised || amountFromMou
+      : 0;
+    const dateReceived = parsedRec.dateReceived || (isReceived ? dateRaised : "");
+
+    // 2. Check if Processed / Raised (Pending / Outstanding)
+    const isProcessedOrRaised = Boolean(
+      isReceived ||
+      typeLower.includes("process") || // "processed", "in process"
+      typeLower.includes("raise") ||   // "raised"
+      typeLower.includes("pend") ||    // "pending"
+      statusLower.includes("process") ||
+      statusLower.includes("raise") ||
+      statusLower.includes("pend") ||
+      (amountRaised > 0 && dateRaised.length > 0) ||
+      (dateRaised && dateRaised.length > 0) ||
+      amountRaised > 0
+    );
+
+    const isRaised = Boolean(isReceived || isProcessedOrRaised || amountRaised > 0);
+
+    const finalStatus = isReceived
+      ? "Received"
+      : isRaised
+      ? "Pending Payment"
+      : "Unraised";
 
     items.push({
       id: `inv-tr-${(projectCode || collegeName).toLowerCase().replace(/[^a-z0-9]/g, "-")}-${invoiceNo}-${r}`,
@@ -540,7 +583,7 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
       date_raised: dateRaised,
       invoice_code: invoiceCode,
       invoice_type: invoiceType,
-      status: status || (isReceived ? "Received" : isRaised ? "Raised" : "Pending"),
+      status: status || finalStatus,
       remarks,
       ga_invoice_code: gaInvoiceCode,
       printed,

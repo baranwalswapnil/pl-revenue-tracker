@@ -233,8 +233,36 @@ export function calculatePeriodOutstanding(
         (!inv.dateRaised && isDateInPeriod(projStartDate, period));
 
       if (isRelevantForPeriod) {
-        const isActuallyReceived = Boolean(inv.isReceived || (inv.dateReceived && inv.dateReceived.trim().length > 0));
-        const isActuallyRaised = Boolean(inv.isRaised || (inv.dateRaised && inv.dateRaised.trim().length > 0));
+        const invTypeLower = (inv.invoiceType || "").toLowerCase();
+        const invStatusLower = (inv.status || "").toLowerCase();
+        const invDateReceived = (inv.dateReceived || "").trim();
+
+        // 1. Check if Received / Collected (matches "received", "recieved", "paid", "cleared", dateReceived)
+        const isActuallyReceived = Boolean(
+          inv.isReceived ||
+          invTypeLower.includes("rec") ||
+          invTypeLower.includes("paid") ||
+          invTypeLower.includes("clear") ||
+          invStatusLower.includes("rec") ||
+          invStatusLower.includes("paid") ||
+          invStatusLower.includes("clear") ||
+          invDateReceived.length > 0
+        );
+
+        // 2. Check if Processed / Raised (matches "processed", "raised", "pending", dateRaised, amountRaised)
+        const isActuallyRaised = Boolean(
+          isActuallyReceived ||
+          inv.isRaised ||
+          invTypeLower.includes("process") ||
+          invTypeLower.includes("raise") ||
+          invTypeLower.includes("pend") ||
+          invStatusLower.includes("process") ||
+          invStatusLower.includes("raise") ||
+          invStatusLower.includes("pend") ||
+          (inv.dateRaised && inv.dateRaised.trim().length > 0) ||
+          (inv.amountRaised && inv.amountRaised > 0) ||
+          inv.amount > 0
+        );
 
         let status: "Received" | "Pending Payment" | "Unraised" = "Unraised";
         if (isActuallyReceived) {
@@ -243,22 +271,21 @@ export function calculatePeriodOutstanding(
           status = "Pending Payment";
         }
 
-        const pendingBal = isActuallyReceived ? 0 : inv.amount;
+        const milestoneAmt = inv.amountRaised || inv.amount || 0;
+        const pendingBal = isActuallyReceived ? 0 : milestoneAmt;
 
-        if (isActuallyRaised && (isRaisedInPeriod || !inv.dateRaised)) {
+        if (isActuallyRaised) {
           raisedCount++;
-          raisedAmount += inv.amount;
+          raisedAmount += milestoneAmt;
         }
 
-        if (isActuallyReceived && (isReceivedInPeriod || !inv.dateReceived)) {
+        if (isActuallyReceived) {
           receivedCount++;
-          receivedAmount += inv.amount;
-        }
-
-        // Outstanding for this period: any invoice active in this period that is not yet received
-        if (!isActuallyReceived) {
+          receivedAmount += milestoneAmt;
+        } else if (isActuallyRaised) {
+          // Processed / Raised comes in Outstanding / Pending Balance
           outstandingCount++;
-          outstandingAmount += inv.amount;
+          outstandingAmount += milestoneAmt;
         }
 
         items.push({
