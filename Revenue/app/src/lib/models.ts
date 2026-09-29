@@ -25,8 +25,12 @@ export type InvoiceMilestone = {
   amount: number;
   isRaised: boolean;
   dateRaised?: string;
+  raisedProofUrl?: string;
+  raisedProofName?: string;
   isReceived?: boolean;
   dateReceived?: string;
+  receivedProofUrl?: string;
+  receivedProofName?: string;
   invoiceCode?: string;
 };
 
@@ -52,6 +56,8 @@ export type Project = {
   invoice_count: number;
   invoice_raised: number;
   invoice_received?: number;
+  raised_invoice_proof?: string;
+  received_invoice_proof?: string;
   invoices?: InvoiceMilestone[];
   additional_notes?: string;
   created_at?: string;

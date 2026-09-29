@@ -488,8 +488,12 @@ export const generateMilestoneInvoices = (
       amount: itemAmount,
       isRaised,
       dateRaised,
+      raisedProofUrl: existing?.raisedProofUrl,
+      raisedProofName: existing?.raisedProofName,
       isReceived,
       dateReceived,
+      receivedProofUrl: existing?.receivedProofUrl,
+      receivedProofName: existing?.receivedProofName,
       invoiceCode: existing?.invoiceCode || `INV-${String(idx + 1).padStart(2, "0")}`,
     };
   });

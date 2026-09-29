@@ -3260,3 +3260,211 @@ a {
   padding: 16px;
   margin-top: 14px;
 }
+
+/* =======================================================
+   Google Drive Proof Upload & Invoices Table Styles
+   ======================================================= */
+.proof-drive-info-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f0fdfa;
+  border: 1px solid #ccfbf1;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  font-size: 12.5px;
+}
+
+.proof-drive-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.drive-tag {
+  font-weight: 700;
+  font-size: 11.5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.drive-tag.raised-tag {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.drive-tag.received-tag {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.drive-folder-link {
+  color: #0d9488;
+  font-weight: 600;
+  text-decoration: underline;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s ease;
+}
+
+.drive-folder-link:hover {
+  color: #0f766e;
+}
+
+.sheet-target-col {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.sheet-target-col strong {
+  color: #0f172a;
+}
+
+/* Proof Toast Alert */
+.proof-toast-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  animation: modalPop 0.25s ease-out;
+}
+
+.proof-toast-alert.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.proof-toast-alert.error {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.toast-dismiss-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.toast-dismiss-btn:hover {
+  opacity: 1;
+}
+
+/* Tick Cell Layout */
+.inv-tick-cell-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.proof-action-wrapper {
+  margin-top: 2px;
+}
+
+/* Upload Proof Button */
+.proof-upload-btn-styled {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px dashed #94a3b8;
+  background: #ffffff;
+  color: #475569;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.proof-upload-btn-styled.raised-upload:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.proof-upload-btn-styled.received-upload:hover {
+  border-color: #059669;
+  color: #059669;
+  background: #ecfdf5;
+}
+
+/* Proof Pill Container */
+.proof-pill-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.proof-link-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.proof-link-badge.raised-proof-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.proof-link-badge.raised-proof-badge:hover {
+  background: #bfdbfe;
+  color: #1e40af;
+}
+
+.proof-link-badge.received-proof-badge {
+  background: #d1fae5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.proof-link-badge.received-proof-badge:hover {
+  background: #a7f3d0;
+  color: #065f46;
+}
+
+.proof-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.proof-icon-btn.change-btn:hover {
+  background: #dbeafe;
+  color: #2563eb;
+  border-color: #93c5fd;
+}
+
+.proof-icon-btn.remove-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}

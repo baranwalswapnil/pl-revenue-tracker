@@ -25,11 +25,22 @@ import {
   Square,
   Clock,
   DollarSign,
+  Camera,
+  Paperclip,
+  ExternalLink,
+  X,
+  UploadCloud,
+  FileCheck,
+  FileSpreadsheet,
+  RefreshCw,
 } from "lucide-react";
 import type { Project, TrainingPhase, PaymentType, PhaseType, InvoiceMilestone } from "../lib/models";
 import { formatINR, computeAttpDetails, generateMilestoneInvoices } from "../lib/mockData";
-import { type GoogleSheetCollegeItem } from "../lib/googleSheetsService";
-import { FileSpreadsheet, RefreshCw } from "lucide-react";
+import {
+  type GoogleSheetCollegeItem,
+  uploadInvoiceProofToDrive,
+  GOOGLE_DRIVE_FOLDERS,
+} from "../lib/googleSheetsService";
 
 interface Step5UpdatePageProps {
   project: Project;
@@ -48,7 +59,6 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
   googleSheetColleges = [],
   onOpenGoogleSheetSync,
 }) => {
-  // Local state initialized with the selected project
   const [formData, setFormData] = useState<Project>({ ...project });
   const [editingTotalCost, setEditingTotalCost] = useState(false);
   const [editingGstCost, setEditingGstCost] = useState(false);
@@ -67,6 +77,95 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
       project.invoice_raised
     );
   });
+
+  // Uploading state for proof attachments
+  const [uploadingIdx, setUploadingIdx] = useState<{ index: number; type: "raised" | "received" } | null>(null);
+  const [proofToast, setProofToast] = useState<{ message: string; isError?: boolean } | null>(null);
+
+  const handleUploadProof = async (index: number, type: "raised" | "received", file: File) => {
+    setUploadingIdx({ index, type });
+    try {
+      const result = await uploadInvoiceProofToDrive({
+        file,
+        type,
+        projectCode: formData.project_code,
+        collegeName: formData.college_name,
+        invoiceCode: invoices[index]?.invoiceCode || `INV-${String(index + 1).padStart(2, "0")}`,
+        milestoneIndex: index,
+      });
+
+      const updated = [...invoices];
+      if (type === "raised") {
+        updated[index] = {
+          ...updated[index],
+          isRaised: true, // Automatically tick when proof is uploaded
+          dateRaised: updated[index].dateRaised || new Date().toISOString().slice(0, 10),
+          raisedProofUrl: result.fileUrl,
+          raisedProofName: file.name,
+        };
+      } else {
+        updated[index] = {
+          ...updated[index],
+          isReceived: true, // Automatically tick when payment proof is uploaded
+          dateReceived: updated[index].dateReceived || new Date().toISOString().slice(0, 10),
+          receivedProofUrl: result.fileUrl,
+          receivedProofName: file.name,
+        };
+      }
+
+      setInvoices(updated);
+
+      const allRaised = updated.map((i) => i.raisedProofUrl).filter(Boolean).join("\n");
+      const allReceived = updated.map((i) => i.receivedProofUrl).filter(Boolean).join("\n");
+      const raisedSum = updated.filter((inv) => inv.isRaised).reduce((sum, inv) => sum + inv.amount, 0);
+      const receivedSum = updated.filter((inv) => inv.isReceived).reduce((sum, inv) => sum + inv.amount, 0);
+
+      setFormData((prev) => ({
+        ...prev,
+        invoices: updated,
+        raised_invoice_proof: allRaised,
+        received_invoice_proof: allReceived,
+        invoice_raised: raisedSum,
+        invoice_received: receivedSum,
+      }));
+
+      setProofToast({ message: result.message });
+      setTimeout(() => setProofToast(null), 4500);
+    } catch (err: any) {
+      setProofToast({ message: `Upload error: ${err.message}`, isError: true });
+      setTimeout(() => setProofToast(null), 4500);
+    } finally {
+      setUploadingIdx(null);
+    }
+  };
+
+  const handleRemoveProof = (index: number, type: "raised" | "received") => {
+    const updated = [...invoices];
+    if (type === "raised") {
+      updated[index] = {
+        ...updated[index],
+        raisedProofUrl: undefined,
+        raisedProofName: undefined,
+      };
+    } else {
+      updated[index] = {
+        ...updated[index],
+        receivedProofUrl: undefined,
+        receivedProofName: undefined,
+      };
+    }
+    setInvoices(updated);
+
+    const allRaised = updated.map((i) => i.raisedProofUrl).filter(Boolean).join("\n");
+    const allReceived = updated.map((i) => i.receivedProofUrl).filter(Boolean).join("\n");
+
+    setFormData((prev) => ({
+      ...prev,
+      invoices: updated,
+      raised_invoice_proof: allRaised,
+      received_invoice_proof: allReceived,
+    }));
+  };
 
   // Handle reload directly from Google Sheet data if matching
   const handleReloadFromSheet = () => {
@@ -645,9 +744,14 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
     const raisedSum = invoices.filter((inv) => inv.isRaised).reduce((sum, inv) => sum + inv.amount, 0);
     const receivedSum = invoices.filter((inv) => inv.isReceived).reduce((sum, inv) => sum + inv.amount, 0);
 
+    const allRaisedProofs = invoices.map((i) => i.raisedProofUrl).filter(Boolean).join("\n");
+    const allReceivedProofs = invoices.map((i) => i.receivedProofUrl).filter(Boolean).join("\n");
+
     const finalPayload: Project = {
       ...formData,
       invoices,
+      raised_invoice_proof: allRaisedProofs || formData.raised_invoice_proof || "",
+      received_invoice_proof: allReceivedProofs || formData.received_invoice_proof || "",
       invoice_count: invoices.length,
       invoice_raised: raisedSum,
       invoice_received: receivedSum,
@@ -1264,14 +1368,55 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
             </div>
           </div>
 
-          {/* Invoices Checklist Table (Updated without Invoice #, Milestone Plan, Status) */}
+          {/* Google Drive Upload Sync Information Banner */}
+          <div className="proof-drive-info-banner">
+            <div className="proof-drive-item">
+              <span className="drive-tag raised-tag">📁 Raised Proofs:</span>
+              <a
+                href="https://drive.google.com/drive/folders/1Aqg6rmMETXqtjcEz6z07XDsj1jYWRfNf?usp=sharing"
+                target="_blank"
+                rel="noreferrer"
+                className="drive-folder-link"
+              >
+                <span>Google Drive Folder (Raised)</span>
+                <ExternalLink size={12} />
+              </a>
+              <span className="sheet-target-col">→ Sheet Column: <strong>Raised Invoice proof</strong></span>
+            </div>
+            <div className="proof-drive-item">
+              <span className="drive-tag received-tag">📁 Received Proofs:</span>
+              <a
+                href="https://drive.google.com/drive/folders/1WgW61UJJ-TTwkZeYzOo3-GdQxD2upqtB?usp=sharing"
+                target="_blank"
+                rel="noreferrer"
+                className="drive-folder-link"
+              >
+                <span>Google Drive Folder (Received)</span>
+                <ExternalLink size={12} />
+              </a>
+              <span className="sheet-target-col">→ Sheet Column: <strong>Recieved Invoice</strong></span>
+            </div>
+          </div>
+
+          {/* Proof Upload Status Alert */}
+          {proofToast && (
+            <div className={`proof-toast-alert ${proofToast.isError ? "error" : "success"}`}>
+              {proofToast.isError ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
+              <span>{proofToast.message}</span>
+              <button type="button" className="toast-dismiss-btn" onClick={() => setProofToast(null)}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Invoices Checklist Table with Photo Upload Options */}
           <div className="update-invoices-table-wrap">
             <table className="update-invoices-table">
               <thead>
                 <tr>
-                  <th className="th-inv-tick">Tick Raised</th>
+                  <th className="th-inv-tick">Tick Raised & Photo</th>
                   <th className="th-inv-date">Date of Raised</th>
-                  <th className="th-inv-tick">Recieved</th>
+                  <th className="th-inv-tick">Recieved & Photo</th>
                   <th className="th-inv-date">Date of Recieved</th>
                   <th className="th-inv-pct">Share (%)</th>
                   <th className="th-inv-amount">Amount (₹)</th>
@@ -1282,28 +1427,89 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
                 {invoices.map((inv, idx) => {
                   const isRaised = Boolean(inv.isRaised);
                   const isReceived = Boolean(inv.isReceived);
+                  const isUploadingRaised = uploadingIdx?.index === idx && uploadingIdx.type === "raised";
+                  const isUploadingReceived = uploadingIdx?.index === idx && uploadingIdx.type === "received";
+
                   return (
                     <tr
                       key={inv.id || idx}
                       className={`inv-checklist-row ${isReceived ? "inv-row-received" : isRaised ? "inv-row-ticked" : "inv-row-pending"}`}
                     >
-                      {/* 1. Tick Raised */}
+                      {/* 1. Tick Raised & Upload Photo */}
                       <td className="td-inv-tick">
-                        <label className="inv-checkbox-container" htmlFor={`inv-raised-check-${idx}`}>
-                          <input
-                            type="checkbox"
-                            id={`inv-raised-check-${idx}`}
-                            className="inv-custom-checkbox"
-                            checked={isRaised}
-                            onChange={() => handleToggleRaised(idx)}
-                          />
-                          <span className="inv-checkbox-checkmark checkmark-raised">
-                            {isRaised && <Check size={13} strokeWidth={3} />}
-                          </span>
-                          <span className={`inv-tick-label ${isRaised ? "text-green" : ""}`}>
-                            {isRaised ? "Raised" : "Pending"}
-                          </span>
-                        </label>
+                        <div className="inv-tick-cell-content">
+                          <label className="inv-checkbox-container" htmlFor={`inv-raised-check-${idx}`}>
+                            <input
+                              type="checkbox"
+                              id={`inv-raised-check-${idx}`}
+                              className="inv-custom-checkbox"
+                              checked={isRaised}
+                              onChange={() => handleToggleRaised(idx)}
+                            />
+                            <span className="inv-checkbox-checkmark checkmark-raised">
+                              {isRaised && <Check size={13} strokeWidth={3} />}
+                            </span>
+                            <span className={`inv-tick-label ${isRaised ? "text-green" : ""}`}>
+                              {isRaised ? "Raised" : "Pending"}
+                            </span>
+                          </label>
+
+                          {/* Upload Photo Button & Proof Link for Raised Invoice */}
+                          <div className="proof-action-wrapper">
+                            {inv.raisedProofUrl ? (
+                              <div className="proof-pill-container">
+                                <a
+                                  href={inv.raisedProofUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="proof-link-badge raised-proof-badge"
+                                  title="View photo proof in Google Drive"
+                                >
+                                  <Paperclip size={12} />
+                                  <span>Proof</span>
+                                  <ExternalLink size={11} />
+                                </a>
+                                <label className="proof-icon-btn change-btn" title="Change photo proof">
+                                  <input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => e.target.files?.[0] && handleUploadProof(idx, "raised", e.target.files[0])}
+                                    hidden
+                                  />
+                                  <Camera size={12} />
+                                </label>
+                                <button
+                                  type="button"
+                                  className="proof-icon-btn remove-btn"
+                                  onClick={() => handleRemoveProof(idx, "raised")}
+                                  title="Remove proof"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              <label className="proof-upload-btn-styled raised-upload" title="Upload Photo to Raised Invoices Drive Folder">
+                                <input
+                                  type="file"
+                                  accept="image/*,.pdf"
+                                  onChange={(e) => e.target.files?.[0] && handleUploadProof(idx, "raised", e.target.files[0])}
+                                  hidden
+                                />
+                                {isUploadingRaised ? (
+                                  <>
+                                    <RefreshCw size={12} className="spinning" />
+                                    <span>Uploading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Camera size={12} />
+                                    <span>Upload Photo</span>
+                                  </>
+                                )}
+                              </label>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       {/* 2. Date of Raised */}
@@ -1318,23 +1524,81 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
                         />
                       </td>
 
-                      {/* 3. Recieved */}
+                      {/* 3. Recieved & Upload Photo */}
                       <td className="td-inv-tick">
-                        <label className="inv-checkbox-container" htmlFor={`inv-received-check-${idx}`}>
-                          <input
-                            type="checkbox"
-                            id={`inv-received-check-${idx}`}
-                            className="inv-custom-checkbox"
-                            checked={isReceived}
-                            onChange={() => handleToggleReceived(idx)}
-                          />
-                          <span className="inv-checkbox-checkmark checkmark-received">
-                            {isReceived && <Check size={13} strokeWidth={3} />}
-                          </span>
-                          <span className={`inv-tick-label ${isReceived ? "text-emerald" : ""}`}>
-                            {isReceived ? "Recieved" : "Pending"}
-                          </span>
-                        </label>
+                        <div className="inv-tick-cell-content">
+                          <label className="inv-checkbox-container" htmlFor={`inv-received-check-${idx}`}>
+                            <input
+                              type="checkbox"
+                              id={`inv-received-check-${idx}`}
+                              className="inv-custom-checkbox"
+                              checked={isReceived}
+                              onChange={() => handleToggleReceived(idx)}
+                            />
+                            <span className="inv-checkbox-checkmark checkmark-received">
+                              {isReceived && <Check size={13} strokeWidth={3} />}
+                            </span>
+                            <span className={`inv-tick-label ${isReceived ? "text-emerald" : ""}`}>
+                              {isReceived ? "Recieved" : "Pending"}
+                            </span>
+                          </label>
+
+                          {/* Upload Photo Button & Proof Link for Received Invoice */}
+                          <div className="proof-action-wrapper">
+                            {inv.receivedProofUrl ? (
+                              <div className="proof-pill-container">
+                                <a
+                                  href={inv.receivedProofUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="proof-link-badge received-proof-badge"
+                                  title="View payment receipt in Google Drive"
+                                >
+                                  <Paperclip size={12} />
+                                  <span>Proof</span>
+                                  <ExternalLink size={11} />
+                                </a>
+                                <label className="proof-icon-btn change-btn" title="Change payment proof">
+                                  <input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={(e) => e.target.files?.[0] && handleUploadProof(idx, "received", e.target.files[0])}
+                                    hidden
+                                  />
+                                  <Camera size={12} />
+                                </label>
+                                <button
+                                  type="button"
+                                  className="proof-icon-btn remove-btn"
+                                  onClick={() => handleRemoveProof(idx, "received")}
+                                  title="Remove proof"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              <label className="proof-upload-btn-styled received-upload" title="Upload Photo to Received Invoices Drive Folder">
+                                <input
+                                  type="file"
+                                  accept="image/*,.pdf"
+                                  onChange={(e) => e.target.files?.[0] && handleUploadProof(idx, "received", e.target.files[0])}
+                                  hidden
+                                />
+                                {isUploadingReceived ? (
+                                  <>
+                                    <RefreshCw size={12} className="spinning" />
+                                    <span>Uploading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Camera size={12} />
+                                    <span>Upload Photo</span>
+                                  </>
+                                )}
+                              </label>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       {/* 4. Date of Recieved */}
