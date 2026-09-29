@@ -11,14 +11,21 @@ import {
   Download,
   FileSpreadsheet,
   ChevronDown,
+  Clock,
+  TrendingUp,
+  Layers,
+  Sparkles,
 } from "lucide-react";
 import type { Project } from "../lib/models";
 import { formatINR, getProjectInvoiceStats } from "../lib/mockData";
+import { OutstandingDropdown } from "./OutstandingDropdown";
+import { type OutstandingPeriod, getDefaultPeriod } from "../lib/outstandingService";
 
 interface Step1DashboardProps {
   projects: Project[];
   onOpenAddCollege: () => void;
   onOpenUpdateModal: () => void;
+  onOpenOutstanding: (period?: OutstandingPeriod) => void;
   onViewProject: (project: Project) => void;
   onEditProject: (project: Project) => void;
   onDeleteProject: (projectId: string) => void;
@@ -30,6 +37,7 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
   projects,
   onOpenAddCollege,
   onOpenUpdateModal,
+  onOpenOutstanding,
   onViewProject,
   onEditProject,
   onDeleteProject,
@@ -39,6 +47,7 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "pending" | "cleared">("all");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [isOutstandingMenuOpen, setIsOutstandingMenuOpen] = useState(false);
 
   const filteredProjects = useMemo(() => {
     return projects.filter((project) => {
@@ -98,11 +107,16 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
     document.body.removeChild(link);
   };
 
+  const handleSelectOutstandingPeriod = (period: OutstandingPeriod) => {
+    setIsOutstandingMenuOpen(false);
+    onOpenOutstanding(period);
+  };
+
   return (
     <div className="dashboard-container">
-      {/* Top Section - Add College and Update College Cards */}
+      {/* Top Section - Add College, Update College and Outstanding Cards */}
       <section className="top-action-cards-grid">
-        {/* Add College Card */}
+        {/* Card 1: Add College Card */}
         <div className="action-card add-card" onClick={onOpenAddCollege} role="button" tabIndex={0}>
           <div className="action-card-content">
             <div className="action-card-header-row">
@@ -152,7 +166,7 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
           </div>
         </div>
 
-        {/* Update College Card */}
+        {/* Card 2: Update College Card */}
         <div className="action-card update-card" onClick={onOpenUpdateModal} role="button" tabIndex={0}>
           <div className="action-card-content">
             <div className="action-card-header-row">
@@ -202,7 +216,61 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
             </svg>
           </div>
         </div>
+
+        {/* Card 3: Outstanding Card (NEW!) */}
+        <div
+          className="action-card outstanding-card"
+          onClick={() => setIsOutstandingMenuOpen(true)}
+          role="button"
+          tabIndex={0}
+        >
+          <div className="action-card-content">
+            <div className="action-card-header-row">
+              <div className="action-icon-wrap outstanding-icon-wrap">
+                <Clock size={26} />
+              </div>
+              <div className="action-card-text">
+                <h2 className="action-card-title">Outstanding</h2>
+                <p className="action-card-desc">
+                  Quarterly & Monthly breakdown of raised vs. received invoices.
+                </p>
+              </div>
+            </div>
+
+            <div className="action-btn-row">
+              <button
+                type="button"
+                className="action-btn outstanding-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOutstandingMenuOpen(true);
+                }}
+                id="outstanding-btn"
+              >
+                <span>Outstanding</span>
+                <ChevronDown size={16} className="btn-arrow" />
+              </button>
+            </div>
+          </div>
+
+          <div className="action-card-art-wrap outstanding-art-wrap" aria-hidden="true">
+            <svg viewBox="0 0 170 140" fill="none" className="card-illustration-svg">
+              <circle cx="95" cy="70" r="50" fill="#fed7aa" fillOpacity="0.45" />
+              <circle cx="95" cy="70" r="38" fill="#ffffff" fillOpacity="0.6" />
+              <path d="M95 44 v26 l16 10" stroke="#ea580c" strokeWidth="3.5" strokeLinecap="round" />
+              <circle cx="135" cy="40" r="14" fill="#ffedd5" stroke="#f97316" strokeWidth="2" />
+              <path d="M131 40 l3 3 l6 -6" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
       </section>
+
+      {/* Outstanding Period Selection Modal / Dropdown */}
+      <OutstandingDropdown
+        isOpen={isOutstandingMenuOpen}
+        onClose={() => setIsOutstandingMenuOpen(false)}
+        onSelectPeriod={handleSelectOutstandingPeriod}
+      />
 
       {/* Bottom Section - Excel Type Overview Table */}
       <section className="excel-table-section">

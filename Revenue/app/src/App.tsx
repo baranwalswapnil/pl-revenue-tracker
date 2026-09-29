@@ -19,13 +19,15 @@ import { Step3_TrainingPhase } from "./components/Step3_TrainingPhase";
 import { Step4_HealthReport } from "./components/Step4_HealthReport";
 import { Step5_UpdateModal } from "./components/Step5_UpdateModal";
 import { Step5_UpdatePage } from "./components/Step5_UpdatePage";
+import { Step6_OutstandingPage } from "./components/Step6_OutstandingPage";
 import { GoogleSheetSyncModal } from "./components/GoogleSheetSyncModal";
 import { Toast, type ToastType } from "./components/Toast";
+import { type OutstandingPeriod, getDefaultPeriod } from "./lib/outstandingService";
 import "./style.css";
 
 const LOCAL_STORAGE_KEY = "company_finance_projects_v3";
 
-type AppView = "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page";
+type AppView = "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding";
 
 export function App() {
   // Load initial projects from localStorage or default mock data
@@ -136,6 +138,9 @@ export function App() {
   // Selected project for viewing Health Report or Updating
   const [activeProject, setActiveProject] = useState<Project | null>(projects[0] || null);
 
+  // Selected period for Outstanding Tracker
+  const [outstandingPeriod, setOutstandingPeriod] = useState<OutstandingPeriod>(() => getDefaultPeriod());
+
   // Draft state for Step 2 and Step 3
   const [draft, setDraft] = useState<ProjectDraft>(() => createEmptyDraft());
 
@@ -175,7 +180,7 @@ export function App() {
 
   // Synchronize with Browser Back / Forward buttons
   useEffect(() => {
-    const validViews: AppView[] = ["dashboard", "new-entry", "training-phase", "health-report", "update-page"];
+    const validViews: AppView[] = ["dashboard", "new-entry", "training-phase", "health-report", "update-page", "outstanding"];
     const currentHash = window.location.hash.replace("#", "") as AppView;
 
     if (validViews.includes(currentHash)) {
@@ -201,6 +206,13 @@ export function App() {
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, [projects]);
+
+  const handleOpenOutstanding = (period?: OutstandingPeriod) => {
+    if (period) {
+      setOutstandingPeriod(period);
+    }
+    navigateTo("outstanding");
+  };
 
   // ==========================================
   // GOOGLE SPREADSHEET HANDLERS
@@ -459,12 +471,13 @@ export function App() {
 
       {/* Main Container Body */}
       <main className="app-main-content-wrap">
-        {/* Step 1: Main Dashboard Screen (Add College card, Update College card, Excel Table) */}
+        {/* Step 1: Main Dashboard Screen (Add College card, Update College card, Outstanding card, Excel Table) */}
         {currentView === "dashboard" && (
           <Step1_Dashboard
             projects={projects}
             onOpenAddCollege={handleOpenAddCollege}
             onOpenUpdateModal={handleOpenUpdateModal}
+            onOpenOutstanding={handleOpenOutstanding}
             onViewProject={handleViewProjectHealth}
             onEditProject={handleEditProjectFromDashboard}
             onDeleteProject={handleDeleteProject}
@@ -530,6 +543,18 @@ export function App() {
               showToast("Reset to saved values.", "info");
             }}
             googleSheetColleges={googleSheetColleges}
+            onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
+          />
+        )}
+
+        {/* Step 6: Outstanding Invoices & Collection Tracking Screen (NEW!) */}
+        {currentView === "outstanding" && (
+          <Step6_OutstandingPage
+            projects={projects}
+            initialPeriod={outstandingPeriod}
+            onBackToDashboard={() => navigateTo("dashboard")}
+            onViewProject={handleViewProjectHealth}
+            onEditProject={handleEditProjectFromDashboard}
             onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
           />
         )}

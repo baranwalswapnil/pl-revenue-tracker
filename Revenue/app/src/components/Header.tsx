@@ -2,7 +2,7 @@ import React from "react";
 import { ArrowLeft, Building2, FileSpreadsheet } from "lucide-react";
 
 interface HeaderProps {
-  currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page";
+  currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding";
   onBackToDashboard: () => void;
   selectedCollegeName?: string;
   onResetSampleData?: () => void;
