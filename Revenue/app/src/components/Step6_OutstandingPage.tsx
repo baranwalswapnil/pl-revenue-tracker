@@ -623,7 +623,9 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                               TDS: {item.tdsStatus}
                             </span>
                           )}
-                          {item.printed && item.printed.toLowerCase() === "yes" && (
+                          {(typeof item.printed === "string"
+                            ? item.printed.trim().toLowerCase() === "yes" || item.printed.trim().toLowerCase() === "true"
+                            : Boolean(item.printed)) && (
                             <span className="printed-tag" title="Hardcopy Printed & Dispatched">
                               🖨️ Hardcopy
                             </span>

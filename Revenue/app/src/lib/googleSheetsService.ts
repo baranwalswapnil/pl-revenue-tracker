@@ -1,4 +1,4 @@
-import type { Project, ProjectDraft, PaymentType, PhaseType } from "./models";
+import type { Project, ProjectDraft, PaymentType, PhaseType, InvoiceMilestone } from "./models";
 import { computeAttpDetails } from "./mockData";
 
 export interface GoogleSheetConfig {

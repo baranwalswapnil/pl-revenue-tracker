@@ -33,6 +33,7 @@ import {
   FileCheck,
   FileSpreadsheet,
   RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import type { Project, TrainingPhase, PaymentType, PhaseType, InvoiceMilestone } from "../lib/models";
 import { formatINR, computeAttpDetails, generateMilestoneInvoices } from "../lib/mockData";
