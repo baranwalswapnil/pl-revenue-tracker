@@ -13,7 +13,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { Project } from "../lib/models";
-import { formatINR } from "../lib/mockData";
+import { formatINR, getProjectInvoiceStats } from "../lib/mockData";
 
 interface Step1DashboardProps {
   projects: Project[];
@@ -65,20 +65,25 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
       "Academic Year",
       "Total Cost Value (INR)",
       "Total Cost Value with GST (INR)",
+      "Invoices Raised Count",
       "Invoice Raised (INR)",
       "Invoice to be Raised (INR)",
     ];
 
-    const rows = filteredProjects.map((p, index) => [
-      index + 1,
-      `"${p.project_code}"`,
-      `"${p.college_name}"`,
-      `"${p.academic_year}"`,
-      p.total_cost_value,
-      p.gst_cost,
-      p.invoice_raised,
-      Math.max(0, p.gst_cost - p.invoice_raised),
-    ]);
+    const rows = filteredProjects.map((p, index) => {
+      const stats = getProjectInvoiceStats(p);
+      return [
+        index + 1,
+        `"${p.project_code}"`,
+        `"${p.college_name}"`,
+        `"${p.academic_year}"`,
+        p.total_cost_value,
+        p.gst_cost,
+        `"${stats.raisedCount} of ${stats.totalCount}"`,
+        p.invoice_raised,
+        Math.max(0, p.gst_cost - p.invoice_raised),
+      ];
+    });
 
     const csvContent =
       "data:text/csv;charset=utf-8," +
@@ -392,9 +397,14 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
                         </span>
                       </td>
                       <td className="td-raised text-center">
-                        <span className="badge-pill green-badge">
-                          {formatINR(project.invoice_raised)}
-                        </span>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                          <span className="badge-pill green-badge">
+                            {formatINR(project.invoice_raised)}
+                          </span>
+                          <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600 }}>
+                            {getProjectInvoiceStats(project).raisedCount} of {getProjectInvoiceStats(project).totalCount} Raised
+                          </span>
+                        </div>
                       </td>
                       <td className="td-pending text-center">
                         <span className="badge-pill amber-badge">

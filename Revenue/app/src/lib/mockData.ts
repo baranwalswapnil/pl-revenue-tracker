@@ -495,6 +495,35 @@ export const generateMilestoneInvoices = (
   });
 };
 
+/**
+ * Calculates number of invoices raised, total invoices, amounts, and progress
+ */
+export function getProjectInvoiceStats(project: Project) {
+  const totalCount = Math.max(1, project.invoice_count || project.installment_count || 1);
+  const totalGst = Number(project.gst_cost) || (Number(project.total_cost_value) * 1.18);
+  const milestoneInvoices = generateMilestoneInvoices(
+    project.payment_type || "FNF",
+    project.attp_percentage || "50%",
+    totalCount,
+    totalGst,
+    project.invoices,
+    project.invoice_raised || 0
+  );
+  const raisedCount = milestoneInvoices.filter((i) => i.isRaised).length;
+  const raisedAmount = Number(project.invoice_raised) || 0;
+  const pendingAmount = Math.max(0, totalGst - raisedAmount);
+  const raisedPct = totalGst > 0 ? Math.min(100, Math.round((raisedAmount / totalGst) * 100)) : 0;
+
+  return {
+    raisedCount,
+    totalCount,
+    raisedAmount,
+    pendingAmount,
+    raisedPct,
+    milestoneInvoices,
+  };
+}
+
 export const createEmptyDraft = (existingProject?: Project): ProjectDraft => {
   if (existingProject) {
     const defaultPhase = existingProject.phases?.[0] || {
