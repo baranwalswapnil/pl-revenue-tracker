@@ -26,6 +26,7 @@ import {
   saveSheetConfig,
   saveCachedSheetItems,
   testGoogleAppsScriptConnection,
+  beautifySpreadsheetProofLinks,
   GOOGLE_APPS_SCRIPT_CODE,
   type GoogleSheetCollegeItem,
 } from "../lib/googleSheetsService";
@@ -52,6 +53,8 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isTestingScript, setIsTestingScript] = useState(false);
   const [testScriptResult, setTestScriptResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isBeautifying, setIsBeautifying] = useState(false);
+  const [beautifyResult, setBeautifyResult] = useState<{ success: boolean; message: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewItems, setPreviewItems] = useState<GoogleSheetCollegeItem[]>([]);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
@@ -187,6 +190,21 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
     const result = await testGoogleAppsScriptConnection(scriptUrl.trim());
     setTestScriptResult(result);
     setIsTestingScript(false);
+  };
+
+  const handleBeautifyLinks = async () => {
+    if (!scriptUrl.trim()) {
+      setErrorMsg("Please enter your Google Apps Script Web App URL first.");
+      return;
+    }
+
+    setIsBeautifying(true);
+    setBeautifyResult(null);
+    setErrorMsg(null);
+
+    const result = await beautifySpreadsheetProofLinks(scriptUrl.trim());
+    setBeautifyResult(result);
+    setIsBeautifying(false);
   };
 
   const handleCopyScriptCode = () => {
@@ -357,6 +375,25 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
                   {isTestingScript ? <RefreshCw size={15} className="spinning" /> : <Zap size={15} />}
                   <span>{isTestingScript ? "Testing..." : "Test Connection"}</span>
                 </button>
+                <button
+                  type="button"
+                  className="form-btn"
+                  onClick={handleBeautifyLinks}
+                  disabled={isBeautifying}
+                  style={{
+                    backgroundColor: "#6366f1",
+                    color: "#fff",
+                    padding: "0 16px",
+                    whiteSpace: "nowrap",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    fontWeight: 600,
+                  }}
+                >
+                  {isBeautifying ? <RefreshCw size={15} className="spinning" /> : <Sparkles size={15} />}
+                  <span>{isBeautifying ? "Beautifying..." : "✨ Beautify Proof Links"}</span>
+                </button>
               </div>
 
               {testScriptResult && (
@@ -379,10 +416,30 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
                 </div>
               )}
 
+              {beautifyResult && (
+                <div
+                  style={{
+                    marginTop: "10px",
+                    padding: "10px 14px",
+                    borderRadius: "6px",
+                    fontSize: "12.5px",
+                    backgroundColor: beautifyResult.success ? "#f5f3ff" : "#fef2f2",
+                    border: `1px solid ${beautifyResult.success ? "#ddd6fe" : "#fecaca"}`,
+                    color: beautifyResult.success ? "#5b21b6" : "#991b1b",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  {beautifyResult.success ? <Sparkles size={16} /> : <AlertCircle size={16} />}
+                  <span>{beautifyResult.message}</span>
+                </div>
+              )}
+
               <span className="field-hint-text" style={{ marginTop: "8px", display: "block" }}>
                 {scriptUrl ? (
                   <span style={{ color: "#10b981", fontWeight: 600 }}>
-                    ✓ 2-Way sync is configured! Make sure you clicked "Test Connection" to verify permissions.
+                    ✓ 2-Way sync is configured! All new uploads automatically format as aesthetic '=HYPERLINK()' badges.
                   </span>
                 ) : (
                   "Follow the 3-step guide below to generate and test your Google Apps Script URL."
@@ -407,6 +464,9 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
                 </li>
                 <li>
                   Click <strong>Deploy &gt; New deployment</strong> (or <em>Manage deployments &gt; Edit &gt; New version</em>) &rarr; Set <em>Execute as: <strong>Me</strong></em> and <em>Who has access: <strong>Anyone</strong> (REQUIRED!)</em> &rarr; Click <strong>Deploy</strong> &rarr; Copy the Web App URL and paste it in the box above!
+                </li>
+                <li>
+                  <strong>✨ Convert Existing Links to Badges</strong>: Click the <strong>"✨ Beautify Proof Links"</strong> button above or in your spreadsheet top menu click <strong>🚀 P&L Revenue Tools &gt; ✨ Beautify All Proof Links</strong> to instantly convert all existing raw URLs into clean badges!
                 </li>
               </ol>
 

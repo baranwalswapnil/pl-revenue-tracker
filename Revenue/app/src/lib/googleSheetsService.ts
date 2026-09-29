@@ -483,15 +483,27 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * 1. Open your Google Spreadsheet
  * 2. Click "Extensions" > "Apps Script" in top menu.
  * 3. Delete any code in the editor and paste this entire code.
- * 4. Click "Deploy" > "New deployment".
+ * 4. Click "Deploy" > "New deployment" (or "Manage deployments" > Edit > "New version" if updating).
  * 5. Select type: "Web app".
  * 6. Set "Execute as": "Me".
  * 7. Set "Who has access": "Anyone" (VERY IMPORTANT!).
  * 8. Click "Deploy", then click "Authorize access" (Advanced > Go to project > Allow).
  * 9. Copy the Web App URL and paste it into the Sheet Sync modal in the website!
  * 
- * NOTE: If you update code later, go to Deploy > Manage deployments > Edit > New version > Deploy!
+ * ✨ BONUS: Refresh your spreadsheet tab to see the new "🚀 P&L Revenue Tools" menu.
+ * Click "✨ Beautify All Proof Links" to instantly convert all existing raw links into clean badges!
  */
+
+/**
+ * Adds custom menu to Google Spreadsheet toolbar
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("🚀 P&L Revenue Tools")
+    .addItem("✨ Beautify All Proof Links (Convert to Badges)", "beautifyAllProofLinks")
+    .addItem("🧪 Test / Authorize Drive Permissions", "authorizeDrive")
+    .addToUi();
+}
 
 /**
  * Run this function ONCE inside Apps Script editor to authorize Drive WRITE permissions:
@@ -500,6 +512,69 @@ function authorizeDrive() {
   var testFile = DriveApp.createFile("temp_auth_check.txt", "Drive write permission test");
   testFile.setTrashed(true);
   Logger.log("Google Drive WRITE permission successfully authorized!");
+  try {
+    SpreadsheetApp.getUi().alert("✅ Google Drive WRITE permissions successfully authorized!");
+  } catch(e) {}
+}
+
+/**
+ * Scans all rows in the spreadsheet and converts any raw Google Drive URLs
+ * into clean, aesthetic '=HYPERLINK(url, "📄 View Proof")' badges!
+ */
+function beautifyAllProofLinks() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getActiveSheet() || ss.getSheets()[0];
+  var dataRange = sheet.getDataRange();
+  var values = dataRange.getValues();
+  if (values.length < 2) {
+    SpreadsheetApp.getUi().alert("No data rows found in spreadsheet.");
+    return;
+  }
+
+  var headers = values[0].map(function(h) {
+    return String(h || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  });
+
+  var colRaised = -1;
+  var colReceived = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].indexOf("raised") !== -1 && (headers[i].indexOf("proof") !== -1 || headers[i].indexOf("invoice") !== -1)) colRaised = i;
+    if (headers[i].indexOf("recieved") !== -1 || (headers[i].indexOf("received") !== -1 && headers[i].indexOf("invoice") !== -1)) colReceived = i;
+  }
+
+  var convertedCount = 0;
+
+  for (var r = 1; r < values.length; r++) {
+    if (colRaised !== -1) {
+      var valRaised = values[r][colRaised];
+      if (valRaised && String(valRaised).indexOf("http") !== -1) {
+        var cellRaised = sheet.getRange(r + 1, colRaised + 1);
+        formatProofCell(cellRaised, valRaised, "Raised");
+        convertedCount++;
+      }
+    }
+    if (colReceived !== -1) {
+      var valReceived = values[r][colReceived];
+      if (valReceived && String(valReceived).indexOf("http") !== -1) {
+        var cellReceived = sheet.getRange(r + 1, colReceived + 1);
+        formatProofCell(cellReceived, valReceived, "Received");
+        convertedCount++;
+      }
+    }
+  }
+
+  // Set optimal column widths and center alignment
+  if (colRaised !== -1) {
+    sheet.setColumnWidth(colRaised + 1, 165);
+    sheet.getRange(2, colRaised + 1, sheet.getLastRow() - 1, 1).setHorizontalAlignment("center").setVerticalAlignment("middle");
+  }
+  if (colReceived !== -1) {
+    sheet.setColumnWidth(colReceived + 1, 165);
+    sheet.getRange(2, colReceived + 1, sheet.getLastRow() - 1, 1).setHorizontalAlignment("center").setVerticalAlignment("middle");
+  }
+
+  SpreadsheetApp.flush();
+  SpreadsheetApp.getUi().alert("✨ Beautification Complete! Converted " + convertedCount + " proof link(s) into clean, aesthetic clickable badges!");
 }
 
 function doGet(e) {
@@ -524,7 +599,18 @@ function doPost(e) {
     }
     
     var data = JSON.parse(rawData);
-    var action = (data.action || "add").toLowerCase(); // "test", "upload_proof", "add", "update"
+    var action = (data.action || "add").toLowerCase(); // "test", "upload_proof", "add", "update", "beautify"
+
+    // ==========================================
+    // ACTION: BEAUTIFY EXISTING PROOF LINKS
+    // ==========================================
+    if (action === "beautify") {
+      beautifyAllProofLinks();
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        message: "Spreadsheet proof links beautified successfully!"
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
 
     // ==========================================
     // ACTION: TEST CONNECTION & DRIVE PERMISSION
@@ -576,6 +662,7 @@ function doPost(e) {
       if (idx === -1) {
         var newCol = sheet.getLastColumn() + 1;
         sheet.getRange(1, newCol).setValue(colName);
+        sheet.setColumnWidth(newCol, 165);
         SpreadsheetApp.flush();
         headers.push(colName.toLowerCase().replace(/[^a-z0-9]/g, ""));
         return newCol - 1;
@@ -676,27 +763,17 @@ function doPost(e) {
       var colName = data.type === "raised" ? "Raised Invoice proof" : "Recieved Invoice";
       var targetColIdx = ensureColumn(colName);
 
-      // If college row exists, write or append direct file link in that row!
-      if (targetRowIndex > 0) {
-        var curVal = sheet.getRange(targetRowIndex, targetColIdx + 1).getValue();
-        var newVal = directFileUrl;
-        if (curVal && String(curVal).trim()) {
-          var curStr = String(curVal).trim();
-          if (curStr.indexOf(directFileUrl) === -1) {
-            newVal = curStr + "\\n" + directFileUrl;
-          } else {
-            newVal = curStr;
-          }
-        }
-        sheet.getRange(targetRowIndex, targetColIdx + 1).setValue(newVal);
-      } else {
-        // If college row doesn't exist yet, create a new row with project code, college name and proof link
+      // If college row exists, write or append aesthetic hyperlink badge
+      if (targetRowIndex <= 0) {
         var newRowIdx = sheet.getLastRow() + 1;
         if (colProjCode !== -1) sheet.getRange(newRowIdx, colProjCode + 1).setValue(data.projectCode || "");
         if (colCollegeName !== -1) sheet.getRange(newRowIdx, colCollegeName + 1).setValue(data.collegeName || "");
-        sheet.getRange(newRowIdx, targetColIdx + 1).setValue(directFileUrl);
         targetRowIndex = newRowIdx;
       }
+
+      var targetCell = sheet.getRange(targetRowIndex, targetColIdx + 1);
+      var labelTag = data.invoiceCode || (data.type === "raised" ? "Raised" : "Received");
+      formatProofCell(targetCell, directFileUrl, labelTag);
 
       SpreadsheetApp.flush();
 
@@ -708,10 +785,64 @@ function doPost(e) {
         uploadLocation: uploadLocation,
         columnName: colName,
         rowIndex: targetRowIndex,
-        message: "Proof uploaded to Google Drive (" + uploadLocation + ") and saved in column '" + colName + "' at row " + targetRowIndex + " in spreadsheet!"
+        message: "Proof uploaded to Google Drive (" + uploadLocation + ") and aesthetic link saved in column '" + colName + "' at row " + targetRowIndex + "!"
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
+    // Format aesthetic Hyperlink badge in Google Sheets cells
+    function formatProofCell(cell, rawUrls, labelPrefix) {
+      if (!rawUrls) return;
+      var urlList = [];
+      if (Array.isArray(rawUrls)) {
+        urlList = rawUrls;
+      } else {
+        urlList = String(rawUrls).split(/[\\n,]+/).map(function(u) { return u.trim(); }).filter(function(u) { return u.indexOf("http") !== -1; });
+      }
+
+      if (urlList.length === 0) {
+        cell.setValue(rawUrls);
+        return;
+      }
+
+      // Clean up URL from any extra quotes
+      var cleanUrl = urlList[0].replace(/.*(https:\\/\\/drive\\.google\\.com[^\\s"'\\)]+).*/, "$1");
+      if (!cleanUrl.startsWith("http")) cleanUrl = urlList[0];
+
+      cell.setHorizontalAlignment("center");
+      cell.setVerticalAlignment("middle");
+
+      if (urlList.length === 1) {
+        var badgeText = labelPrefix ? ("📄 " + labelPrefix + " Proof") : "📄 View Proof";
+        cell.setFormula('=HYPERLINK("' + cleanUrl + '", "' + badgeText + '")');
+        return;
+      }
+
+      // Multiple proofs -> Rich Text with individual clickable lines
+      try {
+        var richBuilder = SpreadsheetApp.newRichTextValue();
+        var fullText = "";
+        var linkSpans = [];
+
+        for (var i = 0; i < urlList.length; i++) {
+          var lineUrl = urlList[i].replace(/.*(https:\\/\\/drive\\.google\\.com[^\\s"'\\)]+).*/, "$1");
+          var lineLabel = "📄 " + (labelPrefix ? labelPrefix + " " : "") + "Proof " + (i + 1);
+          var startIdx = fullText.length;
+          var endIdx = startIdx + lineLabel.length;
+          fullText += (i > 0 ? "\\n" : "") + lineLabel;
+          linkSpans.push({ start: (i > 0 ? startIdx + 1 : startIdx), end: (i > 0 ? endIdx + 1 : endIdx), url: lineUrl });
+        }
+
+        richBuilder.setText(fullText);
+        for (var k = 0; k < linkSpans.length; k++) {
+          richBuilder.setLinkUrl(linkSpans[k].start, linkSpans[k].end, linkSpans[k].url);
+        }
+
+        cell.setRichTextValue(richBuilder.build());
+      } catch (rErr) {
+        cell.setFormula('=HYPERLINK("' + cleanUrl + '", "📄 View Proofs (' + urlList.length + ')")');
+      }
+    }
+
     // Format date to DD/MM/YYYY
     function formatDate(val) {
       if (!val) return "";
@@ -766,14 +897,14 @@ function doPost(e) {
     // Write row back to spreadsheet
     sheet.getRange(targetRowIndex, 1, 1, rowValues.length).setValues([rowValues]);
 
-    // Handle Proof columns if present in payload
+    // Handle Proof columns with aesthetic hyperlink badges
     if (data.raisedInvoiceProof) {
       var colRaised = ensureColumn("Raised Invoice proof");
-      sheet.getRange(targetRowIndex, colRaised + 1).setValue(data.raisedInvoiceProof);
+      formatProofCell(sheet.getRange(targetRowIndex, colRaised + 1), data.raisedInvoiceProof, "Raised");
     }
     if (data.receivedInvoiceProof) {
       var colReceived = ensureColumn("Recieved Invoice");
-      sheet.getRange(targetRowIndex, colReceived + 1).setValue(data.receivedInvoiceProof);
+      formatProofCell(sheet.getRange(targetRowIndex, colReceived + 1), data.receivedInvoiceProof, "Received");
     }
     
     SpreadsheetApp.flush();
@@ -837,6 +968,50 @@ export async function testGoogleAppsScriptConnection(
     };
   }
 }
+
+/**
+ * Triggers spreadsheet proof link beautification on the Google Apps Script backend
+ */
+export async function beautifySpreadsheetProofLinks(
+  url: string
+): Promise<{ success: boolean; message: string }> {
+  if (!url || !url.trim().startsWith("http")) {
+    return { success: false, message: "Please enter a valid Google Apps Script Web App URL." };
+  }
+
+  try {
+    const response = await fetch(url.trim(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({ action: "beautify" }),
+      redirect: "follow",
+    });
+
+    const text = await response.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      // Ignored
+    }
+
+    if (json && json.success) {
+      return { success: true, message: json.message || "Spreadsheet proof links beautified successfully!" };
+    } else if (json && json.error) {
+      return { success: false, message: `Apps Script error: ${json.error}` };
+    } else {
+      return { success: true, message: "Beautification command executed!" };
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Failed to beautify links: ${err.message}`,
+    };
+  }
+}
+
 
 /**
  * Automatically compresses image files to JPEG before Base64 encoding
