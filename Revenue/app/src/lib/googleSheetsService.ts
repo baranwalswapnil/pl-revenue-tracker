@@ -144,10 +144,19 @@ export function parseCSV(text: string): string[][] {
 
 /**
  * Cleans numeric strings (removes ₹, $, commas, spaces)
+ * Safely ignores dates (e.g. 15/06/2024) and split ratios (e.g. 50-50, 30-20-25-25)
  */
 function parseCleanNumber(val: any, fallback = 0): number {
   if (val === null || val === undefined) return fallback;
-  const str = String(val).replace(/[₹$,\s%]/g, "").trim();
+  const rawStr = String(val).trim();
+  if (!rawStr) return fallback;
+
+  // Ignore date patterns e.g. "15/06/2024" or "2024-06-15"
+  if (/\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}/.test(rawStr)) return fallback;
+  // Ignore multi-dash splits e.g. "30-20-25-25", "50-50"
+  if (/^\d+(-\d+)+$/.test(rawStr)) return fallback;
+
+  const str = rawStr.replace(/[₹$,\s%]/g, "").trim();
   const num = parseFloat(str);
   return isNaN(num) ? fallback : num;
 }
