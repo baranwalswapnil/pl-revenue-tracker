@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   Plus,
   Edit3,
@@ -49,6 +49,11 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [isOutstandingMenuOpen, setIsOutstandingMenuOpen] = useState(false);
 
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState(0);
+
   const filteredProjects = useMemo(() => {
     return projects.filter((project) => {
       const matchesSearch =
@@ -65,6 +70,33 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
       return true;
     });
   }, [projects, searchTerm, filterType]);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (tableRef.current) {
+        setTableScrollWidth(tableRef.current.scrollWidth);
+      }
+    };
+    updateWidth();
+    const timer = setTimeout(updateWidth, 100);
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, [filteredProjects]);
+
+  const handleTopScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const handleTableScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    }
+  };
 
   const exportToCSV = () => {
     const headers = [
@@ -393,9 +425,19 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
           </div>
         </div>
 
+        {/* Top Synchronized Horizontal Sliding Scrollbar */}
+        <div
+          className="table-top-scrollbar-wrap"
+          ref={topScrollRef}
+          onScroll={handleTopScroll}
+          title="Slide horizontally to view all table columns"
+        >
+          <div style={{ width: `${Math.max(tableScrollWidth, 1)}px`, height: "1px" }} />
+        </div>
+
         {/* Excel Styled Table */}
-        <div className="table-responsive-wrapper">
-          <table className="excel-table">
+        <div className="table-responsive-wrapper" ref={tableScrollRef} onScroll={handleTableScroll}>
+          <table className="excel-table" ref={tableRef}>
             <thead>
               <tr>
                 <th className="th-num">#</th>

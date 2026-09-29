@@ -754,9 +754,67 @@ a {
   font-weight: 600;
 }
 
-/* Excel Style Table */
+/* Excel Style Table & Top Synchronized Scrollbar */
+.table-top-scrollbar-wrap {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 14px;
+  background: #f8fafc;
+  border-top: 1px solid var(--border-light);
+  border-bottom: 1px solid var(--border-light);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.table-top-scrollbar-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-top-scrollbar-wrap::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.table-top-scrollbar-wrap::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+
+.table-top-scrollbar-wrap::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 .table-responsive-wrapper {
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+.table-responsive-wrapper::-webkit-scrollbar,
+.outstanding-table-scroll-wrap::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.table-responsive-wrapper::-webkit-scrollbar-track,
+.outstanding-table-scroll-wrap::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.table-responsive-wrapper::-webkit-scrollbar-thumb,
+.outstanding-table-scroll-wrap::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 4px;
+}
+
+.table-responsive-wrapper::-webkit-scrollbar-thumb:hover,
+.outstanding-table-scroll-wrap::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .excel-table {

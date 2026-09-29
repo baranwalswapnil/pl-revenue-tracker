@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   ArrowLeft,
   Calendar,
@@ -53,6 +53,11 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "received">("all");
   const [selectedYear, setSelectedYear] = useState<number>(currentPeriod.year || 2026);
 
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [tableScrollWidth, setTableScrollWidth] = useState(0);
+
   // Re-calculate summary whenever period or projects change
   const summary = useMemo(() => {
     return calculatePeriodOutstanding(projects, currentPeriod);
@@ -75,6 +80,33 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
       return true;
     });
   }, [summary.items, searchTerm, statusFilter]);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (tableRef.current) {
+        setTableScrollWidth(tableRef.current.scrollWidth);
+      }
+    };
+    updateWidth();
+    const timer = setTimeout(updateWidth, 100);
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, [filteredItems]);
+
+  const handleTopScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const handleTableScroll = () => {
+    if (topScrollRef.current && tableScrollRef.current) {
+      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    }
+  };
 
   // Switch to specific quarter
   const handleSelectQuarter = (q: QuarterMeta) => {
@@ -415,8 +447,18 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
           </button>
         </div>
 
+        {/* Top Synchronized Horizontal Sliding Scrollbar */}
+        <div
+          className="table-top-scrollbar-wrap"
+          ref={topScrollRef}
+          onScroll={handleTopScroll}
+          title="Slide horizontally to view all table columns"
+        >
+          <div style={{ width: `${Math.max(tableScrollWidth, 1)}px`, height: "1px" }} />
+        </div>
+
         {/* Invoices Table */}
-        <div className="outstanding-table-scroll-wrap">
+        <div className="outstanding-table-scroll-wrap" ref={tableScrollRef} onScroll={handleTableScroll}>
           {filteredItems.length === 0 ? (
             <div className="empty-invoices-box">
               <Clock size={40} className="empty-icon" />
@@ -427,7 +469,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
               </p>
             </div>
           ) : (
-            <table className="outstanding-data-table">
+            <table className="outstanding-data-table" ref={tableRef}>
               <thead>
                 <tr>
                   <th style={{ width: "45px" }}>#</th>
