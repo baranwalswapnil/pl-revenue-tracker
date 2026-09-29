@@ -4,6 +4,7 @@ import { computeAttpDetails } from "./mockData";
 export interface GoogleSheetConfig {
   sheetUrl: string;
   sheetName?: string;
+  scriptUrl?: string; // Google Apps Script Web App URL for writing/updating sheet rows
   autoSync?: boolean;
   lastSyncedAt?: string;
 }
@@ -460,12 +461,258 @@ export function convertSheetItemToDraft(item: GoogleSheetCollegeItem): ProjectDr
   };
 }
 
+export const GOOGLE_APPS_SCRIPT_CODE = `/**
+ * =========================================================================
+ * Google Apps Script for P&L Revenue Tracker (Two-Way Sheet Sync)
+ * =========================================================================
+ * 
+ * Instructions to enable 2-Way Sync:
+ * 1. Open your Google Spreadsheet
+ * 2. Click "Extensions" > "Apps Script" in top menu.
+ * 3. Delete any code in the editor and paste this entire code.
+ * 4. Click "Deploy" > "New deployment".
+ * 5. Select type: "Web app".
+ * 6. Set "Execute as": "Me".
+ * 7. Set "Who has access": "Anyone".
+ * 8. Click "Deploy" and copy the Web App URL (starts with https://script.google.com/macros/s/...).
+ * 9. Paste the Web App URL in your P&L Revenue Tracker website Sync modal.
+ */
+
+function doPost(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getActiveSheet();
+    
+    // Parse incoming payload
+    var rawData = e && e.postData ? e.postData.contents : "";
+    if (!rawData) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, error: "No data payload received" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    var data = JSON.parse(rawData);
+    var action = (data.action || "add").toLowerCase(); // "add" or "update"
+    
+    var dataRange = sheet.getDataRange();
+    var values = dataRange.getValues();
+    
+    if (values.length === 0) {
+      return ContentService.createTextOutput(JSON.stringify({ success: false, error: "Spreadsheet is empty" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Normalize headers for flexible column matching
+    var headers = values[0].map(function(h) {
+      return String(h || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    });
+    
+    function getColIdx(candidates) {
+      for (var i = 0; i < candidates.length; i++) {
+        var cand = candidates[i].toLowerCase().replace(/[^a-z0-9]/g, "");
+        var exactIdx = headers.indexOf(cand);
+        if (exactIdx !== -1) return exactIdx;
+        for (var j = 0; j < headers.length; j++) {
+          if (headers[j].indexOf(cand) !== -1 || cand.indexOf(headers[j]) !== -1) return j;
+        }
+      }
+      return -1;
+    }
+    
+    var colSno = getColIdx(["sno", "s.no", "serial", "srno"]);
+    var colProjCode = getColIdx(["projectcode", "project code", "code"]);
+    var colCollegeName = getColIdx(["nameofthecollege", "college name", "collegename", "name"]);
+    var colCollegeCode = getColIdx(["collegecode", "college code"]);
+    var colYear = getColIdx(["year", "passingyear", "batch"]);
+    var colCourse = getColIdx(["coursestream", "course", "stream", "department"]);
+    var colDomain = getColIdx(["domainoftraining", "domain", "trainingdomain"]);
+    var colTypeProj = getColIdx(["typeofproject", "projecttype", "type"]);
+    var colAcadYear = getColIdx(["academicyear", "academic year"]);
+    var colSales = getColIdx(["sales"]);
+    var colMouDate = getColIdx(["mousigneddate", "mou date", "mou"]);
+    var colStartDate = getColIdx(["trainingstartdate", "start date", "startdate"]);
+    var colEndDate = getColIdx(["trainingenddate", "end date", "enddate"]);
+    var colStudents = getColIdx(["noofstudents", "no of students", "students", "studentcount"]);
+    var colCostPerStudent = getColIdx(["costperstudent", "cost per student", "studentcost"]);
+    var colTotalValue = getColIdx(["totalcontractvalue", "total cost value", "contract value", "totalvalue"]);
+    var colGstValue = getColIdx(["totalcontractvalueinclgst", "total contract value (incl gst)", "gst cost", "totalwithgst"]);
+    var colHrsBatch = getColIdx(["hrsbatch", "hrs/batch", "hours/batch", "hours", "hoursplanned"]);
+    var colPayType = getColIdx(["typeofpayment", "payment type", "payment", "paymentplan"]);
+    var colPayPct = getColIdx(["ofpayment", "% of payment", "percentage", "attppercentage"]);
+    var colInvoices = getColIdx(["noofinvoices", "no of invoices", "invoices", "invoicecount"]);
+    
+    // Find matching row if action is "update"
+    var targetRowIndex = -1; // 1-indexed sheet row number
+    var searchCode = String(data.projectCode || "").trim().toLowerCase();
+    var searchName = String(data.collegeName || "").trim().toLowerCase();
+    
+    if (searchCode || searchName) {
+      for (var r = 1; r < values.length; r++) {
+        var rowCode = colProjCode !== -1 ? String(values[r][colProjCode] || "").trim().toLowerCase() : "";
+        var rowName = colCollegeName !== -1 ? String(values[r][colCollegeName] || "").trim().toLowerCase() : "";
+        
+        if ((searchCode && rowCode === searchCode) || (searchName && rowName === searchName)) {
+          targetRowIndex = r + 1; // Row is 1-indexed
+          break;
+        }
+      }
+    }
+    
+    // Format date to DD/MM/YYYY
+    function formatDate(val) {
+      if (!val) return "";
+      var str = String(val).trim();
+      var match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (match) return match[3] + "/" + match[2] + "/" + match[1];
+      return str;
+    }
+    
+    var numColumns = values[0].length;
+    var rowValues;
+    
+    if (action === "update" && targetRowIndex > 0) {
+      // Preserve existing columns not explicitly modified
+      rowValues = sheet.getRange(targetRowIndex, 1, 1, numColumns).getValues()[0];
+    } else {
+      // Create new row (action === 'add' or not found)
+      targetRowIndex = sheet.getLastRow() + 1;
+      rowValues = new Array(numColumns).fill("");
+      
+      // Auto-increment S.No
+      if (colSno !== -1) {
+        var highestSno = 0;
+        for (var k = 1; k < values.length; k++) {
+          var sNum = parseInt(values[k][colSno], 10);
+          if (!isNaN(sNum) && sNum > highestSno) highestSno = sNum;
+        }
+        rowValues[colSno] = highestSno > 0 ? highestSno + 1 : sheet.getLastRow();
+      }
+    }
+    
+    // Fill or update fields
+    if (colProjCode !== -1 && data.projectCode) rowValues[colProjCode] = data.projectCode;
+    if (colCollegeName !== -1 && data.collegeName) rowValues[colCollegeName] = data.collegeName;
+    if (colCollegeCode !== -1) {
+      rowValues[colCollegeCode] = data.collegeCode || (data.projectCode ? data.projectCode.split("/")[0] : "");
+    }
+    if (colYear !== -1 && data.year) rowValues[colYear] = data.year;
+    if (colCourse !== -1 && data.courseStream) rowValues[colCourse] = data.courseStream;
+    if (colDomain !== -1 && data.domainOfTraining) rowValues[colDomain] = data.domainOfTraining;
+    if (colTypeProj !== -1 && data.typeOfProject) rowValues[colTypeProj] = data.typeOfProject;
+    if (colAcadYear !== -1 && data.academicYear) rowValues[colAcadYear] = data.academicYear;
+    if (colMouDate !== -1 && data.mouSignedDate) rowValues[colMouDate] = formatDate(data.mouSignedDate);
+    if (colStartDate !== -1 && data.trainingStartDate) rowValues[colStartDate] = formatDate(data.trainingStartDate);
+    if (colEndDate !== -1 && data.trainingEndDate) rowValues[colEndDate] = formatDate(data.trainingEndDate);
+    if (colStudents !== -1 && data.studentCount !== undefined) rowValues[colStudents] = Number(data.studentCount) || 0;
+    if (colCostPerStudent !== -1 && data.costPerStudent !== undefined) rowValues[colCostPerStudent] = Number(data.costPerStudent) || 0;
+    if (colTotalValue !== -1 && data.totalContractValue !== undefined) rowValues[colTotalValue] = Number(data.totalContractValue) || 0;
+    if (colGstValue !== -1 && data.totalContractValueGst !== undefined) rowValues[colGstValue] = Number(data.totalContractValueGst) || 0;
+    if (colHrsBatch !== -1 && data.hoursBatch !== undefined) rowValues[colHrsBatch] = Number(data.hoursBatch) || 0;
+    if (colPayType !== -1 && data.typeOfPayment) rowValues[colPayType] = data.typeOfPayment;
+    if (colPayPct !== -1 && data.percentageOfPayment) rowValues[colPayPct] = data.percentageOfPayment;
+    if (colInvoices !== -1 && data.noOfInvoices !== undefined) rowValues[colInvoices] = Number(data.noOfInvoices) || 1;
+    
+    // Write row back to spreadsheet
+    sheet.getRange(targetRowIndex, 1, 1, rowValues.length).setValues([rowValues]);
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      action: action === "update" && targetRowIndex <= values.length ? "updated" : "added",
+      rowIndex: targetRowIndex,
+      message: "Row " + (action === "update" && targetRowIndex <= values.length ? "updated" : "added") + " successfully at line " + targetRowIndex
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      error: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "active",
+    name: "P&L Revenue Tracker Google Sheets Sync Web App",
+    time: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
+}`;
+
+/**
+ * Writes additions or updates back to the Google Spreadsheet via Google Apps Script Web App
+ */
+export async function syncProjectToGoogleSheet(
+  action: "add" | "update",
+  project: Project
+): Promise<{ success: boolean; message: string }> {
+  const config = loadSavedSheetConfig();
+  const scriptUrl = config.scriptUrl || (import.meta as any).env?.VITE_GOOGLE_APPS_SCRIPT_URL;
+
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return {
+      success: false,
+      message: "Google Apps Script URL not configured yet. Changes saved locally in workspace.",
+    };
+  }
+
+  const phase1 = project.phases && project.phases[0];
+  const startDate = phase1?.startDate || "";
+  const endDate = phase1?.endDate || "";
+
+  const payload = {
+    action, // "add" or "update"
+    projectCode: project.project_code,
+    collegeName: project.college_name,
+    collegeCode: project.project_code ? project.project_code.split("/")[0] : "",
+    year: project.passing_year || "2026",
+    academicYear: project.academic_year || "4th Year",
+    courseStream: "",
+    domainOfTraining: "Soft Skills/Aptitude/Technical",
+    typeOfProject: "TP",
+    mouSignedDate: "",
+    trainingStartDate: startDate,
+    trainingEndDate: endDate,
+    studentCount: project.student_count,
+    costPerStudent: project.cost_per_student,
+    totalContractValue: project.total_cost_value,
+    totalContractValueGst: project.gst_cost,
+    hoursBatch: project.hours_planned,
+    typeOfPayment: project.payment_type || "ATP",
+    percentageOfPayment: project.attp_percentage || (project.payment_type === "FNF" ? "100" : "50-50"),
+    noOfInvoices: project.invoice_count,
+    additionalNotes: project.additional_notes || "",
+  };
+
+  try {
+    // Mode no-cors with text/plain JSON payload for Google Apps Script Web App
+    await fetch(scriptUrl.trim(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify(payload),
+      mode: "no-cors",
+    });
+
+    return {
+      success: true,
+      message: action === "add" ? "Row appended to Google Spreadsheet!" : "Row updated in Google Spreadsheet!",
+    };
+  } catch (err: any) {
+    console.warn("Write to Google Sheet error:", err);
+    return {
+      success: false,
+      message: `Could not reach Google Apps Script: ${err.message}`,
+    };
+  }
+}
+
 /**
  * LocalStorage Helpers for Google Sheet Config & Cached Items
  */
 export function loadSavedSheetConfig(): GoogleSheetConfig {
   const envUrl = (import.meta as any).env?.VITE_DEFAULT_GOOGLE_SHEET_URL || DEFAULT_SHEET_URL;
   const envSheetName = (import.meta as any).env?.VITE_DEFAULT_GOOGLE_SHEET_NAME || "";
+  const envScriptUrl = (import.meta as any).env?.VITE_GOOGLE_APPS_SCRIPT_URL || "";
 
   try {
     const raw = localStorage.getItem(STORAGE_CONFIG_KEY);
@@ -474,6 +721,7 @@ export function loadSavedSheetConfig(): GoogleSheetConfig {
       return {
         sheetUrl: parsed.sheetUrl || envUrl,
         sheetName: parsed.sheetName || envSheetName,
+        scriptUrl: parsed.scriptUrl || envScriptUrl,
         autoSync: parsed.autoSync !== false,
         lastSyncedAt: parsed.lastSyncedAt,
       };
@@ -484,6 +732,7 @@ export function loadSavedSheetConfig(): GoogleSheetConfig {
   return {
     sheetUrl: envUrl,
     sheetName: envSheetName,
+    scriptUrl: envScriptUrl,
     autoSync: true,
   };
 }
@@ -513,3 +762,4 @@ export function saveCachedSheetItems(items: GoogleSheetCollegeItem[]): void {
     console.error("Failed to save cached sheet items", e);
   }
 }
+

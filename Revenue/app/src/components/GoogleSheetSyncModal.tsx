@@ -12,6 +12,11 @@ import {
   Building2,
   Sparkles,
   ExternalLink,
+  Code2,
+  Copy,
+  Check,
+  Zap,
+  Save,
 } from "lucide-react";
 import {
   fetchGoogleSheetData,
@@ -20,6 +25,7 @@ import {
   loadSavedSheetConfig,
   saveSheetConfig,
   saveCachedSheetItems,
+  GOOGLE_APPS_SCRIPT_CODE,
   type GoogleSheetCollegeItem,
 } from "../lib/googleSheetsService";
 import { formatINR } from "../lib/mockData";
@@ -39,12 +45,15 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
 }) => {
   const [sheetUrl, setSheetUrl] = useState("");
   const [sheetName, setSheetName] = useState("");
-  const [activeTab, setActiveTab] = useState<"url" | "paste">("url");
+  const [scriptUrl, setScriptUrl] = useState("");
+  const [activeTab, setActiveTab] = useState<"url" | "paste" | "2way">("url");
   const [pastedText, setPastedText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewItems, setPreviewItems] = useState<GoogleSheetCollegeItem[]>([]);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
+  const [copiedScript, setCopiedScript] = useState(false);
+  const [showCodeDetails, setShowCodeDetails] = useState(false);
 
   // Load saved config on open
   useEffect(() => {
@@ -52,6 +61,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
       const config = loadSavedSheetConfig();
       setSheetUrl(config.sheetUrl || "");
       setSheetName(config.sheetName || "");
+      setScriptUrl(config.scriptUrl || "");
       setErrorMsg(null);
       setSyncSuccessMsg(null);
       if (cachedColleges.length > 0) {
@@ -84,6 +94,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
       saveSheetConfig({
         sheetUrl: sheetUrl.trim(),
         sheetName: sheetName.trim(),
+        scriptUrl: scriptUrl.trim(),
         lastSyncedAt: new Date().toISOString(),
       });
       saveCachedSheetItems(items);
@@ -138,6 +149,34 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
     }
   };
 
+  const handleSave2WayConfig = () => {
+    if (!scriptUrl.trim()) {
+      setErrorMsg("Please enter your Google Apps Script Web App URL.");
+      return;
+    }
+
+    if (!scriptUrl.includes("script.google.com")) {
+      setErrorMsg("Please enter a valid Google Apps Script URL (starts with https://script.google.com/macros/s/...)");
+      return;
+    }
+
+    saveSheetConfig({
+      sheetUrl: sheetUrl.trim(),
+      sheetName: sheetName.trim(),
+      scriptUrl: scriptUrl.trim(),
+      lastSyncedAt: new Date().toISOString(),
+    });
+
+    setErrorMsg(null);
+    setSyncSuccessMsg("2-Way Google Sheet Sync URL saved! Adding and editing colleges on the website will now write & update your Google Spreadsheet automatically in real-time.");
+  };
+
+  const handleCopyScriptCode = () => {
+    navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE);
+    setCopiedScript(true);
+    setTimeout(() => setCopiedScript(false), 3000);
+  };
+
   const handleApplyToWebsite = () => {
     if (previewItems.length === 0) {
       setErrorMsg("Please fetch or paste data first.");
@@ -157,9 +196,9 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
               <FileSpreadsheet size={24} />
             </div>
             <div>
-              <h2 className="modal-title">Connect Google Spreadsheet</h2>
+              <h2 className="modal-title">Google Spreadsheet Sync</h2>
               <p className="modal-subtitle">
-                Fetch colleges & contract details directly into Add & Update College forms.
+                Two-way live synchronization: Fetch pre-data and automatically add & update spreadsheet rows.
               </p>
             </div>
           </div>
@@ -176,7 +215,15 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
             onClick={() => setActiveTab("url")}
           >
             <Link size={15} />
-            <span>Google Sheet Link / URL</span>
+            <span>1. Google Sheet Link</span>
+          </button>
+          <button
+            type="button"
+            className={`gsheet-tab-btn ${activeTab === "2way" ? "active" : ""}`}
+            onClick={() => setActiveTab("2way")}
+          >
+            <Zap size={15} />
+            <span>2. Two-Way Add & Edit Sync</span>
           </button>
           <button
             type="button"
@@ -184,7 +231,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
             onClick={() => setActiveTab("paste")}
           >
             <Upload size={15} />
-            <span>Paste Copied Table / CSV</span>
+            <span>Manual Paste / CSV</span>
           </button>
         </div>
 
@@ -200,7 +247,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
                 id="gsheetUrlInput"
                 type="text"
                 className="styled-input-control"
-                placeholder="https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit"
+                placeholder="https://docs.google.com/spreadsheets/d/1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw/edit"
                 value={sheetUrl}
                 onChange={(e) => setSheetUrl(e.target.value)}
               />
@@ -236,7 +283,127 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Direct Paste Tab */}
+        {/* Tab 2: Two-Way Sync / Write to Sheet */}
+        {activeTab === "2way" && (
+          <div className="gsheet-tab-content">
+            <div className="gsheet-2way-banner">
+              <Zap size={20} className="text-amber-500" />
+              <div>
+                <strong>Automatic 2-Way Sync (Add & Update Rows in Google Sheets)</strong>
+                <p>
+                  When you add a new college or edit existing projects on this website, it will automatically append new rows and update columns in your live Google Spreadsheet.
+                </p>
+              </div>
+            </div>
+
+            <div className="form-field-group">
+              <label className="field-label-text" htmlFor="gsheetScriptUrl">
+                <Zap size={15} className="label-icon" />
+                <span>Google Apps Script Web App URL <span className="req-star">*</span></span>
+              </label>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  id="gsheetScriptUrl"
+                  type="text"
+                  className="styled-input-control"
+                  style={{ flex: 1 }}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  value={scriptUrl}
+                  onChange={(e) => setScriptUrl(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="form-btn primary-submit-btn"
+                  onClick={handleSave2WayConfig}
+                  style={{ padding: "0 18px", whiteSpace: "nowrap" }}
+                >
+                  <Save size={15} />
+                  <span>Save URL</span>
+                </button>
+              </div>
+              <span className="field-hint-text">
+                {scriptUrl ? (
+                  <span style={{ color: "#10b981", fontWeight: 600 }}>
+                    ✓ 2-Way sync is active! Added and edited colleges will sync directly to Google Sheet.
+                  </span>
+                ) : (
+                  "Follow the 3-step guide below to generate your Google Apps Script URL in 1 minute."
+                )}
+              </span>
+            </div>
+
+            {/* Step-by-Step Instructions */}
+            <div className="gsheet-steps-box">
+              <h4 style={{ margin: "0 0 10px 0", fontSize: "14px", color: "var(--text-primary)" }}>
+                🛠️ Quick 3-Step Setup for 2-Way Sync:
+              </h4>
+              <ol style={{ paddingLeft: "20px", margin: "0 0 12px 0", fontSize: "13px", lineHeight: "1.7", color: "var(--text-secondary)" }}>
+                <li>
+                  Open your <a href={sheetUrl || "https://docs.google.com/spreadsheets/d/1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw/edit"} target="_blank" rel="noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>Google Spreadsheet</a> and click <strong>Extensions &gt; Apps Script</strong> in the top menu.
+                </li>
+                <li>
+                  Delete any default code, click the <strong>"Copy Apps Script Code"</strong> button below, paste it into the editor, and click <strong>Save</strong> (floppy disk icon).
+                </li>
+                <li>
+                  Click <strong>Deploy &gt; New deployment</strong> &rarr; Click gear icon & Select <strong>Web app</strong> &rarr; Set <em>Execute as: <strong>Me</strong></em> and <em>Who has access: <strong>Anyone</strong></em> &rarr; Click <strong>Deploy</strong> &rarr; Copy the Web App URL and paste it in the box above!
+                </li>
+              </ol>
+
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="form-btn"
+                  onClick={handleCopyScriptCode}
+                  style={{
+                    backgroundColor: copiedScript ? "#10b981" : "var(--color-primary)",
+                    color: "#fff",
+                    padding: "8px 16px",
+                    borderRadius: "6px",
+                    fontSize: "13px",
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  {copiedScript ? <Check size={16} /> : <Copy size={16} />}
+                  <span>{copiedScript ? "Copied Script Code!" : "Copy Apps Script Code"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="form-btn reset-btn"
+                  onClick={() => setShowCodeDetails(!showCodeDetails)}
+                  style={{ fontSize: "12px", padding: "6px 12px" }}
+                >
+                  <Code2 size={14} />
+                  <span>{showCodeDetails ? "Hide Script Preview" : "View Script Code"}</span>
+                </button>
+              </div>
+
+              {showCodeDetails && (
+                <pre
+                  style={{
+                    marginTop: "12px",
+                    padding: "12px",
+                    background: "rgba(0,0,0,0.4)",
+                    borderRadius: "8px",
+                    fontSize: "11px",
+                    maxHeight: "180px",
+                    overflowY: "auto",
+                    color: "#93c5fd",
+                    fontFamily: "monospace",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                  }}
+                >
+                  {GOOGLE_APPS_SCRIPT_CODE}
+                </pre>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 3: Direct Paste Tab */}
         {activeTab === "paste" && (
           <div className="gsheet-tab-content">
             <div className="form-field-group">

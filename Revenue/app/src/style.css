@@ -3225,3 +3225,38 @@ a {
   gap: 12px;
   flex-wrap: wrap;
 }
+
+/* 2-Way Sync Styles */
+.gsheet-2way-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.gsheet-2way-banner strong {
+  display: block;
+  font-size: 13.5px;
+  margin-bottom: 2px;
+  color: #78350f;
+}
+
+.gsheet-2way-banner p {
+  margin: 0;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.gsheet-steps-box {
+  background: #f8fafc;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-top: 14px;
+}

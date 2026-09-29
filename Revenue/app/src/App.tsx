@@ -9,6 +9,7 @@ import {
   convertSheetItemToProject,
   saveCachedSheetItems,
   saveSheetConfig,
+  syncProjectToGoogleSheet,
   type GoogleSheetCollegeItem,
 } from "./lib/googleSheetsService";
 import { Header } from "./components/Header";
@@ -337,6 +338,9 @@ export function App() {
       updated_at: new Date().toISOString(),
     };
 
+    // Check if project already exists
+    const isExisting = projects.some((p) => p.id === newProj.id || p.project_code === newProj.project_code);
+
     // Save to projects state & localStorage
     setProjects((prev) => {
       const index = prev.findIndex((p) => p.id === newProj.id || p.project_code === newProj.project_code);
@@ -349,6 +353,18 @@ export function App() {
     });
 
     setActiveProject(newProj);
+
+    // Two-way sync with Google Spreadsheet
+    syncProjectToGoogleSheet(isExisting ? "update" : "add", newProj).then((syncRes) => {
+      if (syncRes.success) {
+        showToast(
+          openHealthReport
+            ? `Training Phase submitted & synced to Google Sheet!`
+            : `College "${newProj.college_name}" added to register & Google Sheet!`,
+          "success"
+        );
+      }
+    });
 
     if (openHealthReport) {
       navigateTo("health-report", newProj);
@@ -386,6 +402,14 @@ export function App() {
     );
     setActiveProject(updated);
     setDraft(createEmptyDraft(updated));
+
+    // Two-way sync update to Google Spreadsheet
+    syncProjectToGoogleSheet("update", updated).then((syncRes) => {
+      if (syncRes.success) {
+        showToast(`Project "${updated.college_name}" updated & saved in Google Sheet!`, "success");
+      }
+    });
+
     showToast(`Project "${updated.college_name}" updated! Showing Health Report.`, "success");
     navigateTo("health-report", updated);
   };
