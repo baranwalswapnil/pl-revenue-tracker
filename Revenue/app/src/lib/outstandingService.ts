@@ -90,6 +90,8 @@ export interface EnrichedInvoiceItem {
   label: string;
   percentage: number;
   amount: number;
+  amountFromMou?: number;
+  amountRaised?: number;
   isRaised: boolean;
   dateRaised?: string;
   raisedProofUrl?: string;
@@ -103,6 +105,11 @@ export interface EnrichedInvoiceItem {
   isReceivedInPeriod: boolean;
   isPendingInPeriod: boolean;
   status: "Received" | "Pending Payment" | "Unraised";
+  invoiceType?: string;
+  remarks?: string;
+  gaInvoiceCode?: string;
+  printed?: string | boolean;
+  tdsStatus?: string;
   project: Project;
 }
 
@@ -267,6 +274,8 @@ export function calculatePeriodOutstanding(
           label: inv.label || `Milestone ${idx + 1}`,
           percentage: inv.percentage || 100 / projectInvoices.length,
           amount: inv.amount,
+          amountFromMou: inv.amountFromMou,
+          amountRaised: inv.amountRaised || (isActuallyRaised ? inv.amount : 0),
           isRaised: isActuallyRaised,
           dateRaised: inv.dateRaised,
           raisedProofUrl: inv.raisedProofUrl,
@@ -280,6 +289,11 @@ export function calculatePeriodOutstanding(
           isReceivedInPeriod,
           isPendingInPeriod: isActuallyRaised && !isActuallyReceived,
           status,
+          invoiceType: inv.invoiceType,
+          remarks: inv.remarks,
+          gaInvoiceCode: inv.gaInvoiceCode,
+          printed: inv.printed,
+          tdsStatus: inv.tdsStatus,
           project: proj,
         });
       }

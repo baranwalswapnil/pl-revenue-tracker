@@ -5,12 +5,15 @@ import {
   loadCachedSheetItems,
   loadSavedSheetConfig,
   fetchGoogleSheetData,
+  fetchInvoiceTrackerData,
+  buildProjectsFromInvoiceTracker,
   convertSheetItemToDraft,
   convertSheetItemToProject,
   saveCachedSheetItems,
   saveSheetConfig,
   syncProjectToGoogleSheet,
   type GoogleSheetCollegeItem,
+  type GoogleSheetInvoiceTrackerItem,
 } from "./lib/googleSheetsService";
 import { Header } from "./components/Header";
 import { Step1_Dashboard } from "./components/Step1_Dashboard";
@@ -71,6 +74,7 @@ export function App() {
 
       if (!silent) setIsLiveSyncing(true);
       try {
+        // 1. Fetch primary colleges sheet
         const items = await fetchGoogleSheetData(config.sheetUrl, config.sheetName);
         if (isCancelled || !items || items.length === 0) return;
 
@@ -78,9 +82,17 @@ export function App() {
         saveCachedSheetItems(items);
         setLastLiveSyncTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
 
-        // Auto-merge latest sheet figures for existing registered projects
+        // 2. Try fetching 'Invoice Tracker' tab data
+        let invoiceTrackerItems: GoogleSheetInvoiceTrackerItem[] = [];
+        try {
+          invoiceTrackerItems = await fetchInvoiceTrackerData(config.sheetUrl, "Invoice Tracker");
+        } catch (invErr) {
+          // Tab might not exist or have different name, ignore gracefully
+        }
+
+        // Auto-merge latest sheet figures & Invoice Tracker milestones into registered projects
         setProjects((prev) => {
-          const updatedProjects = prev.map((p) => {
+          let updatedProjects = prev.map((p) => {
             const match = items.find(
               (item) =>
                 (item.project_code && item.project_code.toLowerCase() === p.project_code.toLowerCase()) ||
@@ -88,7 +100,6 @@ export function App() {
             );
             if (!match) return p;
 
-            // Update matching project with latest sheet figures
             return {
               ...p,
               student_count: match.student_count || p.student_count,
@@ -102,6 +113,12 @@ export function App() {
               updated_at: new Date().toISOString(),
             };
           });
+
+          // If Invoice Tracker items were retrieved, build & merge rich project milestones
+          if (invoiceTrackerItems.length > 0) {
+            updatedProjects = buildProjectsFromInvoiceTracker(invoiceTrackerItems, updatedProjects);
+          }
+
           return updatedProjects;
         });
       } catch (err) {

@@ -65,12 +65,23 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
 
   // Filter items by search term and status
   const filteredItems = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
     return summary.items.filter((item) => {
+      if (!term) {
+        if (statusFilter === "pending") return item.isPendingInPeriod || !item.isReceived;
+        if (statusFilter === "received") return item.isReceived;
+        return true;
+      }
+
       const matchesSearch =
-        item.collegeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.projectCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.invoiceCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.academicYear.toLowerCase().includes(searchTerm.toLowerCase());
+        item.collegeName.toLowerCase().includes(term) ||
+        item.projectCode.toLowerCase().includes(term) ||
+        item.invoiceCode.toLowerCase().includes(term) ||
+        item.academicYear.toLowerCase().includes(term) ||
+        (item.gaInvoiceCode && item.gaInvoiceCode.toLowerCase().includes(term)) ||
+        (item.invoiceType && item.invoiceType.toLowerCase().includes(term)) ||
+        (item.remarks && item.remarks.toLowerCase().includes(term)) ||
+        (item.tdsStatus && item.tdsStatus.toLowerCase().includes(term));
 
       if (!matchesSearch) return false;
 
@@ -151,9 +162,12 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
       "College Name",
       "Academic Year",
       "Invoice Code",
+      "GA Invoice Code",
+      "Invoice Type",
       "Milestone Label",
       "Share %",
-      "Invoice Amount (INR)",
+      "Amount from MOU (INR)",
+      "Invoice Amount Raised (INR)",
       "Raised Status",
       "Date of Raised",
       "Raised Proof URL",
@@ -162,6 +176,9 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
       "Received Proof URL",
       "Outstanding Amount (INR)",
       "Payment Status",
+      "TDS Status",
+      "Printed Hardcopy",
+      "Remarks",
     ];
 
     const rows = filteredItems.map((item, index) => [
@@ -170,9 +187,12 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
       `"${item.collegeName}"`,
       `"${item.academicYear}"`,
       `"${item.invoiceCode}"`,
+      `"${item.gaInvoiceCode || ""}"`,
+      `"${item.invoiceType || ""}"`,
       `"${item.label}"`,
       `"${item.percentage}%"`,
-      item.amount,
+      item.amountFromMou || 0,
+      item.amountRaised || item.amount,
       item.isRaised ? "Raised" : "Pending",
       item.dateRaised || "",
       item.raisedProofUrl || "",
@@ -181,6 +201,9 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
       item.receivedProofUrl || "",
       item.outstandingAmount,
       `"${item.status}"`,
+      `"${item.tdsStatus || ""}"`,
+      `"${item.printed || ""}"`,
+      `"${(item.remarks || "").replace(/"/g, '""')}"`,
     ]);
 
     const csvContent =
@@ -496,14 +519,42 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                         </div>
                       </td>
                       <td>
-                        <span className="invoice-code-badge">{item.invoiceCode}</span>
-                        <span className="milestone-sub-label">{item.label}</span>
+                        <div className="milestone-code-cell">
+                          <div className="milestone-badge-row">
+                            <span className="invoice-code-badge">{item.invoiceCode}</span>
+                            {item.gaInvoiceCode && (
+                              <span className="ga-code-badge" title={`GA Invoice Code / Tally ERP: ${item.gaInvoiceCode}`}>
+                                GA: {item.gaInvoiceCode}
+                              </span>
+                            )}
+                            {item.invoiceType && (
+                              <span className="invoice-type-tag" title="Invoice Type">
+                                {item.invoiceType}
+                              </span>
+                            )}
+                          </div>
+                          <span className="milestone-sub-label">{item.label}</span>
+                          {item.remarks && (
+                            <span className="milestone-remarks-pill" title={item.remarks}>
+                              💬 {item.remarks}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <span className="share-pct-pill">{item.percentage}%</span>
                       </td>
-                      <td className="text-right font-semibold text-main">
-                        {formatINR(item.amount)}
+                      <td className="text-right">
+                        <div className="amount-cell-wrap">
+                          <span className="font-semibold text-main">
+                            {formatINR(item.amountRaised || item.amount)}
+                          </span>
+                          {item.amountFromMou && item.amountFromMou !== (item.amountRaised || item.amount) && (
+                            <span className="mou-amount-sub" title="MOU Planned Amount">
+                              MOU: {formatINR(item.amountFromMou)}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <div className="proof-cell-wrap">
@@ -559,13 +610,25 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                         )}
                       </td>
                       <td className="text-center">
-                        {item.isReceived ? (
-                          <span className="status-pill-badge paid-pill">✓ Paid</span>
-                        ) : item.isRaised ? (
-                          <span className="status-pill-badge pending-pill">⏳ Pending</span>
-                        ) : (
-                          <span className="status-pill-badge unraised-pill">Not Raised</span>
-                        )}
+                        <div className="status-cell-wrap">
+                          {item.isReceived ? (
+                            <span className="status-pill-badge paid-pill">✓ Paid</span>
+                          ) : item.isRaised ? (
+                            <span className="status-pill-badge pending-pill">⏳ Pending</span>
+                          ) : (
+                            <span className="status-pill-badge unraised-pill">Not Raised</span>
+                          )}
+                          {item.tdsStatus && (
+                            <span className="tds-status-tag" title={`TDS Status: ${item.tdsStatus}`}>
+                              TDS: {item.tdsStatus}
+                            </span>
+                          )}
+                          {item.printed && item.printed.toLowerCase() === "yes" && (
+                            <span className="printed-tag" title="Hardcopy Printed & Dispatched">
+                              🖨️ Hardcopy
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="text-center">
                         <div className="table-actions-cell">

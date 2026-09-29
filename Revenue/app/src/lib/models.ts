@@ -23,6 +23,8 @@ export type InvoiceMilestone = {
   label: string;
   percentage: number;
   amount: number;
+  amountFromMou?: number;
+  amountRaised?: number;
   isRaised: boolean;
   dateRaised?: string;
   raisedProofUrl?: string;
@@ -32,6 +34,12 @@ export type InvoiceMilestone = {
   receivedProofUrl?: string;
   receivedProofName?: string;
   invoiceCode?: string;
+  invoiceType?: string;
+  status?: string;
+  remarks?: string;
+  gaInvoiceCode?: string;
+  printed?: string | boolean;
+  tdsStatus?: string;
 };
 
 export type Project = {

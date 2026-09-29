@@ -34,8 +34,36 @@ export interface GoogleSheetCollegeItem {
   raw_row?: Record<string, string>;
 }
 
+export interface GoogleSheetInvoiceTrackerItem {
+  id: string;
+  project_code: string;
+  college_name: string;
+  invoice_no: number;
+  payment_type: PaymentType;
+  student_count: number;
+  cost_per_student: number;
+  total_contract_value: number;
+  payment_percentage: number;
+  amount_from_mou: number;
+  amount_raised: number;
+  date_raised: string;
+  invoice_code: string;
+  invoice_type: string;
+  status: string;
+  remarks: string;
+  ga_invoice_code: string;
+  printed: string;
+  received: string;
+  received_amount: number;
+  date_received: string;
+  is_received: boolean;
+  is_raised: boolean;
+  tds_status: string;
+}
+
 const STORAGE_CONFIG_KEY = "google_sheet_sync_config_v1";
 const STORAGE_CACHED_ITEMS_KEY = "google_sheet_cached_colleges_v1";
+const STORAGE_CACHED_INVOICE_TRACKER_KEY = "google_sheet_cached_invoice_tracker_v1";
 
 /**
  * Extracts Google Spreadsheet ID from a shared URL or returns the ID if already clean.
@@ -372,6 +400,325 @@ export async function fetchGoogleSheetData(sheetUrlOrId: string, sheetName = "")
   }
 
   return mapRowsToCollegeItems(rows);
+}
+
+/**
+ * Parses received cell value (supports 'Yes', 'Paid', amount numbers, dates, etc.)
+ */
+export function parseReceivedValue(
+  val: any,
+  amountRaised: number
+): { isReceived: boolean; receivedAmount: number; dateReceived: string } {
+  if (val === null || val === undefined) {
+    return { isReceived: false, receivedAmount: 0, dateReceived: "" };
+  }
+  const str = String(val).trim();
+  if (!str) {
+    return { isReceived: false, receivedAmount: 0, dateReceived: "" };
+  }
+
+  const lower = str.toLowerCase();
+  if (
+    lower === "yes" ||
+    lower === "true" ||
+    lower === "received" ||
+    lower === "paid" ||
+    lower === "cleared" ||
+    lower === "done" ||
+    lower === "y"
+  ) {
+    return { isReceived: true, receivedAmount: amountRaised, dateReceived: "" };
+  }
+  if (
+    lower === "no" ||
+    lower === "false" ||
+    lower === "pending" ||
+    lower === "unpaid" ||
+    lower === "n" ||
+    lower === "not received"
+  ) {
+    return { isReceived: false, receivedAmount: 0, dateReceived: "" };
+  }
+
+  // Check if it is a formatted date (e.g. 2026-02-15 or 15/02/2026)
+  const parsedDate = normalizeDate(str);
+  if (parsedDate && parsedDate.length === 10) {
+    return { isReceived: true, receivedAmount: amountRaised, dateReceived: parsedDate };
+  }
+
+  // Check if it is a number/currency amount (e.g. 150000 or ₹1,50,000)
+  const num = parseCleanNumber(str, -1);
+  if (num > 0) {
+    return { isReceived: true, receivedAmount: num, dateReceived: "" };
+  }
+
+  return { isReceived: Boolean(str), receivedAmount: amountRaised, dateReceived: "" };
+}
+
+/**
+ * Maps raw spreadsheet rows from 'Invoice Tracker' tab into GoogleSheetInvoiceTrackerItem[]
+ */
+export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoiceTrackerItem[] {
+  if (!rows || rows.length < 2) return [];
+
+  const headers = rows[0].map((h) => h.trim());
+
+  const colProjCode = findColumnIndex(headers, "project_code", "project code", "projectcode", "college project", "code");
+  const colInvoiceNo = findColumnIndex(headers, "invoice_no", "invoice no", "invoiceno", "invoice number", "installment");
+  const colPayType = findColumnIndex(headers, "payment_type", "payment type", "paymentplan");
+  const colStudents = findColumnIndex(headers, "student count", "student_count", "students", "no of students");
+  const colCostPerStudent = findColumnIndex(headers, "cost per student", "cost_per_student", "cost/student");
+  const colTotalVal = findColumnIndex(headers, "total_contract_value", "total contract value", "contract value", "total value");
+  const colPayPct = findColumnIndex(headers, "payment_percentage", "payment percentage", "payment %", "% of payment");
+  const colMouAmt = findColumnIndex(headers, "amount_from_mou", "amount from mou", "mou amount", "planned amount");
+  const colAmtRaised = findColumnIndex(headers, "amount_raised", "amount raised", "invoice amount", "raised amount", "amount");
+  const colDateRaised = findColumnIndex(headers, "date_raised", "date raised", "raised date", "invoice date");
+  const colInvoiceCode = findColumnIndex(headers, "invoice_code", "invoice code", "invoice no.", "invoice id");
+  const colInvoiceType = findColumnIndex(headers, "invoice_type", "invoice type", "type");
+  const colStatus = findColumnIndex(headers, "status", "payment status", "invoice status");
+  const colRemarks = findColumnIndex(headers, "remarks", "remark", "notes", "comments");
+  const colGaCode = findColumnIndex(headers, "ga_invoice_code", "ga invoice code", "ga code", "tally code", "erp code");
+  const colPrinted = findColumnIndex(headers, "printed", "print status", "hardcopy", "dispatched");
+  const colReceived = findColumnIndex(headers, "received", "amount received", "received status", "paid");
+  const colTdsStatus = findColumnIndex(headers, "tds_status", "tds status", "tds", "tds deducted");
+  const colCollegeName = findColumnIndex(headers, "college_name", "college name", "name of the college", "name");
+
+  const items: GoogleSheetInvoiceTrackerItem[] = [];
+
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || row.length === 0) continue;
+
+    const projectCode = colProjCode !== -1 ? (row[colProjCode] || "").trim() : "";
+    const collegeName = colCollegeName !== -1 ? (row[colCollegeName] || "").trim() : "";
+
+    if (!projectCode && !collegeName) continue;
+
+    const invoiceNo = parseCleanNumber(colInvoiceNo !== -1 ? row[colInvoiceNo] : "", r);
+    const payType = normalizePaymentType(colPayType !== -1 ? row[colPayType] : "");
+    const studentCount = parseCleanNumber(colStudents !== -1 ? row[colStudents] : "", 0);
+    const costPerStudent = parseCleanNumber(colCostPerStudent !== -1 ? row[colCostPerStudent] : "", 0);
+    let totalContractValue = parseCleanNumber(colTotalVal !== -1 ? row[colTotalVal] : "", 0);
+    if (totalContractValue === 0 && studentCount > 0 && costPerStudent > 0) {
+      totalContractValue = studentCount * costPerStudent;
+    }
+
+    const payPct = parseCleanNumber(colPayPct !== -1 ? row[colPayPct] : "", 0);
+    const amountFromMou = parseCleanNumber(colMouAmt !== -1 ? row[colMouAmt] : "", 0);
+    const amountRaised = parseCleanNumber(colAmtRaised !== -1 ? row[colAmtRaised] : "", amountFromMou);
+    const dateRaised = normalizeDate(colDateRaised !== -1 ? row[colDateRaised] : "");
+    const invoiceCode = (colInvoiceCode !== -1 ? (row[colInvoiceCode] || "").trim() : "") || `INV-${String(invoiceNo).padStart(2, "0")}`;
+    const invoiceType = colInvoiceType !== -1 ? (row[colInvoiceType] || "").trim() : "";
+    const status = colStatus !== -1 ? (row[colStatus] || "").trim() : "";
+    const remarks = colRemarks !== -1 ? (row[colRemarks] || "").trim() : "";
+    const gaInvoiceCode = colGaCode !== -1 ? (row[colGaCode] || "").trim() : "";
+    const printed = colPrinted !== -1 ? (row[colPrinted] || "").trim() : "";
+    const tdsStatus = colTdsStatus !== -1 ? (row[colTdsStatus] || "").trim() : "";
+
+    const rawReceived = colReceived !== -1 ? (row[colReceived] || "").trim() : "";
+    const { isReceived, receivedAmount, dateReceived } = parseReceivedValue(rawReceived, amountRaised);
+
+    const isRaised = Boolean(
+      (amountRaised > 0 && dateRaised) ||
+      (status && status.toLowerCase().includes("raised")) ||
+      isReceived ||
+      (dateRaised && dateRaised.length > 0)
+    );
+
+    items.push({
+      id: `inv-tr-${(projectCode || collegeName).toLowerCase().replace(/[^a-z0-9]/g, "-")}-${invoiceNo}-${r}`,
+      project_code: projectCode,
+      college_name: collegeName,
+      invoice_no: invoiceNo,
+      payment_type: payType,
+      student_count: studentCount,
+      cost_per_student: costPerStudent,
+      total_contract_value: totalContractValue,
+      payment_percentage: payPct,
+      amount_from_mou: amountFromMou,
+      amount_raised: amountRaised,
+      date_raised: dateRaised,
+      invoice_code: invoiceCode,
+      invoice_type: invoiceType,
+      status: status || (isReceived ? "Received" : isRaised ? "Raised" : "Pending"),
+      remarks,
+      ga_invoice_code: gaInvoiceCode,
+      printed,
+      received: rawReceived,
+      received_amount: receivedAmount,
+      date_received: dateReceived,
+      is_received: isReceived,
+      is_raised: isRaised,
+      tds_status: tdsStatus,
+    });
+  }
+
+  return items;
+}
+
+/**
+ * Fetches Google Sheet CSV for 'Invoice Tracker' tab directly via browser fetch()
+ */
+export async function fetchInvoiceTrackerData(
+  sheetUrlOrId: string,
+  tabName = "Invoice Tracker"
+): Promise<GoogleSheetInvoiceTrackerItem[]> {
+  const csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, tabName);
+
+  const response = await fetch(csvUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/csv,text/plain,*/*",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch '${tabName}' tab. Status: ${response.status} (${response.statusText}). Make sure the tab name is exactly '${tabName}' and the sheet is public.`
+    );
+  }
+
+  const csvText = await response.text();
+  const rows = parseCSV(csvText);
+
+  if (rows.length < 2) {
+    throw new Error(`'${tabName}' tab returned no data rows.`);
+  }
+
+  return mapInvoiceTrackerRowsToItems(rows);
+}
+
+/**
+ * Builds or merges complete Project entities grouped by project_code from 'Invoice Tracker' items
+ */
+export function buildProjectsFromInvoiceTracker(
+  invoiceItems: GoogleSheetInvoiceTrackerItem[],
+  existingProjects: Project[] = []
+): Project[] {
+  const groupMap = new Map<string, GoogleSheetInvoiceTrackerItem[]>();
+
+  invoiceItems.forEach((item) => {
+    const key = (item.project_code || item.college_name).toLowerCase().trim();
+    if (!key) return;
+    if (!groupMap.has(key)) {
+      groupMap.set(key, []);
+    }
+    groupMap.get(key)!.push(item);
+  });
+
+  const mergedProjects: Project[] = [];
+
+  groupMap.forEach((invList, key) => {
+    const first = invList[0];
+    const projectCode = first.project_code || `PRJ-${mergedProjects.length + 1}`;
+    const collegeName = first.college_name || `College ${mergedProjects.length + 1}`;
+
+    const existing = existingProjects.find(
+      (p) =>
+        (p.project_code && p.project_code.toLowerCase().trim() === key) ||
+        (p.college_name && p.college_name.toLowerCase().trim() === key)
+    );
+
+    const studentCount = first.student_count || existing?.student_count || 0;
+    const costPerStudent = first.cost_per_student || existing?.cost_per_student || 0;
+    const totalContractValue =
+      first.total_contract_value ||
+      (studentCount > 0 && costPerStudent > 0 ? studentCount * costPerStudent : 0) ||
+      existing?.total_cost_value ||
+      0;
+    const gstCost = totalContractValue > 0 ? Math.round(totalContractValue * 1.18) : (existing?.gst_cost || 0);
+
+    const invoices: InvoiceMilestone[] = invList.map((inv, idx) => {
+      const invAmt =
+        inv.amount_raised ||
+        inv.amount_from_mou ||
+        (gstCost > 0 && inv.payment_percentage
+          ? Math.round((gstCost * inv.payment_percentage) / 100)
+          : Math.round(gstCost / invList.length));
+
+      return {
+        id: `inv-${projectCode.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${inv.invoice_no || idx + 1}`,
+        invoiceNumber: inv.invoice_no || idx + 1,
+        label: inv.invoice_type
+          ? `${inv.invoice_type} (${inv.payment_percentage || Math.round(100 / invList.length)}%)`
+          : `Installment ${inv.invoice_no || idx + 1} (${inv.payment_percentage || Math.round(100 / invList.length)}%)`,
+        percentage: inv.payment_percentage || Math.round(100 / invList.length),
+        amount: invAmt,
+        amountFromMou: inv.amount_from_mou,
+        amountRaised: inv.amount_raised,
+        isRaised: inv.is_raised,
+        dateRaised: inv.date_raised,
+        isReceived: inv.is_received,
+        dateReceived: inv.date_received,
+        invoiceCode: inv.invoice_code || `INV-${String(inv.invoice_no || idx + 1).padStart(2, "0")}`,
+        invoiceType: inv.invoice_type,
+        status: inv.status,
+        remarks: inv.remarks,
+        gaInvoiceCode: inv.ga_invoice_code,
+        printed: inv.printed,
+        tdsStatus: inv.tds_status,
+      };
+    });
+
+    const totalRaised = invoices
+      .filter((i) => i.isRaised)
+      .reduce((sum, i) => sum + (i.amountRaised || i.amount || 0), 0);
+    const totalReceived = invoices
+      .filter((i) => i.isReceived)
+      .reduce((sum, i) => sum + (i.amount || 0), 0);
+
+    const firstDate = invList.find((i) => i.date_raised)?.date_raised || "2026-01-15";
+    const lastDate = invList[invList.length - 1]?.date_raised || "2026-03-31";
+
+    const project: Project = {
+      id: existing?.id || `proj-${projectCode.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+      college_name: collegeName,
+      project_code: projectCode,
+      academic_year: existing?.academic_year || "4th Year",
+      passing_year: existing?.passing_year || "2026",
+      student_count: studentCount,
+      cost_per_student: costPerStudent,
+      total_cost_value: totalContractValue,
+      gst_cost: gstCost,
+      hours_planned: existing?.hours_planned || 40,
+      hours_given: existing?.hours_given || 40,
+      training_cost: totalContractValue,
+      payment_type: first.payment_type || existing?.payment_type || "ATP",
+      attp_percentage: existing?.attp_percentage || `${first.payment_percentage || 50}%`,
+      installment_count: invList.length,
+      invoice_count: invList.length,
+      invoice_raised: totalRaised,
+      invoice_received: totalReceived,
+      invoices,
+      phases:
+        existing?.phases && existing.phases.length > 0
+          ? existing.phases
+          : [
+              {
+                id: `p-${projectCode}-1`,
+                phase: "Phase 1",
+                startDate: firstDate,
+                endDate: lastDate,
+                hoursPlanned: 40,
+                hoursGiven: 40,
+                trainingCost: totalContractValue,
+                paymentType: first.payment_type || "ATP",
+                invoiceCount: invList.length,
+              },
+            ],
+      additional_notes:
+        invList
+          .map((i) => i.remarks)
+          .filter(Boolean)
+          .join(" | ") || existing?.additional_notes,
+      created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    mergedProjects.push(project);
+  });
+
+  return mergedProjects;
 }
 
 /**
@@ -1341,4 +1688,23 @@ export function saveCachedSheetItems(items: GoogleSheetCollegeItem[]): void {
     console.error("Failed to save cached sheet items", e);
   }
 }
+
+export function loadCachedInvoiceTrackerItems(): GoogleSheetInvoiceTrackerItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_CACHED_INVOICE_TRACKER_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn("Failed to load cached invoice tracker items", e);
+  }
+  return [];
+}
+
+export function saveCachedInvoiceTrackerItems(items: GoogleSheetInvoiceTrackerItem[]): void {
+  try {
+    localStorage.setItem(STORAGE_CACHED_INVOICE_TRACKER_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error("Failed to save cached invoice tracker items", e);
+  }
+}
+
 

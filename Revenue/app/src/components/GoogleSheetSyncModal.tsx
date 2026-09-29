@@ -20,15 +20,18 @@ import {
 } from "lucide-react";
 import {
   fetchGoogleSheetData,
+  fetchInvoiceTrackerData,
   mapRowsToCollegeItems,
   parseCSV,
   loadSavedSheetConfig,
   saveSheetConfig,
   saveCachedSheetItems,
+  saveCachedInvoiceTrackerItems,
   testGoogleAppsScriptConnection,
   beautifySpreadsheetProofLinks,
   GOOGLE_APPS_SCRIPT_CODE,
   type GoogleSheetCollegeItem,
+  type GoogleSheetInvoiceTrackerItem,
 } from "../lib/googleSheetsService";
 import { formatINR } from "../lib/mockData";
 
@@ -96,6 +99,17 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
         return;
       }
 
+      let invoiceCount = 0;
+      try {
+        const invItems = await fetchInvoiceTrackerData(sheetUrl.trim(), "Invoice Tracker");
+        if (invItems.length > 0) {
+          saveCachedInvoiceTrackerItems(invItems);
+          invoiceCount = invItems.length;
+        }
+      } catch (invErr) {
+        console.log("Note: 'Invoice Tracker' tab not found or skipped:", invErr);
+      }
+
       setPreviewItems(items);
       saveSheetConfig({
         sheetUrl: sheetUrl.trim(),
@@ -104,7 +118,14 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
         lastSyncedAt: new Date().toISOString(),
       });
       saveCachedSheetItems(items);
-      setSyncSuccessMsg(`Successfully fetched ${items.length} colleges from Google Sheet!`);
+
+      if (invoiceCount > 0) {
+        setSyncSuccessMsg(
+          `Successfully fetched ${items.length} colleges and synchronized ${invoiceCount} milestones from 'Invoice Tracker' tab!`
+        );
+      } else {
+        setSyncSuccessMsg(`Successfully fetched ${items.length} colleges from Google Sheet!`);
+      }
     } catch (err: any) {
       console.error("Fetch error:", err);
       setErrorMsg(
