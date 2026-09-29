@@ -844,6 +844,11 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
                 <input
                   type="text"
                   id="editCollegeName"
+                  name="edit_college_name_no_autocomplete"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  data-lpignore="true"
                   className="styled-input-control"
                   value={formData.college_name}
                   onChange={(e) => setFormData({ ...formData, college_name: e.target.value })}
@@ -859,6 +864,11 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
                 <input
                   type="text"
                   id="editProjectCode"
+                  name="edit_project_code_no_autocomplete"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  data-lpignore="true"
                   className="styled-input-control"
                   value={formData.project_code}
                   onChange={(e) => setFormData({ ...formData, project_code: e.target.value })}
@@ -912,6 +922,9 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
                 <input
                   type="number"
                   id="editStudentCount"
+                  name="edit_student_count_no_autocomplete"
+                  autoComplete="off"
+                  data-lpignore="true"
                   className="styled-input-control"
                   min="0"
                   step="1"
@@ -931,6 +944,9 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
                 <input
                   type="number"
                   id="editCostPerStudent"
+                  name="edit_cost_per_student_no_autocomplete"
+                  autoComplete="off"
+                  data-lpignore="true"
                   className="styled-input-control"
                   min="0"
                   step="0.01"

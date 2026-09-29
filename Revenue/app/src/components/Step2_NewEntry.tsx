@@ -184,7 +184,7 @@ export const Step2_NewEntry: React.FC<Step2NewEntryProps> = ({
       </div>
 
       {/* Main Form Box */}
-      <form onSubmit={(e) => handleSubmit(e, true)} className="entry-form-card">
+      <form onSubmit={(e) => handleSubmit(e, true)} className="entry-form-card" autoComplete="off">
         {/* Row 1: College Name, College Project, Academic Year */}
         <div className="form-fields-grid grid-cols-3">
           <div className="form-field-group">
@@ -195,6 +195,12 @@ export const Step2_NewEntry: React.FC<Step2NewEntryProps> = ({
             <input
               type="text"
               id="collegeName"
+              name="college_name_no_autocomplete"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-form-type="other"
               className="styled-input-control"
               placeholder="Select or enter college name"
               value={draft.collegeName}
@@ -211,6 +217,12 @@ export const Step2_NewEntry: React.FC<Step2NewEntryProps> = ({
             <input
               type="text"
               id="projectCode"
+              name="project_code_no_autocomplete"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
+              data-form-type="other"
               className="styled-input-control"
               placeholder="Enter project name / code"
               value={draft.projectCode}
@@ -270,6 +282,9 @@ export const Step2_NewEntry: React.FC<Step2NewEntryProps> = ({
             <input
               type="number"
               id="studentCount"
+              name="student_count_no_autocomplete"
+              autoComplete="off"
+              data-lpignore="true"
               className="styled-input-control"
               placeholder="Enter number of students"
               min="0"
@@ -288,6 +303,9 @@ export const Step2_NewEntry: React.FC<Step2NewEntryProps> = ({
             <input
               type="number"
               id="costPerStudent"
+              name="cost_per_student_no_autocomplete"
+              autoComplete="off"
+              data-lpignore="true"
               className="styled-input-control"
               placeholder="Enter cost per student"
               min="0"

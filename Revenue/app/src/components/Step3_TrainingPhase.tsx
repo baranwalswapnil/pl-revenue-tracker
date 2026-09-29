@@ -225,6 +225,11 @@ export const Step3_TrainingPhase: React.FC<Step3TrainingPhaseProps> = ({
             <span className="context-label">College Name</span>
             <input
               type="text"
+              name="college_name_no_autocomplete"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
               className="context-input"
               value={draft.collegeName}
               placeholder="Dr. DY Patil Institute"
@@ -241,6 +246,11 @@ export const Step3_TrainingPhase: React.FC<Step3TrainingPhaseProps> = ({
             <span className="context-label">Project Code</span>
             <input
               type="text"
+              name="project_code_no_autocomplete"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              data-lpignore="true"
               className="context-input"
               value={draft.projectCode}
               placeholder="DypCSE-001"
@@ -257,6 +267,9 @@ export const Step3_TrainingPhase: React.FC<Step3TrainingPhaseProps> = ({
             <span className="context-label">No. of Students</span>
             <input
               type="number"
+              name="student_count_no_autocomplete"
+              autoComplete="off"
+              data-lpignore="true"
               className="context-input"
               value={draft.studentCount}
               placeholder="120"
@@ -267,7 +280,7 @@ export const Step3_TrainingPhase: React.FC<Step3TrainingPhaseProps> = ({
       </div>
 
       {/* Main Steps Form */}
-      <form onSubmit={handleSubmit} className="training-entry-card">
+      <form onSubmit={handleSubmit} className="training-entry-card" autoComplete="off">
         {/* Step 1: Training Phase & Timeline */}
         <section className="form-step-section">
           <div className="step-section-header">
@@ -305,6 +318,8 @@ export const Step3_TrainingPhase: React.FC<Step3TrainingPhaseProps> = ({
               <input
                 type="date"
                 id="phaseStartDate"
+                name="phase_start_date_no_autocomplete"
+                autoComplete="off"
                 className="styled-input-control"
                 value={currentPhaseObj.startDate || draft.phaseStartDate || ""}
                 onChange={(e) => handleDateChange("startDate", e.target.value)}
@@ -320,6 +335,8 @@ export const Step3_TrainingPhase: React.FC<Step3TrainingPhaseProps> = ({
               <input
                 type="date"
                 id="phaseEndDate"
+                name="phase_end_date_no_autocomplete"
+                autoComplete="off"
                 className="styled-input-control"
                 value={currentPhaseObj.endDate || draft.phaseEndDate || ""}
                 onChange={(e) => handleDateChange("endDate", e.target.value)}
@@ -349,6 +366,9 @@ export const Step3_TrainingPhase: React.FC<Step3TrainingPhaseProps> = ({
               <input
                 type="number"
                 id="hoursPlanned"
+                name="hours_planned_no_autocomplete"
+                autoComplete="off"
+                data-lpignore="true"
                 className="styled-input-control"
                 placeholder="40"
                 min="0"
@@ -367,6 +387,9 @@ export const Step3_TrainingPhase: React.FC<Step3TrainingPhaseProps> = ({
               <input
                 type="number"
                 id="hoursGiven"
+                name="hours_given_no_autocomplete"
+                autoComplete="off"
+                data-lpignore="true"
                 className="styled-input-control"
                 placeholder="35"
                 min="0"
@@ -385,6 +408,9 @@ export const Step3_TrainingPhase: React.FC<Step3TrainingPhaseProps> = ({
               <input
                 type="number"
                 id="trainingCost"
+                name="training_cost_no_autocomplete"
+                autoComplete="off"
+                data-lpignore="true"
                 className="styled-input-control"
                 placeholder="50000"
                 min="0"
