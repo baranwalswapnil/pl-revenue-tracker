@@ -403,7 +403,10 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
                   Delete any existing code in the editor, click the <strong>"Copy Apps Script Code"</strong> button below, paste it into the editor, and click <strong>Save</strong> (💾 icon).
                 </li>
                 <li>
-                  Click <strong>Deploy &gt; New deployment</strong> &rarr; Click gear icon & Select <strong>Web app</strong> &rarr; Set <em>Execute as: <strong>Me</strong></em> and <em>Who has access: <strong>Anyone</strong> (REQUIRED!)</em> &rarr; Click <strong>Deploy</strong> &rarr; <strong>Authorize Access</strong> &rarr; Copy the Web App URL, paste it in the box above, and click <strong>Test Connection</strong>!
+                  <strong>Authorize Drive Permissions (One-Time)</strong>: In the toolbar dropdown next to "Debug", select <code>authorizeDrive</code> &rarr; click <strong>Run</strong> (▶️) &rarr; click <strong>Review Permissions</strong> &rarr; choose your account &rarr; <strong>Advanced</strong> &rarr; <strong>Go to project (unsafe)</strong> &rarr; <strong>Allow</strong>.
+                </li>
+                <li>
+                  Click <strong>Deploy &gt; New deployment</strong> (or <em>Manage deployments &gt; Edit &gt; New version</em>) &rarr; Set <em>Execute as: <strong>Me</strong></em> and <em>Who has access: <strong>Anyone</strong> (REQUIRED!)</em> &rarr; Click <strong>Deploy</strong> &rarr; Copy the Web App URL and paste it in the box above!
                 </li>
               </ol>
 

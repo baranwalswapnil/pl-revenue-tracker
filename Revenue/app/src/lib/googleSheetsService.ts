@@ -493,6 +493,14 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * NOTE: If you update code later, go to Deploy > Manage deployments > Edit > New version > Deploy!
  */
 
+/**
+ * Run this function ONCE inside Apps Script editor to authorize Drive permissions:
+ */
+function authorizeDrive() {
+  var root = DriveApp.getRootFolder();
+  Logger.log("Drive authorized successfully! Root folder: " + root.getName());
+}
+
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: "active",
