@@ -515,7 +515,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                       <td>
                         <div className="college-info-cell">
                           <span className="college-main-name">{item.collegeName}</span>
-                          <span className="project-code-sub">{item.projectCode} • {item.academicYear}</span>
+                          <span className="project-code-sub">{item.projectCode}</span>
                         </div>
                       </td>
                       <td>
