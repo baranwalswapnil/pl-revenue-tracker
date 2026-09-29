@@ -477,8 +477,8 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                   <th>Milestone Code</th>
                   <th>Share (%)</th>
                   <th className="text-right">Invoice Amount (₹)</th>
-                  <th>Tick Raised (Date & Proof)</th>
-                  <th>Tick Received (Date & Proof)</th>
+                  <th>Tick Raised</th>
+                  <th>Tick Received</th>
                   <th className="text-right">Outstanding (₹)</th>
                   <th className="text-center">Status</th>
                   <th className="text-center" style={{ width: "110px" }}>Actions</th>
