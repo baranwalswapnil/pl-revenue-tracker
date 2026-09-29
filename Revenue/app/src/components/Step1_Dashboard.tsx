@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import type { Project } from "../lib/models";
 import { formatINR, getProjectInvoiceStats } from "../lib/mockData";
-import { OutstandingDropdown } from "./OutstandingDropdown";
 import { type OutstandingPeriod, getDefaultPeriod } from "../lib/outstandingService";
 
 interface Step1DashboardProps {
@@ -47,7 +46,6 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "pending" | "cleared">("all");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const [isOutstandingMenuOpen, setIsOutstandingMenuOpen] = useState(false);
 
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -137,11 +135,6 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  const handleSelectOutstandingPeriod = (period: OutstandingPeriod) => {
-    setIsOutstandingMenuOpen(false);
-    onOpenOutstanding(period);
   };
 
   return (
@@ -249,10 +242,10 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
           </div>
         </div>
 
-        {/* Card 3: Outstanding Card (NEW!) */}
+        {/* Card 3: Outstanding Card (Direct navigation to Step 6) */}
         <div
           className="action-card outstanding-card"
-          onClick={() => setIsOutstandingMenuOpen(true)}
+          onClick={() => onOpenOutstanding()}
           role="button"
           tabIndex={0}
         >
@@ -275,12 +268,12 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
                 className="action-btn outstanding-btn"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsOutstandingMenuOpen(true);
+                  onOpenOutstanding();
                 }}
                 id="outstanding-btn"
               >
-                <span>Outstanding</span>
-                <ChevronDown size={16} className="btn-arrow" />
+                <span>View Outstanding</span>
+                <ArrowRight size={16} className="btn-arrow" />
               </button>
             </div>
           </div>
@@ -296,13 +289,6 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
           </div>
         </div>
       </section>
-
-      {/* Outstanding Period Selection Modal / Dropdown */}
-      <OutstandingDropdown
-        isOpen={isOutstandingMenuOpen}
-        onClose={() => setIsOutstandingMenuOpen(false)}
-        onSelectPeriod={handleSelectOutstandingPeriod}
-      />
 
       {/* Bottom Section - Excel Type Overview Table */}
       <section className="excel-table-section">
