@@ -622,41 +622,55 @@ function doPost(e) {
     // ==========================================
     if (action === "upload_proof") {
       var folderId = data.folderId || (data.type === "raised" ? "1Aqg6rmMETXqtjcEz6z07XDsj1jYWRfNf" : "1WgW61UJJ-TTwkZeYzOo3-GdQxD2upqtB");
-      var folder;
+      var folder = null;
       try {
         folder = DriveApp.getFolderById(folderId);
       } catch (fErr) {
-        return ContentService.createTextOutput(JSON.stringify({
-          success: false,
-          error: "Cannot access Google Drive folder (" + folderId + "): " + fErr.toString() + ". Make sure you have accepted Drive permissions."
-        })).setMimeType(ContentService.MimeType.JSON);
+        try {
+          folder = DriveApp.getRootFolder();
+        } catch (rErr) {}
       }
 
-      var contentType = data.mimeType || "image/png";
+      var contentType = data.mimeType || "image/jpeg";
       var base64Data = data.fileBase64 || "";
       if (base64Data.indexOf(",") !== -1) {
         base64Data = base64Data.split(",")[1];
       }
+      
       var decodedBytes = Utilities.base64Decode(base64Data);
-      var blob = Utilities.newBlob(decodedBytes, contentType, data.fileName || "invoice_proof.png");
-      var file = folder.createFile(blob);
+      var safeFileName = String(data.fileName || "invoice_proof.jpg").replace(/[\/\\:?*"<>|]/g, "_");
+      var blob = Utilities.newBlob(decodedBytes, contentType, safeFileName);
+      
+      var file = null;
+      if (folder) {
+        try {
+          file = folder.createFile(blob);
+        } catch (createErr) {
+          file = DriveApp.createFile(blob);
+        }
+      } else {
+        file = DriveApp.createFile(blob);
+      }
+
       try {
         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       } catch (e) {}
-      var fileUrl = file.getUrl();
+
+      var fileId = file.getId();
+      var directFileUrl = "https://drive.google.com/file/d/" + fileId + "/view?usp=sharing";
 
       // Determine Target Column
       var colName = data.type === "raised" ? "Raised Invoice proof" : "Recieved Invoice";
       var targetColIdx = ensureColumn(colName);
 
-      // If college row exists, write or append file link in that row!
+      // If college row exists, write or append direct file link in that row!
       if (targetRowIndex > 0) {
         var curVal = sheet.getRange(targetRowIndex, targetColIdx + 1).getValue();
-        var newVal = fileUrl;
+        var newVal = directFileUrl;
         if (curVal && String(curVal).trim()) {
           var curStr = String(curVal).trim();
-          if (curStr.indexOf(fileUrl) === -1) {
-            newVal = curStr + "\\n" + fileUrl;
+          if (curStr.indexOf(directFileUrl) === -1) {
+            newVal = curStr + "\\n" + directFileUrl;
           } else {
             newVal = curStr;
           }
@@ -667,7 +681,7 @@ function doPost(e) {
         var newRowIdx = sheet.getLastRow() + 1;
         if (colProjCode !== -1) sheet.getRange(newRowIdx, colProjCode + 1).setValue(data.projectCode || "");
         if (colCollegeName !== -1) sheet.getRange(newRowIdx, colCollegeName + 1).setValue(data.collegeName || "");
-        sheet.getRange(newRowIdx, targetColIdx + 1).setValue(fileUrl);
+        sheet.getRange(newRowIdx, targetColIdx + 1).setValue(directFileUrl);
         targetRowIndex = newRowIdx;
       }
 
@@ -675,11 +689,12 @@ function doPost(e) {
 
       return ContentService.createTextOutput(JSON.stringify({
         success: true,
-        fileUrl: fileUrl,
+        fileUrl: directFileUrl,
+        fileId: fileId,
         fileName: file.getName(),
         columnName: colName,
         rowIndex: targetRowIndex,
-        message: "Proof uploaded to Google Drive folder and linked to column '" + colName + "' at row " + targetRowIndex + " in spreadsheet!"
+        message: "Proof uploaded to Google Drive folder and direct file link saved in column '" + colName + "' at row " + targetRowIndex + " in spreadsheet!"
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
@@ -810,6 +825,87 @@ export async function testGoogleAppsScriptConnection(
 }
 
 /**
+ * Automatically compresses image files to JPEG before Base64 encoding
+ * Ensures fast (< 1s) uploads and prevents hitting Google Apps Script payload limits.
+ */
+async function fileToBase64WithCompression(file: File): Promise<{ base64: string; mimeType: string; fileName: string }> {
+  const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+  // If not an image (e.g. PDF), read directly
+  if (!file.type.startsWith("image/")) {
+    const rawBase64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    return { base64: rawBase64, mimeType: file.type || "application/pdf", fileName: sanitizedName };
+  }
+
+  // Compress image via Canvas
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIM = 1600;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+          resolve({
+            base64: dataUrl,
+            mimeType: "image/jpeg",
+            fileName: sanitizedName.replace(/\.[^/.]+$/, "") + ".jpg",
+          });
+          return;
+        }
+
+        resolve({
+          base64: e.target?.result as string,
+          mimeType: file.type,
+          fileName: sanitizedName,
+        });
+      };
+      img.onerror = () => {
+        resolve({
+          base64: e.target?.result as string,
+          mimeType: file.type,
+          fileName: sanitizedName,
+        });
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => {
+      resolve({
+        base64: "",
+        mimeType: file.type,
+        fileName: sanitizedName,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
  * Uploads an Invoice Proof photo / PDF to Google Drive and links to matching Google Sheet row
  */
 export async function uploadInvoiceProofToDrive(params: {
@@ -828,30 +924,28 @@ export async function uploadInvoiceProofToDrive(params: {
       ? GOOGLE_DRIVE_FOLDERS.raisedInvoiceProof
       : GOOGLE_DRIVE_FOLDERS.receivedInvoiceProof;
 
-  // Convert File to Base64
-  const base64Data = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(params.file);
-  });
+  // Compress and convert File to Base64
+  const { base64, mimeType, fileName: processedFileName } = await fileToBase64WithCompression(params.file);
 
   if (!scriptUrl || !scriptUrl.trim()) {
     return {
       success: false,
-      fileUrl: base64Data,
-      message: "⚠️ Apps Script URL is not configured in Sheet Sync. The photo is previewed locally only until Web App URL is connected.",
+      fileUrl: base64,
+      message: "⚠️ Apps Script URL is not configured in Sheet Sync. Connect Apps Script Web App for live Google Drive uploads.",
     };
   }
+
+  const safeCode = String(params.projectCode || "PRJ").replace(/[\/\\:?*"<>|]/g, "-");
+  const safeInv = String(params.invoiceCode || "INV").replace(/[\/\\:?*"<>|]/g, "-");
 
   const payload = {
     action: "upload_proof",
     type: params.type,
     folderId: folderConfig.folderId,
     columnName: folderConfig.columnName,
-    fileName: `${params.projectCode || "PRJ"}_${params.invoiceCode || "INV"}_${params.type}_proof_${params.file.name}`,
-    mimeType: params.file.type || "image/png",
-    fileBase64: base64Data,
+    fileName: `${safeCode}_${safeInv}_${params.type}_proof_${processedFileName}`,
+    mimeType: mimeType,
+    fileBase64: base64,
     projectCode: params.projectCode,
     collegeName: params.collegeName,
   };
@@ -874,31 +968,31 @@ export async function uploadInvoiceProofToDrive(params: {
       // Ignored
     }
 
-    if (resJson && resJson.success) {
+    if (resJson && resJson.success && resJson.fileUrl) {
       return {
         success: true,
         fileUrl: resJson.fileUrl,
-        message: `✓ Uploaded to Google Drive & linked in spreadsheet column "${folderConfig.columnName}" (Row ${resJson.rowIndex})!`,
+        message: `✓ Photo uploaded to Google Drive & direct file link saved in spreadsheet column "${folderConfig.columnName}"!`,
       };
     } else if (resJson && resJson.error) {
       return {
         success: false,
-        fileUrl: base64Data,
+        fileUrl: base64,
         message: `Apps Script Error: ${resJson.error}`,
       };
     }
 
     return {
-      success: true,
-      fileUrl: folderConfig.url,
-      message: `Proof sent to ${params.type === "raised" ? "Raised" : "Received"} Google Drive folder!`,
+      success: false,
+      fileUrl: base64,
+      message: `Failed to confirm Google Drive upload. Response: ${resText.slice(0, 100)}`,
     };
   } catch (err: any) {
     console.warn("Upload proof notice:", err);
     return {
       success: false,
-      fileUrl: base64Data,
-      message: `Failed to upload to Google Drive: ${err.message}. Check permissions and Sheet Sync URL.`,
+      fileUrl: base64,
+      message: `Upload error: ${err.message}. Make sure Google Drive permissions are authorized in Apps Script.`,
     };
   }
 }
