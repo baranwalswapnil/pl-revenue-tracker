@@ -486,15 +486,26 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * 4. Click "Deploy" > "New deployment".
  * 5. Select type: "Web app".
  * 6. Set "Execute as": "Me".
- * 7. Set "Who has access": "Anyone".
- * 8. Click "Deploy" and copy the Web App URL (starts with https://script.google.com/macros/s/...).
- * 9. Paste the Web App URL in your P&L Revenue Tracker website Sync modal.
+ * 7. Set "Who has access": "Anyone" (VERY IMPORTANT!).
+ * 8. Click "Deploy", then click "Authorize access" (Advanced > Go to project > Allow).
+ * 9. Copy the Web App URL and paste it into the Sheet Sync modal in the website!
+ * 
+ * NOTE: If you update code later, go to Deploy > Manage deployments > Edit > New version > Deploy!
  */
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "active",
+    name: "P&L Revenue Tracker Google Sheets & Drive Sync Web App",
+    time: new Date().toISOString(),
+    message: "Web App is active and ready to accept POST requests for sheet sync and proof uploads."
+  })).setMimeType(ContentService.MimeType.JSON);
+}
 
 function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getActiveSheet();
+    var sheet = ss.getActiveSheet() || ss.getSheets()[0];
     
     // Parse incoming payload
     var rawData = e && e.postData ? e.postData.contents : "";
@@ -504,7 +515,27 @@ function doPost(e) {
     }
     
     var data = JSON.parse(rawData);
-    var action = (data.action || "add").toLowerCase(); // "add", "update", or "upload_proof"
+    var action = (data.action || "add").toLowerCase(); // "test", "upload_proof", "add", "update"
+
+    // ==========================================
+    // ACTION: TEST CONNECTION & DRIVE PERMISSION
+    // ==========================================
+    if (action === "test") {
+      var driveTest = "Drive access ok";
+      try {
+        var folderRaised = DriveApp.getFolderById("1Aqg6rmMETXqtjcEz6z07XDsj1jYWRfNf");
+        driveTest = "Drive folders accessible (" + folderRaised.getName() + ")";
+      } catch (dErr) {
+        driveTest = "Drive permission warning: " + dErr.toString();
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        message: "Google Apps Script connection verified successfully! " + driveTest,
+        sheetName: sheet.getName(),
+        time: new Date().toISOString()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
     
     var dataRange = sheet.getDataRange();
     var values = dataRange.getValues();
@@ -536,6 +567,7 @@ function doPost(e) {
       if (idx === -1) {
         var newCol = sheet.getLastColumn() + 1;
         sheet.getRange(1, newCol).setValue(colName);
+        SpreadsheetApp.flush();
         headers.push(colName.toLowerCase().replace(/[^a-z0-9]/g, ""));
         return newCol - 1;
       }
@@ -574,7 +606,11 @@ function doPost(e) {
         var rowCode = colProjCode !== -1 ? String(values[r][colProjCode] || "").trim().toLowerCase() : "";
         var rowName = colCollegeName !== -1 ? String(values[r][colCollegeName] || "").trim().toLowerCase() : "";
         
-        if ((searchCode && rowCode === searchCode) || (searchName && rowName === searchName)) {
+        if (searchCode && (rowCode === searchCode || (rowCode && searchCode && (rowCode.indexOf(searchCode) !== -1 || searchCode.indexOf(rowCode) !== -1)))) {
+          targetRowIndex = r + 1;
+          break;
+        }
+        if (searchName && (rowName === searchName || (rowName && searchName && (rowName.indexOf(searchName) !== -1 || searchName.indexOf(rowName) !== -1)))) {
           targetRowIndex = r + 1;
           break;
         }
@@ -586,7 +622,16 @@ function doPost(e) {
     // ==========================================
     if (action === "upload_proof") {
       var folderId = data.folderId || (data.type === "raised" ? "1Aqg6rmMETXqtjcEz6z07XDsj1jYWRfNf" : "1WgW61UJJ-TTwkZeYzOo3-GdQxD2upqtB");
-      var folder = DriveApp.getFolderById(folderId);
+      var folder;
+      try {
+        folder = DriveApp.getFolderById(folderId);
+      } catch (fErr) {
+        return ContentService.createTextOutput(JSON.stringify({
+          success: false,
+          error: "Cannot access Google Drive folder (" + folderId + "): " + fErr.toString() + ". Make sure you have accepted Drive permissions."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+
       var contentType = data.mimeType || "image/png";
       var base64Data = data.fileBase64 || "";
       if (base64Data.indexOf(",") !== -1) {
@@ -607,9 +652,26 @@ function doPost(e) {
       // If college row exists, write or append file link in that row!
       if (targetRowIndex > 0) {
         var curVal = sheet.getRange(targetRowIndex, targetColIdx + 1).getValue();
-        var newVal = curVal ? (String(curVal) + "\\n" + fileUrl) : fileUrl;
+        var newVal = fileUrl;
+        if (curVal && String(curVal).trim()) {
+          var curStr = String(curVal).trim();
+          if (curStr.indexOf(fileUrl) === -1) {
+            newVal = curStr + "\\n" + fileUrl;
+          } else {
+            newVal = curStr;
+          }
+        }
         sheet.getRange(targetRowIndex, targetColIdx + 1).setValue(newVal);
+      } else {
+        // If college row doesn't exist yet, create a new row with project code, college name and proof link
+        var newRowIdx = sheet.getLastRow() + 1;
+        if (colProjCode !== -1) sheet.getRange(newRowIdx, colProjCode + 1).setValue(data.projectCode || "");
+        if (colCollegeName !== -1) sheet.getRange(newRowIdx, colCollegeName + 1).setValue(data.collegeName || "");
+        sheet.getRange(newRowIdx, targetColIdx + 1).setValue(fileUrl);
+        targetRowIndex = newRowIdx;
       }
+
+      SpreadsheetApp.flush();
 
       return ContentService.createTextOutput(JSON.stringify({
         success: true,
@@ -617,7 +679,7 @@ function doPost(e) {
         fileName: file.getName(),
         columnName: colName,
         rowIndex: targetRowIndex,
-        message: "Proof uploaded to Google Drive folder and linked to row in spreadsheet!"
+        message: "Proof uploaded to Google Drive folder and linked to column '" + colName + "' at row " + targetRowIndex + " in spreadsheet!"
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
@@ -685,6 +747,8 @@ function doPost(e) {
       sheet.getRange(targetRowIndex, colReceived + 1).setValue(data.receivedInvoiceProof);
     }
     
+    SpreadsheetApp.flush();
+
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
       action: action === "update" && targetRowIndex <= values.length ? "updated" : "added",
@@ -698,15 +762,52 @@ function doPost(e) {
       error: err.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
-}
-
-function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "active",
-    name: "P&L Revenue Tracker Google Sheets & Drive Sync Web App",
-    time: new Date().toISOString()
-  })).setMimeType(ContentService.MimeType.JSON);
 }`;
+
+/**
+ * Tests live connection to Google Apps Script Web App
+ */
+export async function testGoogleAppsScriptConnection(
+  url: string
+): Promise<{ success: boolean; message: string }> {
+  if (!url || !url.trim().startsWith("http")) {
+    return { success: false, message: "Please enter a valid Google Apps Script Web App URL starting with https://" };
+  }
+
+  try {
+    const response = await fetch(url.trim(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({ action: "test" }),
+      redirect: "follow",
+    });
+
+    const text = await response.text();
+    let json: any = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      // Ignored
+    }
+
+    if (json && json.success) {
+      return { success: true, message: json.message || "Connected to Google Sheet and Drive successfully!" };
+    } else if (json && json.error) {
+      return { success: false, message: `Apps Script returned error: ${json.error}` };
+    } else if (response.ok) {
+      return { success: true, message: "Apps Script Web App reachable and responding!" };
+    } else {
+      return { success: false, message: `HTTP ${response.status}: Make sure 'Who has access' is set to 'Anyone'.` };
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      message: `Connection failed: ${err.message}. Make sure the script is deployed with 'Who has access: Anyone' and Drive permissions are granted.`,
+    };
+  }
+}
 
 /**
  * Uploads an Invoice Proof photo / PDF to Google Drive and links to matching Google Sheet row
@@ -735,6 +836,14 @@ export async function uploadInvoiceProofToDrive(params: {
     reader.readAsDataURL(params.file);
   });
 
+  if (!scriptUrl || !scriptUrl.trim()) {
+    return {
+      success: false,
+      fileUrl: base64Data,
+      message: "⚠️ Apps Script URL is not configured in Sheet Sync. The photo is previewed locally only until Web App URL is connected.",
+    };
+  }
+
   const payload = {
     action: "upload_proof",
     type: params.type,
@@ -747,14 +856,6 @@ export async function uploadInvoiceProofToDrive(params: {
     collegeName: params.collegeName,
   };
 
-  if (!scriptUrl || !scriptUrl.trim()) {
-    return {
-      success: true,
-      fileUrl: base64Data,
-      message: "Proof attached locally! (Configure Google Apps Script URL in Sheet Sync for live Google Drive uploads)",
-    };
-  }
-
   try {
     const response = await fetch(scriptUrl.trim(), {
       method: "POST",
@@ -762,34 +863,42 @@ export async function uploadInvoiceProofToDrive(params: {
         "Content-Type": "text/plain;charset=utf-8",
       },
       body: JSON.stringify(payload),
+      redirect: "follow",
     });
 
-    if (response.ok) {
-      try {
-        const resJson = await response.json();
-        if (resJson && resJson.fileUrl) {
-          return {
-            success: true,
-            fileUrl: resJson.fileUrl,
-            message: `Proof uploaded to Google Drive & linked in spreadsheet column "${folderConfig.columnName}"!`,
-          };
-        }
-      } catch {
-        // Mode no-cors fallback
-      }
+    const resText = await response.text();
+    let resJson: any = null;
+    try {
+      resJson = JSON.parse(resText);
+    } catch {
+      // Ignored
+    }
+
+    if (resJson && resJson.success) {
+      return {
+        success: true,
+        fileUrl: resJson.fileUrl,
+        message: `✓ Uploaded to Google Drive & linked in spreadsheet column "${folderConfig.columnName}" (Row ${resJson.rowIndex})!`,
+      };
+    } else if (resJson && resJson.error) {
+      return {
+        success: false,
+        fileUrl: base64Data,
+        message: `Apps Script Error: ${resJson.error}`,
+      };
     }
 
     return {
       success: true,
       fileUrl: folderConfig.url,
-      message: `Proof submitted to ${params.type === "raised" ? "Raised" : "Received"} Google Drive folder!`,
+      message: `Proof sent to ${params.type === "raised" ? "Raised" : "Received"} Google Drive folder!`,
     };
   } catch (err: any) {
     console.warn("Upload proof notice:", err);
     return {
-      success: true,
+      success: false,
       fileUrl: base64Data,
-      message: `Proof attached locally: ${err.message}`,
+      message: `Failed to upload to Google Drive: ${err.message}. Check permissions and Sheet Sync URL.`,
     };
   }
 }

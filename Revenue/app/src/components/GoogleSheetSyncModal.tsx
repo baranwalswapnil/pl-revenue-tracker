@@ -25,6 +25,7 @@ import {
   loadSavedSheetConfig,
   saveSheetConfig,
   saveCachedSheetItems,
+  testGoogleAppsScriptConnection,
   GOOGLE_APPS_SCRIPT_CODE,
   type GoogleSheetCollegeItem,
 } from "../lib/googleSheetsService";
@@ -49,6 +50,8 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
   const [activeTab, setActiveTab] = useState<"url" | "paste" | "2way">("url");
   const [pastedText, setPastedText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isTestingScript, setIsTestingScript] = useState(false);
+  const [testScriptResult, setTestScriptResult] = useState<{ success: boolean; message: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [previewItems, setPreviewItems] = useState<GoogleSheetCollegeItem[]>([]);
   const [syncSuccessMsg, setSyncSuccessMsg] = useState<string | null>(null);
@@ -171,6 +174,21 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
     setSyncSuccessMsg("2-Way Google Sheet Sync URL saved! Adding and editing colleges on the website will now write & update your Google Spreadsheet automatically in real-time.");
   };
 
+  const handleTestScriptConnection = async () => {
+    if (!scriptUrl.trim()) {
+      setErrorMsg("Please enter your Google Apps Script Web App URL first.");
+      return;
+    }
+
+    setIsTestingScript(true);
+    setTestScriptResult(null);
+    setErrorMsg(null);
+
+    const result = await testGoogleAppsScriptConnection(scriptUrl.trim());
+    setTestScriptResult(result);
+    setIsTestingScript(false);
+  };
+
   const handleCopyScriptCode = () => {
     navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE);
     setCopiedScript(true);
@@ -289,9 +307,9 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
             <div className="gsheet-2way-banner">
               <Zap size={20} className="text-amber-500" />
               <div>
-                <strong>Automatic 2-Way Sync (Add & Update Rows in Google Sheets)</strong>
+                <strong>Automatic 2-Way Sync & Google Drive Photo Uploads</strong>
                 <p>
-                  When you add a new college or edit existing projects on this website, it will automatically append new rows and update columns in your live Google Spreadsheet.
+                  When you add or edit colleges, or upload invoice photo proofs, they are automatically saved into Google Drive and recorded into the matching college row in your live Google Spreadsheet.
                 </p>
               </div>
             </div>
@@ -301,12 +319,12 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
                 <Zap size={15} className="label-icon" />
                 <span>Google Apps Script Web App URL <span className="req-star">*</span></span>
               </label>
-              <div style={{ display: "flex", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                 <input
                   id="gsheetScriptUrl"
                   type="text"
                   className="styled-input-control"
-                  style={{ flex: 1 }}
+                  style={{ flex: 1, minWidth: "220px" }}
                   placeholder="https://script.google.com/macros/s/.../exec"
                   value={scriptUrl}
                   onChange={(e) => setScriptUrl(e.target.value)}
@@ -320,14 +338,54 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
                   <Save size={15} />
                   <span>Save URL</span>
                 </button>
+                <button
+                  type="button"
+                  className="form-btn"
+                  onClick={handleTestScriptConnection}
+                  disabled={isTestingScript}
+                  style={{
+                    backgroundColor: "#0d9488",
+                    color: "#fff",
+                    padding: "0 16px",
+                    whiteSpace: "nowrap",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    fontWeight: 600,
+                  }}
+                >
+                  {isTestingScript ? <RefreshCw size={15} className="spinning" /> : <Zap size={15} />}
+                  <span>{isTestingScript ? "Testing..." : "Test Connection"}</span>
+                </button>
               </div>
-              <span className="field-hint-text">
+
+              {testScriptResult && (
+                <div
+                  style={{
+                    marginTop: "10px",
+                    padding: "10px 14px",
+                    borderRadius: "6px",
+                    fontSize: "12.5px",
+                    backgroundColor: testScriptResult.success ? "#ecfdf5" : "#fef2f2",
+                    border: `1px solid ${testScriptResult.success ? "#a7f3d0" : "#fecaca"}`,
+                    color: testScriptResult.success ? "#065f46" : "#991b1b",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  {testScriptResult.success ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                  <span>{testScriptResult.message}</span>
+                </div>
+              )}
+
+              <span className="field-hint-text" style={{ marginTop: "8px", display: "block" }}>
                 {scriptUrl ? (
                   <span style={{ color: "#10b981", fontWeight: 600 }}>
-                    ✓ 2-Way sync is active! Added and edited colleges will sync directly to Google Sheet.
+                    ✓ 2-Way sync is configured! Make sure you clicked "Test Connection" to verify permissions.
                   </span>
                 ) : (
-                  "Follow the 3-step guide below to generate your Google Apps Script URL in 1 minute."
+                  "Follow the 3-step guide below to generate and test your Google Apps Script URL."
                 )}
               </span>
             </div>
@@ -335,19 +393,34 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
             {/* Step-by-Step Instructions */}
             <div className="gsheet-steps-box">
               <h4 style={{ margin: "0 0 10px 0", fontSize: "14px", color: "var(--text-primary)" }}>
-                🛠️ Quick 3-Step Setup for 2-Way Sync:
+                🛠️ Quick 3-Step Setup for 2-Way Sync & Drive Uploads:
               </h4>
               <ol style={{ paddingLeft: "20px", margin: "0 0 12px 0", fontSize: "13px", lineHeight: "1.7", color: "var(--text-secondary)" }}>
                 <li>
                   Open your <a href={sheetUrl || "https://docs.google.com/spreadsheets/d/1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw/edit"} target="_blank" rel="noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>Google Spreadsheet</a> and click <strong>Extensions &gt; Apps Script</strong> in the top menu.
                 </li>
                 <li>
-                  Delete any default code, click the <strong>"Copy Apps Script Code"</strong> button below, paste it into the editor, and click <strong>Save</strong> (floppy disk icon).
+                  Delete any existing code in the editor, click the <strong>"Copy Apps Script Code"</strong> button below, paste it into the editor, and click <strong>Save</strong> (💾 icon).
                 </li>
                 <li>
-                  Click <strong>Deploy &gt; New deployment</strong> &rarr; Click gear icon & Select <strong>Web app</strong> &rarr; Set <em>Execute as: <strong>Me</strong></em> and <em>Who has access: <strong>Anyone</strong></em> &rarr; Click <strong>Deploy</strong> &rarr; Copy the Web App URL and paste it in the box above!
+                  Click <strong>Deploy &gt; New deployment</strong> &rarr; Click gear icon & Select <strong>Web app</strong> &rarr; Set <em>Execute as: <strong>Me</strong></em> and <em>Who has access: <strong>Anyone</strong> (REQUIRED!)</em> &rarr; Click <strong>Deploy</strong> &rarr; <strong>Authorize Access</strong> &rarr; Copy the Web App URL, paste it in the box above, and click <strong>Test Connection</strong>!
                 </li>
               </ol>
+
+              <div
+                style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  borderRadius: "6px",
+                  padding: "10px 14px",
+                  marginBottom: "12px",
+                  fontSize: "12px",
+                  color: "#92400e",
+                  lineHeight: "1.5",
+                }}
+              >
+                ⚠️ <strong>Important Note on Code Updates:</strong> If you already deployed earlier, you must go to <strong>Deploy &gt; Manage deployments &gt; Edit (pencil icon) &gt; Version: New version &gt; Deploy</strong> for the new Drive upload & Column creation code to take effect!
+              </div>
 
               <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                 <button

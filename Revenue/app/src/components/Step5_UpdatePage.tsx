@@ -39,6 +39,7 @@ import { formatINR, computeAttpDetails, generateMilestoneInvoices } from "../lib
 import {
   type GoogleSheetCollegeItem,
   uploadInvoiceProofToDrive,
+  loadSavedSheetConfig,
   GOOGLE_DRIVE_FOLDERS,
 } from "../lib/googleSheetsService";
 
@@ -1370,6 +1371,36 @@ export const Step5_UpdatePage: React.FC<Step5UpdatePageProps> = ({
 
           {/* Google Drive Upload Sync Information Banner */}
           <div className="proof-drive-info-banner">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", borderBottom: "1px solid #ccfbf1", paddingBottom: "6px", marginBottom: "4px" }}>
+              <span style={{ fontWeight: 700, color: "#0f766e", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                <UploadCloud size={14} />
+                <span>Google Drive & Spreadsheet Real-time Proof Sync</span>
+              </span>
+              {loadSavedSheetConfig().scriptUrl ? (
+                <span style={{ fontSize: "11px", color: "#059669", fontWeight: 700, background: "#d1fae5", padding: "2px 8px", borderRadius: "10px" }}>
+                  🟢 Live Apps Script Connected
+                </span>
+              ) : (
+                onOpenGoogleSheetSync && (
+                  <button
+                    type="button"
+                    onClick={onOpenGoogleSheetSync}
+                    style={{
+                      fontSize: "11px",
+                      color: "#b45309",
+                      fontWeight: 700,
+                      background: "#fef3c7",
+                      border: "1px solid #fde68a",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⚠️ Connect Apps Script URL for Live Drive Sync
+                  </button>
+                )
+              )}
+            </div>
             <div className="proof-drive-item">
               <span className="drive-tag raised-tag">📁 Raised Proofs:</span>
               <a
