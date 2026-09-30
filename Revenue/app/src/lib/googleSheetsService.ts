@@ -752,6 +752,8 @@ export function buildProjectsFromInvoiceTracker(
     const firstDate = invList.find((i) => i.date_raised)?.date_raised || "2026-01-15";
     const lastDate = invList[invList.length - 1]?.date_raised || "2026-03-31";
 
+    const plannedInvoiceCount = existing?.invoice_count || existing?.installment_count || invList.length;
+
     const project: Project = {
       id: existing?.id || `proj-${projectCode.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
       college_name: collegeName,
@@ -767,8 +769,8 @@ export function buildProjectsFromInvoiceTracker(
       training_cost: totalContractValue,
       payment_type: first.payment_type || existing?.payment_type || "ATP",
       attp_percentage: existing?.attp_percentage || `${first.payment_percentage || 50}%`,
-      installment_count: invList.length,
-      invoice_count: invList.length,
+      installment_count: plannedInvoiceCount,
+      invoice_count: plannedInvoiceCount,
       invoice_raised: totalRaised,
       invoice_received: totalReceived,
       invoices,
@@ -785,7 +787,7 @@ export function buildProjectsFromInvoiceTracker(
                 hoursGiven: 40,
                 trainingCost: totalContractValue,
                 paymentType: first.payment_type || "ATP",
-                invoiceCount: invList.length,
+                invoiceCount: plannedInvoiceCount,
               },
             ],
       additional_notes:

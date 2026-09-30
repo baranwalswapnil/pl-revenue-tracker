@@ -110,6 +110,8 @@ export function App() {
               payment_type: match.payment_type || p.payment_type,
               academic_year: match.academic_year || p.academic_year,
               passing_year: match.passing_year || p.passing_year,
+              invoice_count: match.invoice_count || p.invoice_count,
+              installment_count: match.invoice_count || p.installment_count,
               updated_at: new Date().toISOString(),
             };
           });
