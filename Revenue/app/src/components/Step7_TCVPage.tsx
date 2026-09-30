@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
   ArrowLeft,
+  ChevronLeft,
   ChevronRight,
   Search,
   Download,
@@ -15,7 +16,7 @@ import {
 } from "lucide-react";
 import { type GoogleSheetMOUItem, parseMOUDateMonth } from "../lib/googleSheetsService";
 import { formatINR } from "../lib/mockData";
-import { ALL_MONTHS, ALL_QUARTERS } from "../lib/outstandingService";
+import { ALL_QUARTERS } from "../lib/outstandingService";
 
 export interface Step7TCVPageProps {
   mouItems: GoogleSheetMOUItem[];
@@ -25,6 +26,21 @@ export interface Step7TCVPageProps {
 }
 
 type PeriodFilterMode = "all" | "quarter" | "month";
+
+export const CALENDAR_MONTHS = [
+  { num: 1, name: "January", short: "Jan" },
+  { num: 2, name: "February", short: "Feb" },
+  { num: 3, name: "March", short: "Mar" },
+  { num: 4, name: "April", short: "Apr" },
+  { num: 5, name: "May", short: "May" },
+  { num: 6, name: "June", short: "Jun" },
+  { num: 7, name: "July", short: "Jul" },
+  { num: 8, name: "August", short: "Aug" },
+  { num: 9, name: "September", short: "Sep" },
+  { num: 10, name: "October", short: "Oct" },
+  { num: 11, name: "November", short: "Nov" },
+  { num: 12, name: "December", short: "Dec" },
+];
 
 export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
   mouItems,
@@ -40,7 +56,13 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
   // State for Period (Quarter / Month) filter
   const [periodMode, setPeriodMode] = useState<PeriodFilterMode>("all");
   const [selectedQuarter, setSelectedQuarter] = useState<string>("Q1");
-  const [selectedMonthNum, setSelectedMonthNum] = useState<number>(4); // Default to April (Q1 start)
+
+  // Calendar State for Month Mode
+  const [calendarYear, setCalendarYear] = useState<number>(2026);
+  const [selectedMonth, setSelectedMonth] = useState<{ monthNum: number; year: number } | null>({
+    monthNum: 4,
+    year: 2026,
+  });
 
   // Search filter for table
   const [tableSearchTerm, setTableSearchTerm] = useState<string>("");
@@ -71,11 +93,11 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     if (tableRef.current) {
       setTableScrollWidth(tableRef.current.scrollWidth);
     }
-  }, [mouItems, selectedCollege, periodMode, selectedQuarter, selectedMonthNum]);
+  }, [mouItems, selectedCollege, periodMode, selectedQuarter, selectedMonth, calendarYear]);
 
   const handleTopScroll = () => {
     if (topScrollRef.current && tableScrollRef.current) {
-      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+      tableScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
     }
   };
 
@@ -115,12 +137,38 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     return collegeOptions.filter((c) => c.name.toLowerCase().includes(term));
   }, [collegeOptions, collegeSearchTerm]);
 
+  // Pre-calculate month statistics (MOU count & total TCV) for calendar view
+  const getMonthStats = useMemo(() => {
+    const statsMap = new Map<string, { count: number; tcv: number; tcvGst: number }>();
+    mouItems.forEach((item) => {
+      if (
+        selectedCollege !== "all" &&
+        item.collegeName?.toLowerCase().trim() !== selectedCollege.toLowerCase().trim()
+      ) {
+        return;
+      }
+      const parsed = parseMOUDateMonth(item.month || "");
+      if (parsed.monthNum > 0 && parsed.year > 0) {
+        const key = `${parsed.year}-${parsed.monthNum}`;
+        const existing = statsMap.get(key) || { count: 0, tcv: 0, tcvGst: 0 };
+        existing.count += 1;
+        existing.tcv += item.totalContractValue || 0;
+        existing.tcvGst += item.totalContractValueGst || 0;
+        statsMap.set(key, existing);
+      }
+    });
+    return (monthNum: number, year: number) => {
+      return statsMap.get(`${year}-${monthNum}`) || { count: 0, tcv: 0, tcvGst: 0 };
+    };
+  }, [mouItems, selectedCollege]);
+
   // Helper function to check if an MOU item matches the selected Period (Col AR)
   const matchesPeriod = (item: GoogleSheetMOUItem): boolean => {
     if (periodMode === "all") return true;
 
     const parsed = parseMOUDateMonth(item.month || "");
     const itemMonthNum = parsed.monthNum;
+    const itemYear = parsed.year;
     const monthStr = (parsed.display || item.month || "").toLowerCase().trim();
     const mouDate = (item.mouSignedDate || "").toLowerCase().trim();
 
@@ -135,7 +183,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
       // 2. Text month name match
       const matchesMonthName = qMeta.months.some((mNum) => {
-        const mMeta = ALL_MONTHS.find((m) => m.num === mNum);
+        const mMeta = CALENDAR_MONTHS.find((m) => m.num === mNum);
         if (!mMeta) return false;
         return (
           monthStr.includes(mMeta.name.toLowerCase()) ||
@@ -158,19 +206,32 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     }
 
     if (periodMode === "month") {
-      // 1. Direct month number match
-      if (itemMonthNum > 0 && itemMonthNum === selectedMonthNum) {
+      if (!selectedMonth) {
+        // If "All Months of Year" is chosen
+        if (itemYear > 0) return itemYear === calendarYear;
         return true;
       }
 
-      const mMeta = ALL_MONTHS.find((m) => m.num === selectedMonthNum);
+      // 1. Direct month number & year match
+      if (itemMonthNum > 0) {
+        const targetYear = selectedMonth.year;
+        if (itemYear > 0) {
+          return itemMonthNum === selectedMonth.monthNum && itemYear === targetYear;
+        }
+        return itemMonthNum === selectedMonth.monthNum;
+      }
+
+      const mMeta = CALENDAR_MONTHS.find((m) => m.num === selectedMonth.monthNum);
       if (!mMeta) return true;
 
-      // 2. Text month name match
+      // 2. Text month & year match
       if (
         monthStr.includes(mMeta.name.toLowerCase()) ||
         monthStr.includes(mMeta.short.toLowerCase())
       ) {
+        if (monthStr.includes(String(selectedMonth.year))) {
+          return true;
+        }
         return true;
       }
 
@@ -178,7 +239,12 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
       const dateParts = mouDate.split(/[-/]/);
       if (dateParts.length >= 2) {
         const monthPart = parseInt(dateParts[1], 10);
-        if (!isNaN(monthPart) && monthPart === selectedMonthNum) {
+        const yearPart = dateParts.length >= 3 ? parseInt(dateParts[2], 10) : 0;
+        if (!isNaN(monthPart) && monthPart === selectedMonth.monthNum) {
+          if (yearPart > 0) {
+            const fullYear = yearPart < 100 ? 2000 + yearPart : yearPart;
+            return fullYear === selectedMonth.year;
+          }
           return true;
         }
       }
@@ -223,7 +289,8 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     selectedCollege,
     periodMode,
     selectedQuarter,
-    selectedMonthNum,
+    selectedMonth,
+    calendarYear,
     tableSearchTerm,
   ]);
 
@@ -236,7 +303,9 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
     filteredItems.forEach((item) => {
       totalTcv += item.totalContractValue || 0;
-      totalTcvGst += item.totalContractValueGst || (item.totalContractValue ? Math.round(item.totalContractValue * 1.18) : 0);
+      totalTcvGst +=
+        item.totalContractValueGst ||
+        (item.totalContractValue ? Math.round(item.totalContractValue * 1.18) : 0);
       totalStudents += item.studentCount || 0;
       if (item.collegeName) uniqueColleges.add(item.collegeName.trim());
     });
@@ -261,12 +330,12 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
       return `${selectedQuarter} (${qMeta?.rangeText || ""}) 2026-2027`;
     }
     if (periodMode === "month") {
-      const mMeta = ALL_MONTHS.find((m) => m.num === selectedMonthNum);
-      const yr = selectedMonthNum <= 3 ? "2027" : "2026";
-      return `${mMeta?.name || ""} ${yr}`;
+      if (!selectedMonth) return `All Months of ${calendarYear}`;
+      const mMeta = CALENDAR_MONTHS.find((m) => m.num === selectedMonth.monthNum);
+      return `${mMeta?.name || "Month"} ${selectedMonth.year}`;
     }
-    return "All MOUs";
-  }, [periodMode, selectedQuarter, selectedMonthNum]);
+    return "Full Year 2026-2027";
+  }, [periodMode, selectedQuarter, selectedMonth, calendarYear]);
 
   // CSV Export handler
   const handleExportCSV = () => {
@@ -555,24 +624,128 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
               </div>
             )}
 
-            {/* Sub-selectors for Months */}
+            {/* Sub-selectors for Calendar Month Picker with Horizontal Year Navigation */}
             {periodMode === "month" && (
-              <div className="tcv-month-chips-grid">
-                {ALL_MONTHS.map((m) => {
-                  const isSelected = selectedMonthNum === m.num;
-                  const yr = m.num <= 3 ? "'27" : "'26";
-                  return (
+              <div className="tcv-calendar-picker-wrapper">
+                {/* Horizontal Year Navigation Bar */}
+                <div className="tcv-calendar-header-bar">
+                  <div className="calendar-year-nav-controls">
                     <button
-                      key={m.num}
                       type="button"
-                      className={`month-chip-btn ${isSelected ? "selected" : ""}`}
-                      onClick={() => setSelectedMonthNum(m.num)}
+                      className="calendar-nav-arrow-btn prev-year-btn"
+                      onClick={() => {
+                        const newYear = calendarYear - 1;
+                        setCalendarYear(newYear);
+                        if (selectedMonth) {
+                          setSelectedMonth({ monthNum: selectedMonth.monthNum, year: newYear });
+                        }
+                      }}
+                      title={`Go to ${calendarYear - 1}`}
                     >
-                      <span className="month-name">{m.short}</span>
-                      <span className="month-yr">{yr}</span>
+                      <ChevronLeft size={18} />
+                      <span>{calendarYear - 1}</span>
                     </button>
-                  );
-                })}
+
+                    <div className="calendar-active-year-display">
+                      <Calendar size={18} className="cal-year-icon" />
+                      <span className="cal-year-text">{calendarYear}</span>
+                      <span className="cal-year-sub">Fiscal Year Calendar</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="calendar-nav-arrow-btn next-year-btn"
+                      onClick={() => {
+                        const newYear = calendarYear + 1;
+                        setCalendarYear(newYear);
+                        if (selectedMonth) {
+                          setSelectedMonth({ monthNum: selectedMonth.monthNum, year: newYear });
+                        }
+                      }}
+                      title={`Go to ${calendarYear + 1}`}
+                    >
+                      <span>{calendarYear + 1}</span>
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+
+                  {/* Quick Year Navigation Pills */}
+                  <div className="calendar-quick-year-pills">
+                    {[2025, 2026, 2027, 2028].map((yr) => (
+                      <button
+                        key={yr}
+                        type="button"
+                        className={`quick-year-pill ${calendarYear === yr ? "active" : ""}`}
+                        onClick={() => {
+                          setCalendarYear(yr);
+                          if (selectedMonth) {
+                            setSelectedMonth({ monthNum: selectedMonth.monthNum, year: yr });
+                          }
+                        }}
+                      >
+                        {yr}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      className={`quick-year-pill all-months-pill ${selectedMonth === null ? "active" : ""}`}
+                      onClick={() => setSelectedMonth(null)}
+                      title={`Show all months of ${calendarYear}`}
+                    >
+                      All Months of {calendarYear}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 12-Month Calendar Interactive Grid */}
+                <div className="tcv-calendar-months-grid">
+                  {CALENDAR_MONTHS.map((m) => {
+                    const isSelected =
+                      selectedMonth !== null &&
+                      selectedMonth.monthNum === m.num &&
+                      selectedMonth.year === calendarYear;
+                    const stats = getMonthStats(m.num, calendarYear);
+                    const hasData = stats.count > 0;
+
+                    return (
+                      <button
+                        key={m.num}
+                        type="button"
+                        className={`tcv-calendar-month-tile ${isSelected ? "selected" : ""} ${hasData ? "has-data" : "no-data"}`}
+                        onClick={() => {
+                          setSelectedMonth({ monthNum: m.num, year: calendarYear });
+                        }}
+                      >
+                        <div className="month-tile-header">
+                          <span className="month-tile-name">{m.name}</span>
+                          <span className="month-tile-year">{calendarYear}</span>
+                        </div>
+
+                        <div className="month-tile-body">
+                          {hasData ? (
+                            <>
+                              <span className="month-tile-badge">
+                                {stats.count} MOU{stats.count > 1 ? "s" : ""}
+                              </span>
+                              <span className="month-tile-tcv font-mono">
+                                {formatINR(stats.tcv)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="month-tile-empty">0 MOUs</span>
+                          )}
+                        </div>
+
+                        {isSelected && (
+                          <div className="month-tile-check">
+                            <Check size={14} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>

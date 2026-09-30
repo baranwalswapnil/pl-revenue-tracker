@@ -1823,8 +1823,8 @@ export function saveCachedInvoiceTrackerItems(items: GoogleSheetInvoiceTrackerIt
   }
 }
 
-export function parseMOUDateMonth(raw: string): { monthNum: number; display: string } {
-  if (!raw) return { monthNum: 0, display: "" };
+export function parseMOUDateMonth(raw: string): { monthNum: number; year: number; display: string } {
+  if (!raw) return { monthNum: 0, year: 0, display: "" };
   const str = String(raw).trim();
 
   // GViz Date(2026,3,1) format
@@ -1837,17 +1837,25 @@ export function parseMOUDateMonth(raw: string): { monthNum: number; display: str
       "July", "August", "September", "October", "November", "December"
     ];
     const monthName = monthNames[mIdx] || `Month ${mIdx + 1}`;
-    return { monthNum: mIdx + 1, display: `${monthName} ${y}` };
+    return { monthNum: mIdx + 1, year: y, display: `${monthName} ${y}` };
   }
 
-  // Standard month names (e.g. "April 2026", "April")
+  // Extract explicit 4-digit year if present (e.g. 2026, 2027)
+  let year = 0;
+  const yearMatch = str.match(/\b(20\d\d)\b/);
+  if (yearMatch) {
+    year = parseInt(yearMatch[1], 10);
+  }
+
+  // Standard month names (e.g. "April 2026", "August", "Aug 2026")
   const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
   const monthShorts = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
   const displayNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const lower = str.toLowerCase();
   for (let i = 0; i < 12; i++) {
     if (lower.includes(monthNames[i]) || lower.includes(monthShorts[i])) {
-      return { monthNum: i + 1, display: str.length <= 15 ? str : displayNames[i] };
+      const finalYear = year || (i < 3 ? 2027 : 2026); // Academic year 26-27 default (Jan-Mar 2027, Apr-Dec 2026)
+      return { monthNum: i + 1, year: finalYear, display: `${displayNames[i]} ${finalYear}` };
     }
   }
 
@@ -1855,12 +1863,15 @@ export function parseMOUDateMonth(raw: string): { monthNum: number; display: str
   const parts = str.split(/[-/]/);
   if (parts.length >= 2) {
     let m = parseInt(parts[1], 10);
+    let y = parts.length >= 3 ? parseInt(parts[2], 10) : 0;
+    if (y < 100 && y > 0) y += 2000;
     if (!isNaN(m) && m >= 1 && m <= 12) {
-      return { monthNum: m, display: `${displayNames[m - 1]}` };
+      const finalYear = y || 2026;
+      return { monthNum: m, year: finalYear, display: `${displayNames[m - 1]} ${finalYear}` };
     }
   }
 
-  return { monthNum: 0, display: str };
+  return { monthNum: 0, year: year || 0, display: str };
 }
 
 /**
