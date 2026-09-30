@@ -64,6 +64,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
   const tableRef = useRef<HTMLTableElement>(null);
   const collegeDropdownRef = useRef<HTMLDivElement>(null);
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
+  const isSyncingScroll = useRef(false);
 
   // Close college dropdown on outside click
   useEffect(() => {
@@ -154,27 +155,38 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
   useEffect(() => {
     const updateWidth = () => {
       if (tableRef.current) {
-        setTableScrollWidth(tableRef.current.scrollWidth);
+        const width = Math.max(tableRef.current.scrollWidth, tableRef.current.offsetWidth);
+        setTableScrollWidth(width);
       }
     };
     updateWidth();
-    const timer = setTimeout(updateWidth, 100);
+    const timer1 = setTimeout(updateWidth, 50);
+    const timer2 = setTimeout(updateWidth, 200);
     window.addEventListener("resize", updateWidth);
     return () => {
-      clearTimeout(timer);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       window.removeEventListener("resize", updateWidth);
     };
-  }, [filteredItems]);
+  }, [filteredItems, summary]);
 
   const handleTopScroll = () => {
-    if (topScrollRef.current && tableScrollRef.current) {
+    if (!isSyncingScroll.current && topScrollRef.current && tableScrollRef.current) {
+      isSyncingScroll.current = true;
       tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+      requestAnimationFrame(() => {
+        isSyncingScroll.current = false;
+      });
     }
   };
 
   const handleTableScroll = () => {
-    if (topScrollRef.current && tableScrollRef.current) {
+    if (!isSyncingScroll.current && topScrollRef.current && tableScrollRef.current) {
+      isSyncingScroll.current = true;
       topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+      requestAnimationFrame(() => {
+        isSyncingScroll.current = false;
+      });
     }
   };
 

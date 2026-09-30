@@ -4459,8 +4459,25 @@ a {
 
 .outstanding-data-table {
   width: 100%;
+  min-width: 1380px;
   border-collapse: collapse;
   font-size: 13px;
+}
+
+.tcv-data-table {
+  min-width: 1400px;
+  width: 100%;
+}
+
+.tcv-data-table th,
+.tcv-data-table td {
+  white-space: nowrap;
+}
+
+.tcv-data-table th:nth-child(2),
+.tcv-data-table td:nth-child(2) {
+  min-width: 260px;
+  white-space: normal;
 }
 
 .outstanding-data-table thead th {

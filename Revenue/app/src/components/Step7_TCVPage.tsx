@@ -82,7 +82,8 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const collegeDropdownRef = useRef<HTMLDivElement>(null);
-  const [tableScrollWidth, setTableScrollWidth] = useState<number>(1200);
+  const [tableScrollWidth, setTableScrollWidth] = useState<number>(0);
+  const isSyncingScroll = useRef(false);
 
   // Close college dropdown on outside click
   useEffect(() => {
@@ -98,26 +99,26 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Update table scroll width on resize
-  useEffect(() => {
-    if (tableRef.current) {
-      setTableScrollWidth(tableRef.current.scrollWidth);
-    }
-  }, [mouItems, selectedCollege, periodMode, selectedQuarter, selectedMonthNum, selectedYear]);
-
   const handleTopScroll = () => {
-    if (topScrollRef.current && tableScrollRef.current) {
-      tableScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    if (!isSyncingScroll.current && topScrollRef.current && tableScrollRef.current) {
+      isSyncingScroll.current = true;
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+      requestAnimationFrame(() => {
+        isSyncingScroll.current = false;
+      });
     }
   };
 
   const handleTableScroll = () => {
-    if (topScrollRef.current && tableScrollRef.current) {
+    if (!isSyncingScroll.current && topScrollRef.current && tableScrollRef.current) {
+      isSyncingScroll.current = true;
       topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+      requestAnimationFrame(() => {
+        isSyncingScroll.current = false;
+      });
     }
   };
 
-  // Distinct list of colleges with their MOU counts and total TCV
   const collegeOptions = useMemo(() => {
     const map = new Map<string, { count: number; tcv: number }>();
     mouItems.forEach((item) => {
@@ -302,6 +303,25 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     selectedYear,
     tableSearchTerm,
   ]);
+
+  // Update table scroll width on resize and filtered items change
+  useEffect(() => {
+    const updateWidth = () => {
+      if (tableRef.current) {
+        const width = Math.max(tableRef.current.scrollWidth, tableRef.current.offsetWidth);
+        setTableScrollWidth(width);
+      }
+    };
+    updateWidth();
+    const timer1 = setTimeout(updateWidth, 50);
+    const timer2 = setTimeout(updateWidth, 200);
+    window.addEventListener("resize", updateWidth);
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, [filteredItems]);
 
   // Aggregate KPI summary metrics for the active filtered selection
   const summary = useMemo(() => {
