@@ -25,6 +25,7 @@ interface Step1DashboardProps {
   onOpenAddCollege: () => void;
   onOpenUpdateModal: () => void;
   onOpenOutstanding: (period?: OutstandingPeriod) => void;
+  onOpenTCV: () => void;
   onViewProject: (project: Project) => void;
   onEditProject: (project: Project) => void;
   onDeleteProject: (projectId: string) => void;
@@ -37,6 +38,7 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
   onOpenAddCollege,
   onOpenUpdateModal,
   onOpenOutstanding,
+  onOpenTCV,
   onViewProject,
   onEditProject,
   onDeleteProject,
@@ -285,6 +287,54 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
               <path d="M95 44 v26 l16 10" stroke="#ea580c" strokeWidth="3.5" strokeLinecap="round" />
               <circle cx="135" cy="40" r="14" fill="#ffedd5" stroke="#f97316" strokeWidth="2" />
               <path d="M131 40 l3 3 l6 -6" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Card 4: TCV (Total Contract Value) Card */}
+        <div
+          className="action-card tcv-card"
+          onClick={() => onOpenTCV()}
+          role="button"
+          tabIndex={0}
+        >
+          <div className="action-card-content">
+            <div className="action-card-header-row">
+              <div className="action-icon-wrap tcv-icon-wrap">
+                <TrendingUp size={26} />
+              </div>
+              <div className="action-card-text">
+                <h2 className="action-card-title">TCV (Total Contract Value)</h2>
+                <p className="action-card-desc">
+                  MOU analytics by College, Quarter & Month from MOUs 26-27.
+                </p>
+              </div>
+            </div>
+
+            <div className="action-btn-row">
+              <button
+                type="button"
+                className="action-btn tcv-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenTCV();
+                }}
+                id="tcv-btn"
+              >
+                <span>View TCV</span>
+                <ArrowRight size={16} className="btn-arrow" />
+              </button>
+            </div>
+          </div>
+
+          <div className="action-card-art-wrap tcv-art-wrap" aria-hidden="true">
+            <svg viewBox="0 0 170 140" fill="none" className="card-illustration-svg">
+              <rect x="25" y="45" width="120" height="75" rx="10" fill="#ccfbf1" fillOpacity="0.5" />
+              <rect x="35" y="55" width="100" height="55" rx="6" fill="#ffffff" fillOpacity="0.7" />
+              <path d="M45 95 L65 78 L85 86 L115 62 L125 70" stroke="#0d9488" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="115" cy="62" r="4" fill="#0d9488" />
+              <circle cx="132" cy="40" r="14" fill="#99f6e4" stroke="#0d9488" strokeWidth="2" />
+              <text x="132" y="45" textAnchor="middle" fill="#0f766e" fontSize="13" fontWeight="bold">₹</text>
             </svg>
           </div>
         </div>

@@ -3,17 +3,21 @@ import type { Project, ProjectDraft } from "./lib/models";
 import { INITIAL_PROJECTS, createEmptyDraft, computeAttpDetails } from "./lib/mockData";
 import {
   loadCachedSheetItems,
+  loadCachedMOUItems,
   loadSavedSheetConfig,
   fetchGoogleSheetData,
   fetchInvoiceTrackerData,
+  fetchMOUData,
   buildProjectsFromInvoiceTracker,
   convertSheetItemToDraft,
   convertSheetItemToProject,
   saveCachedSheetItems,
+  saveCachedMOUItems,
   saveSheetConfig,
   syncProjectToGoogleSheet,
   type GoogleSheetCollegeItem,
   type GoogleSheetInvoiceTrackerItem,
+  type GoogleSheetMOUItem,
 } from "./lib/googleSheetsService";
 import { Header } from "./components/Header";
 import { Step1_Dashboard } from "./components/Step1_Dashboard";
@@ -23,6 +27,7 @@ import { Step4_HealthReport } from "./components/Step4_HealthReport";
 import { Step5_UpdateModal } from "./components/Step5_UpdateModal";
 import { Step5_UpdatePage } from "./components/Step5_UpdatePage";
 import { Step6_OutstandingPage } from "./components/Step6_OutstandingPage";
+import { Step7_TCVPage } from "./components/Step7_TCVPage";
 import { GoogleSheetSyncModal } from "./components/GoogleSheetSyncModal";
 import { Toast, type ToastType } from "./components/Toast";
 import { type OutstandingPeriod, getDefaultPeriod } from "./lib/outstandingService";
@@ -30,7 +35,7 @@ import "./style.css";
 
 const LOCAL_STORAGE_KEY = "company_finance_projects_v3";
 
-type AppView = "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding";
+type AppView = "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv";
 
 export function App() {
   // Load initial projects from localStorage or default mock data
@@ -60,6 +65,9 @@ export function App() {
   const [googleSheetColleges, setGoogleSheetColleges] = useState<GoogleSheetCollegeItem[]>(() =>
     loadCachedSheetItems()
   );
+  const [mouItems, setMouItems] = useState<GoogleSheetMOUItem[]>(() =>
+    loadCachedMOUItems()
+  );
   const [isGoogleSheetModalOpen, setIsGoogleSheetModalOpen] = useState(false);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
   const [lastLiveSyncTime, setLastLiveSyncTime] = useState<string | null>(null);
@@ -88,6 +96,17 @@ export function App() {
           invoiceTrackerItems = await fetchInvoiceTrackerData(config.sheetUrl, "Invoice Tracker");
         } catch (invErr) {
           // Tab might not exist or have different name, ignore gracefully
+        }
+
+        // 3. Try fetching 'MOUs 26-27' tab data for TCV page
+        try {
+          const mouData = await fetchMOUData(config.sheetUrl, "MOUs 26-27");
+          if (!isCancelled && mouData && mouData.length > 0) {
+            setMouItems(mouData);
+            saveCachedMOUItems(mouData);
+          }
+        } catch (mouErr) {
+          // Tab might not exist or network error, ignore gracefully
         }
 
         // Auto-merge latest sheet figures & Invoice Tracker milestones into registered projects
@@ -200,7 +219,7 @@ export function App() {
 
   // Synchronize with Browser Back / Forward buttons
   useEffect(() => {
-    const validViews: AppView[] = ["dashboard", "new-entry", "training-phase", "health-report", "update-page", "outstanding"];
+    const validViews: AppView[] = ["dashboard", "new-entry", "training-phase", "health-report", "update-page", "outstanding", "tcv"];
     const currentHash = window.location.hash.replace("#", "") as AppView;
 
     if (validViews.includes(currentHash)) {
@@ -232,6 +251,33 @@ export function App() {
       setOutstandingPeriod(period);
     }
     navigateTo("outstanding");
+  };
+
+  const handleOpenTCV = () => {
+    navigateTo("tcv");
+  };
+
+  const handleRefreshTCVData = async () => {
+    const config = loadSavedSheetConfig();
+    if (!config.sheetUrl || !config.sheetUrl.trim()) {
+      showToast("Please configure Google Sheet URL in sync settings first.", "warning");
+      return;
+    }
+    setIsLiveSyncing(true);
+    try {
+      const fetched = await fetchMOUData(config.sheetUrl, "MOUs 26-27");
+      if (fetched && fetched.length > 0) {
+        setMouItems(fetched);
+        saveCachedMOUItems(fetched);
+        showToast(`Successfully synced ${fetched.length} MOU records from MOUs 26-27!`, "success");
+      } else {
+        showToast("No MOU records found in MOUs 26-27 sheet.", "warning");
+      }
+    } catch (err: any) {
+      showToast(`Error refreshing MOU data: ${err.message || err}`, "error");
+    } finally {
+      setIsLiveSyncing(false);
+    }
   };
 
   // ==========================================
@@ -493,13 +539,14 @@ export function App() {
 
       {/* Main Container Body */}
       <main className="app-main-content-wrap">
-        {/* Step 1: Main Dashboard Screen (Add College card, Update College card, Outstanding card, Excel Table) */}
+        {/* Step 1: Main Dashboard Screen (Add College card, Update College card, Outstanding card, TCV card, Excel Table) */}
         {currentView === "dashboard" && (
           <Step1_Dashboard
             projects={projects}
             onOpenAddCollege={handleOpenAddCollege}
             onOpenUpdateModal={handleOpenUpdateModal}
             onOpenOutstanding={handleOpenOutstanding}
+            onOpenTCV={handleOpenTCV}
             onViewProject={handleViewProjectHealth}
             onEditProject={handleEditProjectFromDashboard}
             onDeleteProject={handleDeleteProject}
@@ -569,7 +616,7 @@ export function App() {
           />
         )}
 
-        {/* Step 6: Outstanding Invoices & Collection Tracking Screen (NEW!) */}
+        {/* Step 6: Outstanding Invoices & Collection Tracking Screen */}
         {currentView === "outstanding" && (
           <Step6_OutstandingPage
             projects={projects}
@@ -578,6 +625,16 @@ export function App() {
             onViewProject={handleViewProjectHealth}
             onEditProject={handleEditProjectFromDashboard}
             onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
+          />
+        )}
+
+        {/* Step 7: TCV (Total Contract Value) Explorer & MOUs 26-27 Analytics Screen */}
+        {currentView === "tcv" && (
+          <Step7_TCVPage
+            mouItems={mouItems}
+            onBackToDashboard={() => navigateTo("dashboard")}
+            onRefreshData={handleRefreshTCVData}
+            isSyncing={isLiveSyncing}
           />
         )}
       </main>
