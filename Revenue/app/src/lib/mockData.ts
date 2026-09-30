@@ -908,15 +908,28 @@ export function getProjectInvoiceStats(project: Project) {
         project.invoice_raised || 0
       );
 
-  const raisedCount = milestoneInvoices.filter((i) => i.isRaised).length;
-  const raisedAmount =
-    Number(project.invoice_raised) ||
-    milestoneInvoices.filter((i) => i.isRaised).reduce((sum, i) => sum + (i.amountRaised || i.amount || 0), 0);
+  // x = How many times Received based on Column M (Status) in Invoice Tracker sheet
+  const receivedCount = milestoneInvoices.filter(
+    (i) =>
+      i.isReceived ||
+      (i.status && i.status.toLowerCase().includes("rec")) ||
+      (i.status && i.status.toLowerCase().includes("paid")) ||
+      (i.status && i.status.toLowerCase().includes("clear"))
+  ).length;
+
+  const raisedCount = receivedCount; // x is number of times received from Column M!
+
+  const totalReceivedAmount = milestoneInvoices
+    .filter((i) => i.isReceived || (i.status && i.status.toLowerCase().includes("rec")))
+    .reduce((sum, i) => sum + (i.amountRaised || i.amount || 0), 0);
+
+  const raisedAmount = Number(project.invoice_raised) || totalReceivedAmount;
   const pendingAmount = Math.max(0, totalGst - raisedAmount);
   const raisedPct = totalGst > 0 ? Math.min(100, Math.round((raisedAmount / totalGst) * 100)) : 0;
 
   return {
     raisedCount,
+    receivedCount,
     totalCount,
     raisedAmount,
     pendingAmount,
