@@ -5298,7 +5298,7 @@ a {
 .tcv-simple-months-row {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
-  gap: 5px;
+  gap: 6px;
 }
 
 @media (max-width: 900px) {
@@ -5317,60 +5317,36 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 6px 4px;
+  padding: 8px 4px;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #cbd5e1;
   background: #ffffff;
   cursor: pointer;
   transition: all 0.15s ease;
-  min-height: 34px;
+  min-height: 36px;
 }
 
 .simple-month-pill:hover {
   border-color: #0d9488;
   background: #f0fdfa;
-}
-
-.simple-month-pill.has-mous {
-  border-color: #99f6e4;
-  background: #f8fafc;
+  color: #0f766e;
 }
 
 .simple-month-pill.active {
   background: #0d9488 !important;
   border-color: #0d9488 !important;
   color: #ffffff !important;
-  box-shadow: 0 3px 10px rgba(13, 148, 136, 0.3);
+  box-shadow: 0 3px 10px rgba(13, 148, 136, 0.25);
 }
 
 .month-name-text {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #334155;
 }
 
 .simple-month-pill.active .month-name-text {
   color: #ffffff;
-}
-
-.month-mou-bubble {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  border-radius: 9px;
-  font-size: 10px;
-  font-weight: 800;
-  background: #0d9488;
-  color: #ffffff;
-}
-
-.simple-month-pill.active .month-mou-bubble {
-  background: #ffffff;
-  color: #0d9488;
 }
 
 /* Active Selection Summary Bar */

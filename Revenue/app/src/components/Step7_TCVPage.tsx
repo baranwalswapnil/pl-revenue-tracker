@@ -639,26 +639,19 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
             <div className="tcv-simple-months-row">
               {CALENDAR_MONTHS.map((m) => {
                 const isSelected = periodMode === "month" && selectedMonthNum === m.num;
-                const stats = getMonthStats(m.num, selectedYear);
-                const hasData = stats.count > 0;
 
                 return (
                   <button
                     key={m.num}
                     type="button"
-                    className={`simple-month-pill ${isSelected ? "active" : ""} ${hasData ? "has-mous" : "no-mous"}`}
+                    className={`simple-month-pill ${isSelected ? "active" : ""}`}
                     onClick={() => {
                       setPeriodMode("month");
                       setSelectedMonthNum(m.num);
                     }}
-                    title={`${m.name} ${selectedYear}: ${stats.count} MOUs • ${formatINR(stats.tcv)}`}
+                    title={`${m.name} ${selectedYear}`}
                   >
                     <span className="month-name-text">{m.short}</span>
-                    {hasData && (
-                      <span className="month-mou-bubble">
-                        {stats.count}
-                      </span>
-                    )}
                   </button>
                 );
               })}
