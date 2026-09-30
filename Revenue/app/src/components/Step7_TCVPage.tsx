@@ -56,13 +56,8 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
   // State for Period (Quarter / Month) filter
   const [periodMode, setPeriodMode] = useState<PeriodFilterMode>("all");
   const [selectedQuarter, setSelectedQuarter] = useState<string>("Q1");
-
-  // Calendar State for Month Mode
-  const [calendarYear, setCalendarYear] = useState<number>(2026);
-  const [selectedMonth, setSelectedMonth] = useState<{ monthNum: number; year: number } | null>({
-    monthNum: 4,
-    year: 2026,
-  });
+  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedMonthNum, setSelectedMonthNum] = useState<number | null>(4);
 
   // Search filter for table
   const [tableSearchTerm, setTableSearchTerm] = useState<string>("");
@@ -93,7 +88,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     if (tableRef.current) {
       setTableScrollWidth(tableRef.current.scrollWidth);
     }
-  }, [mouItems, selectedCollege, periodMode, selectedQuarter, selectedMonth, calendarYear]);
+  }, [mouItems, selectedCollege, periodMode, selectedQuarter, selectedMonthNum, selectedYear]);
 
   const handleTopScroll = () => {
     if (topScrollRef.current && tableScrollRef.current) {
@@ -206,22 +201,21 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     }
 
     if (periodMode === "month") {
-      if (!selectedMonth) {
+      if (selectedMonthNum === null) {
         // If "All Months of Year" is chosen
-        if (itemYear > 0) return itemYear === calendarYear;
+        if (itemYear > 0) return itemYear === selectedYear;
         return true;
       }
 
       // 1. Direct month number & year match
       if (itemMonthNum > 0) {
-        const targetYear = selectedMonth.year;
         if (itemYear > 0) {
-          return itemMonthNum === selectedMonth.monthNum && itemYear === targetYear;
+          return itemMonthNum === selectedMonthNum && itemYear === selectedYear;
         }
-        return itemMonthNum === selectedMonth.monthNum;
+        return itemMonthNum === selectedMonthNum;
       }
 
-      const mMeta = CALENDAR_MONTHS.find((m) => m.num === selectedMonth.monthNum);
+      const mMeta = CALENDAR_MONTHS.find((m) => m.num === selectedMonthNum);
       if (!mMeta) return true;
 
       // 2. Text month & year match
@@ -229,7 +223,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
         monthStr.includes(mMeta.name.toLowerCase()) ||
         monthStr.includes(mMeta.short.toLowerCase())
       ) {
-        if (monthStr.includes(String(selectedMonth.year))) {
+        if (monthStr.includes(String(selectedYear))) {
           return true;
         }
         return true;
@@ -240,10 +234,10 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
       if (dateParts.length >= 2) {
         const monthPart = parseInt(dateParts[1], 10);
         const yearPart = dateParts.length >= 3 ? parseInt(dateParts[2], 10) : 0;
-        if (!isNaN(monthPart) && monthPart === selectedMonth.monthNum) {
+        if (!isNaN(monthPart) && monthPart === selectedMonthNum) {
           if (yearPart > 0) {
             const fullYear = yearPart < 100 ? 2000 + yearPart : yearPart;
-            return fullYear === selectedMonth.year;
+            return fullYear === selectedYear;
           }
           return true;
         }
@@ -289,8 +283,8 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     selectedCollege,
     periodMode,
     selectedQuarter,
-    selectedMonth,
-    calendarYear,
+    selectedMonthNum,
+    selectedYear,
     tableSearchTerm,
   ]);
 
@@ -324,18 +318,18 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
   // Period label display text
   const currentPeriodLabel = useMemo(() => {
-    if (periodMode === "all") return "Full Year 2026-2027";
+    if (periodMode === "all") return `Full Year ${selectedYear}-${(selectedYear + 1) % 100}`;
     if (periodMode === "quarter") {
       const qMeta = ALL_QUARTERS.find((q) => q.key === selectedQuarter);
-      return `${selectedQuarter} (${qMeta?.rangeText || ""}) 2026-2027`;
+      return `${selectedQuarter} (${qMeta?.rangeText || ""}) ${selectedYear}`;
     }
     if (periodMode === "month") {
-      if (!selectedMonth) return `All Months of ${calendarYear}`;
-      const mMeta = CALENDAR_MONTHS.find((m) => m.num === selectedMonth.monthNum);
-      return `${mMeta?.name || "Month"} ${selectedMonth.year}`;
+      if (selectedMonthNum === null) return `All Months of ${selectedYear}`;
+      const mMeta = CALENDAR_MONTHS.find((m) => m.num === selectedMonthNum);
+      return `${mMeta?.name || "Month"} ${selectedYear}`;
     }
-    return "Full Year 2026-2027";
-  }, [periodMode, selectedQuarter, selectedMonth, calendarYear]);
+    return `Full Year ${selectedYear}`;
+  }, [periodMode, selectedQuarter, selectedMonthNum, selectedYear]);
 
   // CSV Export handler
   const handleExportCSV = () => {
@@ -566,188 +560,109 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
           {/* OPTION 2: SELECT MONTHS OR QUARTER */}
           <div className="tcv-filter-group period-filter-group">
-            <label className="tcv-filter-label">
-              <Calendar size={16} className="filter-label-icon" />
-              <span>2. Select Months or Quarter</span>
-              <span className="period-active-label">{currentPeriodLabel}</span>
-            </label>
+            <div className="tcv-period-header-bar">
+              <label className="tcv-filter-label" style={{ marginBottom: 0 }}>
+                <Calendar size={16} className="filter-label-icon" />
+                <span>2. Select Period</span>
+                <span className="period-active-label">{currentPeriodLabel}</span>
+              </label>
 
-            {/* Mode Toggle: Full Year vs Quarters vs Months */}
-            <div className="tcv-period-toggle-row">
+              {/* Horizontal Year Switcher with ‹ side button › and quick pills */}
+              <div className="tcv-year-switcher-bar">
+                <button
+                  type="button"
+                  className="year-nav-arrow"
+                  onClick={() => setSelectedYear((prev) => prev - 1)}
+                  title="Previous Year"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+
+                {[2025, 2026, 2027, 2028].map((yr) => (
+                  <button
+                    key={yr}
+                    type="button"
+                    className={`year-toggle-pill ${selectedYear === yr ? "active" : ""}`}
+                    onClick={() => setSelectedYear(yr)}
+                  >
+                    {yr}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  className="year-nav-arrow"
+                  onClick={() => setSelectedYear((prev) => prev + 1)}
+                  title="Next Year"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Row 1: Full Year & Quarters */}
+            <div className="tcv-simple-period-row">
               <button
                 type="button"
-                className={`tcv-period-btn ${periodMode === "all" ? "active" : ""}`}
-                onClick={() => setPeriodMode("all")}
+                className={`simple-period-pill all-pill ${periodMode === "all" ? "active" : ""}`}
+                onClick={() => {
+                  setPeriodMode("all");
+                  setSelectedMonthNum(null);
+                }}
               >
                 All Months / Full Year
               </button>
 
-              <button
-                type="button"
-                className={`tcv-period-btn ${periodMode === "quarter" ? "active" : ""}`}
-                onClick={() => setPeriodMode("quarter")}
-              >
-                By Quarter (Q1-Q4)
-              </button>
+              <div className="period-pill-separator" />
 
-              <button
-                type="button"
-                className={`tcv-period-btn ${periodMode === "month" ? "active" : ""}`}
-                onClick={() => setPeriodMode("month")}
-              >
-                By Month
-              </button>
+              {ALL_QUARTERS.map((q) => {
+                const isSelected = periodMode === "quarter" && selectedQuarter === q.key;
+                return (
+                  <button
+                    key={q.key}
+                    type="button"
+                    className={`simple-period-pill quarter-pill ${isSelected ? "active" : ""}`}
+                    onClick={() => {
+                      setPeriodMode("quarter");
+                      setSelectedQuarter(q.key);
+                      setSelectedMonthNum(null);
+                    }}
+                  >
+                    <span className="q-tag">{q.key}</span>
+                    <span className="q-months">({q.rangeText})</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Sub-selectors for Quarters */}
-            {periodMode === "quarter" && (
-              <div className="tcv-quarter-chips-row">
-                {ALL_QUARTERS.map((q) => {
-                  const isSelected = selectedQuarter === q.key;
-                  return (
-                    <button
-                      key={q.key}
-                      type="button"
-                      className={`quarter-chip-btn ${isSelected ? "selected" : ""}`}
-                      onClick={() => setSelectedQuarter(q.key)}
-                      style={{
-                        borderColor: isSelected ? q.color : undefined,
-                        backgroundColor: isSelected ? `${q.color}15` : undefined,
-                        color: isSelected ? q.color : undefined,
-                      }}
-                    >
-                      <strong className="chip-key">{q.key}</strong>
-                      <span className="chip-range">{q.rangeText}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {/* Row 2: Streamlined 12-Month Pills */}
+            <div className="tcv-simple-months-row">
+              {CALENDAR_MONTHS.map((m) => {
+                const isSelected = periodMode === "month" && selectedMonthNum === m.num;
+                const stats = getMonthStats(m.num, selectedYear);
+                const hasData = stats.count > 0;
 
-            {/* Sub-selectors for Calendar Month Picker with Horizontal Year Navigation */}
-            {periodMode === "month" && (
-              <div className="tcv-calendar-picker-wrapper">
-                {/* Horizontal Year Navigation Bar */}
-                <div className="tcv-calendar-header-bar">
-                  <div className="calendar-year-nav-controls">
-                    <button
-                      type="button"
-                      className="calendar-nav-arrow-btn prev-year-btn"
-                      onClick={() => {
-                        const newYear = calendarYear - 1;
-                        setCalendarYear(newYear);
-                        if (selectedMonth) {
-                          setSelectedMonth({ monthNum: selectedMonth.monthNum, year: newYear });
-                        }
-                      }}
-                      title={`Go to ${calendarYear - 1}`}
-                    >
-                      <ChevronLeft size={18} />
-                      <span>{calendarYear - 1}</span>
-                    </button>
-
-                    <div className="calendar-active-year-display">
-                      <Calendar size={18} className="cal-year-icon" />
-                      <span className="cal-year-text">{calendarYear}</span>
-                      <span className="cal-year-sub">Fiscal Year Calendar</span>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="calendar-nav-arrow-btn next-year-btn"
-                      onClick={() => {
-                        const newYear = calendarYear + 1;
-                        setCalendarYear(newYear);
-                        if (selectedMonth) {
-                          setSelectedMonth({ monthNum: selectedMonth.monthNum, year: newYear });
-                        }
-                      }}
-                      title={`Go to ${calendarYear + 1}`}
-                    >
-                      <span>{calendarYear + 1}</span>
-                      <ChevronRight size={18} />
-                    </button>
-                  </div>
-
-                  {/* Quick Year Navigation Pills */}
-                  <div className="calendar-quick-year-pills">
-                    {[2025, 2026, 2027, 2028].map((yr) => (
-                      <button
-                        key={yr}
-                        type="button"
-                        className={`quick-year-pill ${calendarYear === yr ? "active" : ""}`}
-                        onClick={() => {
-                          setCalendarYear(yr);
-                          if (selectedMonth) {
-                            setSelectedMonth({ monthNum: selectedMonth.monthNum, year: yr });
-                          }
-                        }}
-                      >
-                        {yr}
-                      </button>
-                    ))}
-
-                    <button
-                      type="button"
-                      className={`quick-year-pill all-months-pill ${selectedMonth === null ? "active" : ""}`}
-                      onClick={() => setSelectedMonth(null)}
-                      title={`Show all months of ${calendarYear}`}
-                    >
-                      All Months of {calendarYear}
-                    </button>
-                  </div>
-                </div>
-
-                {/* 12-Month Calendar Interactive Grid */}
-                <div className="tcv-calendar-months-grid">
-                  {CALENDAR_MONTHS.map((m) => {
-                    const isSelected =
-                      selectedMonth !== null &&
-                      selectedMonth.monthNum === m.num &&
-                      selectedMonth.year === calendarYear;
-                    const stats = getMonthStats(m.num, calendarYear);
-                    const hasData = stats.count > 0;
-
-                    return (
-                      <button
-                        key={m.num}
-                        type="button"
-                        className={`tcv-calendar-month-tile ${isSelected ? "selected" : ""} ${hasData ? "has-data" : "no-data"}`}
-                        onClick={() => {
-                          setSelectedMonth({ monthNum: m.num, year: calendarYear });
-                        }}
-                      >
-                        <div className="month-tile-header">
-                          <span className="month-tile-name">{m.name}</span>
-                          <span className="month-tile-year">{calendarYear}</span>
-                        </div>
-
-                        <div className="month-tile-body">
-                          {hasData ? (
-                            <>
-                              <span className="month-tile-badge">
-                                {stats.count} MOU{stats.count > 1 ? "s" : ""}
-                              </span>
-                              <span className="month-tile-tcv font-mono">
-                                {formatINR(stats.tcv)}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="month-tile-empty">0 MOUs</span>
-                          )}
-                        </div>
-
-                        {isSelected && (
-                          <div className="month-tile-check">
-                            <Check size={14} />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                return (
+                  <button
+                    key={m.num}
+                    type="button"
+                    className={`simple-month-pill ${isSelected ? "active" : ""} ${hasData ? "has-mous" : "no-mous"}`}
+                    onClick={() => {
+                      setPeriodMode("month");
+                      setSelectedMonthNum(m.num);
+                    }}
+                    title={`${m.name} ${selectedYear}: ${stats.count} MOUs • ${formatINR(stats.tcv)}`}
+                  >
+                    <span className="month-name-text">{m.short}</span>
+                    {hasData && (
+                      <span className="month-mou-bubble">
+                        {stats.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 

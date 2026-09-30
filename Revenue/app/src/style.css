@@ -5164,58 +5164,99 @@ a {
   font-size: 13px;
 }
 
-/* Period Toggle Modes */
-.tcv-period-toggle-row {
+/* ==========================================================================
+   Simplified Period & Month Selector for TCV Page
+   ========================================================================== */
+.tcv-period-header-bar {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.period-active-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #0d9488;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-left: 6px;
+}
+
+/* Horizontal Year Switcher */
+.tcv-year-switcher-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: #f1f5f9;
-  padding: 4px;
+  padding: 3px 6px;
   border-radius: 10px;
   border: 1px solid #e2e8f0;
 }
 
-.tcv-period-btn {
-  flex: 1;
-  padding: 8px 12px;
-  border-radius: 7px;
-  border: none;
-  background: transparent;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #64748b;
+.year-nav-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: #ffffff;
+  color: #0f766e;
   cursor: pointer;
-  transition: all 0.18s ease;
-  text-align: center;
-  white-space: nowrap;
+  transition: all 0.15s ease;
 }
 
-.tcv-period-btn:hover {
+.year-nav-arrow:hover {
+  background: #0d9488;
+  color: #ffffff;
+  border-color: #0d9488;
+}
+
+.year-toggle-pill {
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.year-toggle-pill:hover {
   color: #0f172a;
 }
 
-.tcv-period-btn.active {
-  background: #ffffff;
-  color: #0d9488;
-  font-weight: 700;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+.year-toggle-pill.active {
+  background: #0d9488;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25);
 }
 
-/* Quarter Chips */
-.tcv-quarter-chips-row {
+/* Row 1: Full Year & Quarters */
+.tcv-simple-period-row {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 6px;
-}
-
-.quarter-chip-btn {
-  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
-  border-radius: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.simple-period-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 8px;
   border: 1px solid #cbd5e1;
-  background: #f8fafc;
+  background: #ffffff;
   font-size: 12px;
   font-weight: 600;
   color: #334155;
@@ -5223,286 +5264,113 @@ a {
   transition: all 0.15s ease;
 }
 
-.quarter-chip-btn:hover {
+.simple-period-pill:hover {
   background: #f0fdfa;
   border-color: #99f6e4;
   color: #0f766e;
 }
 
-.quarter-chip-btn.selected {
-  background: #0d9488 !important;
-  border-color: #0d9488 !important;
-  color: #ffffff !important;
-  box-shadow: 0 3px 10px rgba(13, 148, 136, 0.25);
-}
-
-.chip-key {
-  font-weight: 800;
-}
-
-.chip-range {
-  font-size: 11px;
-  opacity: 0.9;
-}
-
-/* ==========================================================================
-   TCV Calendar Month Picker with Horizontal Year Navigation
-   ========================================================================== */
-.tcv-calendar-picker-wrapper {
-  background: #ffffff;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 14px;
-  padding: 16px 18px;
-  margin-top: 10px;
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
-}
-
-.tcv-calendar-header-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding-bottom: 14px;
-  border-bottom: 1.5px solid #f1f5f9;
-}
-
-.calendar-year-nav-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.calendar-nav-arrow-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 14px;
-  background: #f8fafc;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #0f766e;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.calendar-nav-arrow-btn:hover {
-  background: #f0fdfa;
-  border-color: #0d9488;
-  color: #0d9488;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(13, 148, 136, 0.15);
-}
-
-.calendar-nav-arrow-btn:active {
-  transform: translateY(0);
-}
-
-.calendar-active-year-display {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #f0fdfa;
-  border: 1.5px solid #99f6e4;
-  border-radius: 10px;
-  padding: 4px 14px;
-  height: 38px;
-}
-
-.cal-year-icon {
-  color: #0d9488;
-}
-
-.cal-year-text {
-  font-size: 17px;
-  font-weight: 900;
-  color: #0f766e;
-  letter-spacing: -0.3px;
-}
-
-.cal-year-sub {
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: #0d9488;
-  background: #ffffff;
-  padding: 2px 7px;
-  border-radius: 6px;
-  border: 1px solid #ccfbf1;
-}
-
-.calendar-quick-year-pills {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.quick-year-pill {
-  padding: 6px 12px;
-  border-radius: 20px;
-  border: 1px solid #cbd5e1;
-  background: #f8fafc;
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-
-.quick-year-pill:hover {
-  border-color: #0d9488;
-  color: #0d9488;
-  background: #f0fdfa;
-}
-
-.quick-year-pill.active {
+.simple-period-pill.active {
   background: #0d9488;
   border-color: #0d9488;
   color: #ffffff;
   font-weight: 700;
-  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.28);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.25);
 }
 
-.quick-year-pill.all-months-pill {
-  font-weight: 700;
-  border-style: dashed;
+.simple-period-pill .q-tag {
+  font-weight: 800;
 }
 
-.quick-year-pill.all-months-pill.active {
-  border-style: solid;
-  background: #0f766e;
+.simple-period-pill .q-months {
+  font-size: 11px;
+  opacity: 0.85;
 }
 
-/* 12-Month Calendar Interactive Grid */
-.tcv-calendar-months-grid {
+.period-pill-separator {
+  width: 1px;
+  height: 20px;
+  background: #cbd5e1;
+  margin: 0 2px;
+}
+
+/* Row 2: Streamlined 12-Month Pills */
+.tcv-simple-months-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-top: 14px;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 5px;
 }
 
 @media (max-width: 900px) {
-  .tcv-calendar-months-grid {
-    grid-template-columns: repeat(3, 1fr);
+  .tcv-simple-months-row {
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
-@media (max-width: 600px) {
-  .tcv-calendar-months-grid {
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 550px) {
+  .tcv-simple-months-row {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
-.tcv-calendar-month-tile {
-  background: #ffffff;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  text-align: left;
-  position: relative;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 82px;
-}
-
-.tcv-calendar-month-tile:hover {
-  border-color: #0d9488;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(13, 148, 136, 0.12);
-}
-
-.tcv-calendar-month-tile.selected {
-  border: 2px solid #0d9488;
-  background: linear-gradient(135deg, #f0fdfa 0%, #e6fffa 100%);
-  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2), 0 6px 16px rgba(13, 148, 136, 0.12);
-}
-
-.tcv-calendar-month-tile.has-data {
-  border-color: #99f6e4;
-  background: #fafdfd;
-}
-
-.tcv-calendar-month-tile.has-data:hover {
-  border-color: #0d9488;
-}
-
-.month-tile-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.month-tile-name {
-  font-size: 13.5px;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.tcv-calendar-month-tile.selected .month-tile-name {
-  color: #0f766e;
-}
-
-.month-tile-year {
-  font-size: 11px;
-  font-weight: 600;
-  color: #94a3b8;
-}
-
-.tcv-calendar-month-tile.selected .month-tile-year {
-  color: #0d9488;
-}
-
-.month-tile-body {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.month-tile-badge {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  color: #0f766e;
-  background: #ccfbf1;
-  padding: 1px 7px;
-  border-radius: 5px;
-  width: fit-content;
-  border: 1px solid #99f6e4;
-}
-
-.month-tile-tcv {
-  font-size: 12.5px;
-  font-weight: 800;
-  color: #0d9488;
-  letter-spacing: -0.2px;
-}
-
-.month-tile-empty {
-  font-size: 11px;
-  font-weight: 500;
-  color: #cbd5e1;
-}
-
-.month-tile-check {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #0d9488;
-  color: #ffffff;
+.simple-month-pill {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.4);
+  gap: 4px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 34px;
+}
+
+.simple-month-pill:hover {
+  border-color: #0d9488;
+  background: #f0fdfa;
+}
+
+.simple-month-pill.has-mous {
+  border-color: #99f6e4;
+  background: #f8fafc;
+}
+
+.simple-month-pill.active {
+  background: #0d9488 !important;
+  border-color: #0d9488 !important;
+  color: #ffffff !important;
+  box-shadow: 0 3px 10px rgba(13, 148, 136, 0.3);
+}
+
+.month-name-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.simple-month-pill.active .month-name-text {
+  color: #ffffff;
+}
+
+.month-mou-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 800;
+  background: #0d9488;
+  color: #ffffff;
+}
+
+.simple-month-pill.active .month-mou-bubble {
+  background: #ffffff;
+  color: #0d9488;
 }
 
 /* Active Selection Summary Bar */
