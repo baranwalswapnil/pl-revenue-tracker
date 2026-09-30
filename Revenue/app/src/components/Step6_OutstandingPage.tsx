@@ -14,6 +14,9 @@ import {
   FileSpreadsheet,
   ExternalLink,
   ChevronRight,
+  ChevronDown,
+  Check,
+  X,
   Eye,
   Edit3,
   RefreshCw,
@@ -52,16 +55,72 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "received">("all");
   const [selectedYear, setSelectedYear] = useState<number>(currentPeriod.year || 2026);
+  const [selectedCollege, setSelectedCollege] = useState<string>("all");
+  const [collegeSearchTerm, setCollegeSearchTerm] = useState<string>("");
+  const [isCollegeDropdownOpen, setIsCollegeDropdownOpen] = useState<boolean>(false);
 
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const collegeDropdownRef = useRef<HTMLDivElement>(null);
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
 
-  // Re-calculate summary whenever period or projects change
+  // Close college dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        collegeDropdownRef.current &&
+        !collegeDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsCollegeDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Distinct list of colleges with their invoice and project counts
+  const collegeOptions = useMemo(() => {
+    const map = new Map<string, { invoiceCount: number; projectCount: number }>();
+    projects.forEach((p) => {
+      const name = (p.college_name || "").trim();
+      if (!name) return;
+      if (!map.has(name)) {
+        map.set(name, { invoiceCount: 0, projectCount: 0 });
+      }
+      const data = map.get(name)!;
+      data.projectCount++;
+      data.invoiceCount += (p.invoices || []).length;
+    });
+
+    return Array.from(map.entries())
+      .map(([name, data]) => ({
+        name,
+        invoiceCount: data.invoiceCount,
+        projectCount: data.projectCount,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [projects]);
+
+  // Filtered college list for dropdown search
+  const filteredCollegeOptions = useMemo(() => {
+    if (!collegeSearchTerm) return collegeOptions;
+    const term = collegeSearchTerm.toLowerCase().trim();
+    return collegeOptions.filter((c) => c.name.toLowerCase().includes(term));
+  }, [collegeOptions, collegeSearchTerm]);
+
+  // Projects filtered by selected college
+  const filteredProjects = useMemo(() => {
+    if (selectedCollege === "all") return projects;
+    return projects.filter(
+      (p) => (p.college_name || "").toLowerCase().trim() === selectedCollege.toLowerCase().trim()
+    );
+  }, [projects, selectedCollege]);
+
+  // Re-calculate summary whenever period or filtered projects change
   const summary = useMemo(() => {
-    return calculatePeriodOutstanding(projects, currentPeriod);
-  }, [projects, currentPeriod]);
+    return calculatePeriodOutstanding(filteredProjects, currentPeriod);
+  }, [filteredProjects, currentPeriod]);
 
   // Filter items by search term and status
   const filteredItems = useMemo(() => {
@@ -258,6 +317,13 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
               <p className="hero-subtitle">
                 Track invoices raised, collected, and outstanding payments for{" "}
                 <strong>{currentPeriod.label}</strong>
+                {selectedCollege !== "all" && (
+                  <span className="hero-selected-college-tag">
+                    {" • "}
+                    <Building2 size={13} style={{ display: "inline", verticalAlign: "-1px", marginRight: "3px" }} />
+                    {selectedCollege}
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -276,8 +342,122 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
           </div>
         </div>
 
-        {/* IN-PAGE PERIOD SWITCHER: Quarters (Apr-Jun, Jul-Sep, Oct-Dec, Jan-Mar) & Months (Jan to Dec) */}
+        {/* IN-PAGE PERIOD & COLLEGE SWITCHER */}
         <div className="inpage-period-switcher-wrap">
+          {/* Row 0: College Selector Dropdown */}
+          <div className="outstanding-college-filter-bar" ref={collegeDropdownRef}>
+            <div className="switcher-group-label">
+              <Building2 size={15} />
+              <span>Filter by College:</span>
+              {selectedCollege !== "all" && (
+                <span className="active-filter-badge">Active</span>
+              )}
+            </div>
+
+            <div className="tcv-custom-select-wrap outstanding-college-select-wrap">
+              <button
+                type="button"
+                className={`tcv-select-trigger-btn ${isCollegeDropdownOpen ? "active" : ""}`}
+                onClick={() => setIsCollegeDropdownOpen(!isCollegeDropdownOpen)}
+              >
+                <span className="tcv-trigger-text">
+                  {selectedCollege === "all"
+                    ? `All Colleges (${collegeOptions.length})`
+                    : selectedCollege}
+                </span>
+                <ChevronDown size={16} className="tcv-chevron-icon" />
+              </button>
+
+              {isCollegeDropdownOpen && (
+                <div className="tcv-dropdown-menu">
+                  <div className="tcv-dropdown-search-box">
+                    <Search size={14} className="dropdown-search-icon" />
+                    <input
+                      type="text"
+                      placeholder="Search college name..."
+                      value={collegeSearchTerm}
+                      onChange={(e) => setCollegeSearchTerm(e.target.value)}
+                      className="tcv-dropdown-search-input"
+                      autoFocus
+                    />
+                    {collegeSearchTerm && (
+                      <button
+                        type="button"
+                        className="clear-dropdown-search"
+                        onClick={() => setCollegeSearchTerm("")}
+                      >
+                        &times;
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="tcv-dropdown-options-list">
+                    <div
+                      className={`tcv-dropdown-option ${selectedCollege === "all" ? "selected" : ""}`}
+                      onClick={() => {
+                        setSelectedCollege("all");
+                        setIsCollegeDropdownOpen(false);
+                      }}
+                    >
+                      <div className="option-name-row">
+                        <span className="option-name font-semibold">
+                          All Colleges
+                        </span>
+                        <span className="option-meta-badge">
+                          {collegeOptions.length} colleges
+                        </span>
+                      </div>
+                      {selectedCollege === "all" && (
+                        <Check size={16} className="check-mark-icon" />
+                      )}
+                    </div>
+
+                    {filteredCollegeOptions.map((c) => (
+                      <div
+                        key={c.name}
+                        className={`tcv-dropdown-option ${selectedCollege === c.name ? "selected" : ""}`}
+                        onClick={() => {
+                          setSelectedCollege(c.name);
+                          setIsCollegeDropdownOpen(false);
+                        }}
+                      >
+                        <div className="option-name-row">
+                          <span className="option-name">{c.name}</span>
+                          <span className="option-val-tag">
+                            {c.invoiceCount} invoice{c.invoiceCount === 1 ? "" : "s"}
+                          </span>
+                        </div>
+                        {selectedCollege === c.name && (
+                          <Check size={16} className="check-mark-icon" />
+                        )}
+                      </div>
+                    ))}
+
+                    {filteredCollegeOptions.length === 0 && (
+                      <div className="tcv-dropdown-empty">
+                        No college matching "{collegeSearchTerm}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedCollege !== "all" && (
+                <button
+                  type="button"
+                  className="clear-college-filter-btn"
+                  onClick={() => setSelectedCollege("all")}
+                  title="Clear college filter"
+                >
+                  <X size={14} />
+                  <span>Clear Filter</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="outstanding-filter-divider" />
+
           {/* 1. Quarterly Tabs */}
           <div className="switcher-section-group">
             <div className="switcher-group-label">
@@ -412,7 +592,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
             </div>
             <div className="kpi-footer-row">
               <span className="kpi-count-text">
-                Across <strong>{projects.length}</strong> colleges
+                Across <strong>{filteredProjects.length}</strong> college{filteredProjects.length === 1 ? "" : "s"}
               </span>
               <span className="kpi-period-tag">{selectedYear}</span>
             </div>

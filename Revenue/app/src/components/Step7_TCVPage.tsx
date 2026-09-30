@@ -855,8 +855,12 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                   <th style={{ width: "45px" }}>#</th>
                   <th>College Name & Project Code</th>
                   <th>Date & Month (Col AR)</th>
-                  <th className="text-center">Students & Rate</th>
-                  <th className="text-right">Total Contract Value (₹) [Col R]</th>
+                  <th className="text-center th-highlight-students">
+                    Students & Rate
+                  </th>
+                  <th className="text-right th-highlight-tcv">
+                    Total Contract Value (₹) [Col R]
+                  </th>
                   <th className="text-right">Total with GST (₹) [Col S]</th>
                   <th className="text-right">GST Amount (₹)</th>
                   <th className="text-center">Contract & Stream</th>
@@ -912,15 +916,15 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                           )}
                         </div>
                       </td>
-                      <td className="text-center">
+                      <td className="text-center td-highlight-students">
                         <div className="tcv-students-cell">
                           {item.studentCount > 0 ? (
                             <>
-                              <span className="students-count-badge">
+                              <span className="students-count-badge highlighted">
                                 {item.studentCount} Students
                               </span>
                               {item.costPerStudent > 0 && (
-                                <span className="rate-sub">
+                                <span className="rate-sub highlighted">
                                   @{formatINR(item.costPerStudent)}/student
                                 </span>
                               )}
@@ -930,11 +934,11 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                           )}
                         </div>
                       </td>
-                      <td className="text-right font-semibold">
+                      <td className="text-right font-semibold td-highlight-tcv">
                         {isMissingTcv ? (
                           <span className="missing-data-text">Missing data</span>
                         ) : (
-                          <span className="tcv-base-amount">
+                          <span className="tcv-base-amount highlighted">
                             {formatINR(item.totalContractValue)}
                           </span>
                         )}

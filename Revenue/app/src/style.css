@@ -5508,3 +5508,135 @@ a {
   font-style: italic;
   font-size: 11.5px;
 }
+
+/* ==========================================================================
+   TCV Explorer Column Highlights: Students & Rate + Total Contract Value (Col R)
+   ========================================================================== */
+.outstanding-data-table thead th.th-highlight-students {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%) !important;
+  color: #1e40af !important;
+  border-bottom: 2.5px solid #3b82f6 !important;
+  border-left: 1px solid #bfdbfe;
+  border-right: 1px solid #bfdbfe;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+
+.outstanding-data-table tbody td.td-highlight-students {
+  background: rgba(239, 246, 255, 0.45);
+  border-left: 1px solid #eff6ff;
+  border-right: 1px solid #eff6ff;
+}
+
+.tcv-data-row:hover td.td-highlight-students {
+  background: #eff6ff !important;
+}
+
+.students-count-badge.highlighted {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1.5px solid #93c5fd;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.12);
+  display: inline-block;
+}
+
+.rate-sub.highlighted {
+  color: #2563eb;
+  font-weight: 700;
+  font-size: 11.5px;
+}
+
+.outstanding-data-table thead th.th-highlight-tcv {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  color: #065f46 !important;
+  border-bottom: 2.5px solid #10b981 !important;
+  border-left: 1px solid #a7f3d0;
+  border-right: 1px solid #a7f3d0;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+
+.outstanding-data-table tbody td.td-highlight-tcv {
+  background: rgba(236, 253, 245, 0.45);
+  border-left: 1px solid #ecfdf5;
+  border-right: 1px solid #ecfdf5;
+}
+
+.tcv-data-row:hover td.td-highlight-tcv {
+  background: #ecfdf5 !important;
+}
+
+.tcv-base-amount.highlighted {
+  font-size: 14px;
+  font-weight: 800;
+  color: #047857;
+  background: #ecfdf5;
+  padding: 4px 11px;
+  border-radius: 8px;
+  border: 1.5px solid #6ee7b7;
+  display: inline-block;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.12);
+}
+
+/* ==========================================================================
+   Outstanding Tracker: College Filter & Hero Subtitle
+   ========================================================================== */
+.outstanding-college-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+}
+
+.outstanding-college-select-wrap {
+  min-width: 280px;
+  max-width: 420px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.outstanding-college-select-wrap .tcv-select-trigger-btn {
+  flex: 1;
+}
+
+.clear-college-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.clear-college-filter-btn:hover {
+  background: #fecaca;
+  color: #b91c1c;
+}
+
+.outstanding-filter-divider {
+  width: 100%;
+  height: 1px;
+  background: #e2e8f0;
+  margin: 4px 0 12px 0;
+}
+
+.hero-selected-college-tag {
+  color: #0284c7;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+}
