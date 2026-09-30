@@ -39,10 +39,10 @@ export const Step4_HealthReport: React.FC<Step4HealthReportProps> = ({
   const contractValue = Number(project.total_cost_value) || 0;
   const contractValueWithGst = Number(project.gst_cost) || (contractValue * 1.18);
 
-  // Formula: ((Total Contract Value with GST - Trainee Cost) / Total Contract Value with GST) * 100
-  const rawDiff = contractValueWithGst - trainingCost;
-  // If (Contract Value with GST - Trainee Cost) is negative, healthPercent is also negative!
-  const healthPercent = contractValueWithGst > 0 ? (rawDiff / contractValueWithGst) * 100 : 0;
+  // Formula: ((Total Contract Value - Total Training Cost) / Total Contract Value) * 100
+  const rawDiff = contractValue - trainingCost;
+  // If (Contract Value - Total Training Cost) is negative, healthPercent is also negative!
+  const healthPercent = contractValue > 0 ? (rawDiff / contractValue) * 100 : 0;
   const isProfitable = rawDiff >= 0;
   const scoreDisplay = `${healthPercent.toFixed(1)}%`;
   const formattedScoreWithSign = `${healthPercent > 0 ? "+" : ""}${healthPercent.toFixed(1)}%`;
@@ -271,7 +271,7 @@ export const Step4_HealthReport: React.FC<Step4HealthReportProps> = ({
           <div>
             <h2 className="panel-main-title">Health Report</h2>
             <p className="panel-sub-title">
-              Shows the comparison between Total Contract Value with GST and Trainee Cost
+              Shows the comparison between Total Contract Value and Total Training Cost
             </p>
           </div>
         </div>
@@ -341,15 +341,15 @@ export const Step4_HealthReport: React.FC<Step4HealthReportProps> = ({
           <div className="health-formula-box">
             <div className="formula-breakdown-table">
               <div className="formula-row">
-                <span className="formula-key">Total Contract Value with GST</span>
-                <span className="formula-val font-semibold">{formatINR(contractValueWithGst)}</span>
+                <span className="formula-key">Total Contract Value</span>
+                <span className="formula-val font-semibold">{formatINR(contractValue)}</span>
               </div>
               <div className="formula-row">
-                <span className="formula-key">Total Trainee Cost</span>
+                <span className="formula-key">Total Training Cost</span>
                 <span className="formula-val font-semibold">{formatINR(trainingCost)}</span>
               </div>
               <div className="formula-row">
-                <span className="formula-key">Difference (Contract Value with GST - Trainee Cost)</span>
+                <span className="formula-key">Difference (Total Contract Value - Total Training Cost)</span>
                 <span
                   className="formula-val font-semibold"
                   style={{ color: rawDiff < 0 ? "#dc2626" : "#16a34a", fontWeight: 700 }}
