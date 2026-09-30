@@ -1,11 +1,12 @@
 import React from "react";
-import { ArrowLeft, Building2, FileSpreadsheet } from "lucide-react";
+import { ArrowLeft, Building2, FileSpreadsheet, Moon, Sun } from "lucide-react";
 
 interface HeaderProps {
   currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv";
   onBackToDashboard: () => void;
   selectedCollegeName?: string;
-  onResetSampleData?: () => void;
+  isDarkMode?: boolean;
+  onToggleTheme?: () => void;
   onOpenGoogleSheetSync?: () => void;
   googleSheetCount?: number;
   isLiveSyncing?: boolean;
@@ -16,7 +17,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentView,
   onBackToDashboard,
   selectedCollegeName,
-  onResetSampleData,
+  isDarkMode = false,
+  onToggleTheme,
   onOpenGoogleSheetSync,
   googleSheetCount = 0,
   isLiveSyncing = false,
@@ -89,18 +91,25 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {onResetSampleData && currentView === "dashboard" && (
+          {onToggleTheme && (
             <button
               type="button"
-              className="reset-demo-btn"
-              onClick={() => {
-                if (window.confirm("Restore the default 8 sample college records?")) {
-                  onResetSampleData();
-                }
-              }}
-              title="Reset Sample Data"
+              className={`theme-switch-btn ${isDarkMode ? "is-dark" : "is-light"}`}
+              onClick={onToggleTheme}
+              title={isDarkMode ? "Switch to Light Mode" : "Switch to Black Theme"}
+              aria-label="Toggle Theme"
             >
-              Restore Sample Data
+              {isDarkMode ? (
+                <>
+                  <Sun size={16} className="theme-toggle-icon sun-icon" />
+                  <span>Light Mode</span>
+                </>
+              ) : (
+                <>
+                  <Moon size={16} className="theme-toggle-icon moon-icon" />
+                  <span>Black Theme</span>
+                </>
+              )}
             </button>
           )}
         </div>

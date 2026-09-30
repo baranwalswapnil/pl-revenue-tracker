@@ -202,19 +202,65 @@ a {
   box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2);
 }
 
-.reset-demo-btn {
-  font-size: 12px;
-  color: var(--text-muted);
-  background: #f8fafc;
-  border: 1px solid var(--border-light);
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  transition: all 0.2s ease;
+.theme-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 15px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
 }
 
-.reset-demo-btn:hover {
-  background: #f1f5f9;
-  color: var(--text-main);
+.theme-switch-btn.is-light {
+  background: #0f172a;
+  color: #f8fafc;
+  border: 1px solid #1e293b;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+}
+
+.theme-switch-btn.is-light:hover {
+  background: #1e293b;
+  color: #38bdf8;
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+}
+
+.theme-switch-btn.is-light .moon-icon {
+  color: #fbbf24;
+  transition: transform 0.3s ease;
+}
+
+.theme-switch-btn.is-light:hover .moon-icon {
+  transform: rotate(-15deg) scale(1.15);
+}
+
+.theme-switch-btn.is-dark {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  color: #f8fafc;
+  border: 1px solid #475569;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.theme-switch-btn.is-dark:hover {
+  background: linear-gradient(135deg, #334155 0%, #475569 100%);
+  color: #fef08a;
+  border-color: #facc15;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(250, 204, 21, 0.25);
+}
+
+.theme-switch-btn.is-dark .sun-icon {
+  color: #facc15;
+  transition: transform 0.3s ease;
+}
+
+.theme-switch-btn.is-dark:hover .sun-icon {
+  transform: rotate(45deg) scale(1.15);
 }
 
 .topbar-bell-btn {
@@ -5522,4 +5568,314 @@ a {
   font-weight: 600;
   font-style: italic;
   font-size: 11.5px;
+}
+
+/* ==========================================================================
+   BLACK THEME / DARK MODE SYSTEM
+   ========================================================================== */
+
+:root.dark-mode,
+html.dark-mode,
+body.dark-mode {
+  --bg-app: #080c14;
+  --bg-card: #0f172a;
+  
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-gradient: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  --hero-gradient: linear-gradient(135deg, #080e1e 0%, #111e3b 50%, #1e1b4b 100%);
+  
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-sub: #64748b;
+  --text-inverse: #080c14;
+  
+  --border-light: #1e293b;
+  --border-focus: #38bdf8;
+  
+  --green: #22c55e;
+  --green-bg: rgba(34, 197, 94, 0.14);
+  --green-border: rgba(34, 197, 94, 0.3);
+  
+  --amber: #f59e0b;
+  --amber-bg: rgba(245, 158, 11, 0.14);
+  --amber-border: rgba(245, 158, 11, 0.3);
+  
+  --blue: #38bdf8;
+  --blue-bg: rgba(56, 189, 248, 0.14);
+  --blue-border: rgba(56, 189, 248, 0.3);
+  
+  --purple: #c084fc;
+  --purple-bg: rgba(192, 132, 252, 0.14);
+  --purple-border: rgba(192, 132, 252, 0.3);
+  
+  --red: #f87171;
+  --red-bg: rgba(248, 113, 113, 0.14);
+  --red-border: rgba(248, 113, 113, 0.3);
+  
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 14px 36px rgba(0, 0, 0, 0.7);
+}
+
+.dark-mode {
+  background-color: #080c14 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark-mode .finance-app-standalone-container {
+  background-color: #080c14;
+}
+
+/* Header Dark Mode */
+.dark-mode .app-topbar-header {
+  background: #0f172a;
+  border-bottom: 1px solid #1e293b;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.dark-mode .brand-name-main {
+  color: #f8fafc;
+}
+
+.dark-mode .brand-name-sub {
+  color: #94a3b8;
+}
+
+.dark-mode .active-college-pill {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.dark-mode .header-gsheet-btn {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.dark-mode .header-gsheet-btn:hover {
+  background: #334155;
+  border-color: #475569;
+  color: #38bdf8;
+}
+
+.dark-mode .topbar-back-button {
+  background: rgba(37, 99, 235, 0.2);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+.dark-mode .topbar-back-button:hover {
+  background: rgba(37, 99, 235, 0.35);
+  color: #93c5fd;
+}
+
+/* Cards and Panels in Dark Mode */
+.dark-mode .action-card,
+.dark-mode .dashboard-kpi-card,
+.dark-mode .excel-table-section,
+.dark-mode .outstanding-hero-card,
+.dark-mode .outstanding-summary-card,
+.dark-mode .tcv-hero-card,
+.dark-mode .tcv-summary-card,
+.dark-mode .tcv-college-card,
+.dark-mode .form-section-card,
+.dark-mode .update-modal-dialog,
+.dark-mode .gsheet-modal-dialog,
+.dark-mode .filter-bar-card,
+.dark-mode .summary-card,
+.dark-mode .kpi-metric-box,
+.dark-mode .formula-box,
+.dark-mode .health-card {
+  background: #0f172a;
+  border-color: #1e293b;
+  color: #f1f5f9;
+}
+
+.dark-mode .action-card:hover {
+  border-color: #3b82f6;
+  background: #131d33;
+}
+
+.dark-mode .action-card-subtitle,
+.dark-mode .dashboard-kpi-sub,
+.dark-mode .table-panel-subtitle,
+.dark-mode .tcv-hero-sub,
+.dark-mode .tcv-card-sub,
+.dark-mode .outstanding-hero-sub {
+  color: #94a3b8;
+}
+
+/* Tables in Dark Mode */
+.dark-mode .excel-table,
+.dark-mode .phases-table,
+.dark-mode .update-invoices-table,
+.dark-mode .outstanding-table,
+.dark-mode .tcv-table,
+.dark-mode .gsheet-preview-table {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+.dark-mode .excel-table th,
+.dark-mode .phases-table th,
+.dark-mode .update-invoices-table th,
+.dark-mode .outstanding-table th,
+.dark-mode .tcv-table th,
+.dark-mode .gsheet-preview-table th {
+  background: #131d33 !important;
+  color: #cbd5e1 !important;
+  border-color: #1e293b !important;
+}
+
+.dark-mode .excel-table td,
+.dark-mode .phases-table td,
+.dark-mode .update-invoices-table td,
+.dark-mode .outstanding-table td,
+.dark-mode .tcv-table td,
+.dark-mode .gsheet-preview-table td {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-color: #1e293b;
+}
+
+.dark-mode .excel-table tr:hover td,
+.dark-mode .outstanding-table tr:hover td,
+.dark-mode .tcv-table tr:hover td,
+.dark-mode .phases-table tr:hover td {
+  background: #17233f !important;
+}
+
+.dark-mode .sticky-col,
+.dark-mode .excel-table td:first-child,
+.dark-mode .excel-table th:first-child,
+.dark-mode .tcv-table td:first-child,
+.dark-mode .tcv-table th:first-child {
+  background: #10192e !important;
+}
+
+/* Inputs, Selects, and Search Bars in Dark Mode */
+.dark-mode .table-search-input,
+.dark-mode .table-date-input,
+.dark-mode .table-num-input,
+.dark-mode .table-select-input,
+.dark-mode .table-inv-date-input,
+.dark-mode .table-code-input,
+.dark-mode .form-control-input,
+.dark-mode select,
+.dark-mode input[type="text"],
+.dark-mode input[type="number"],
+.dark-mode input[type="date"],
+.dark-mode input[type="search"],
+.dark-mode textarea {
+  background: #131d33 !important;
+  border-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+.dark-mode .table-search-input:focus,
+.dark-mode .form-control-input:focus,
+.dark-mode select:focus,
+.dark-mode input:focus,
+.dark-mode textarea:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+}
+
+/* TCV & Outstanding Period Selectors & Tabs in Dark Mode */
+.dark-mode .tcv-filter-box,
+.dark-mode .tcv-view-toggle,
+.dark-mode .outstanding-tabs-container {
+  background: #131d33;
+  border-color: #1e293b;
+}
+
+.dark-mode .tcv-view-btn {
+  color: #94a3b8;
+}
+
+.dark-mode .tcv-view-btn.active {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.dark-mode .tcv-year-tab,
+.dark-mode .tcv-quarter-chip,
+.dark-mode .tcv-month-chip {
+  background: #131d33;
+  border-color: #1e293b;
+  color: #cbd5e1;
+}
+
+.dark-mode .tcv-year-tab:hover,
+.dark-mode .tcv-quarter-chip:hover,
+.dark-mode .tcv-month-chip:hover {
+  background: #1e293b;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
+.dark-mode .tcv-year-tab.active,
+.dark-mode .tcv-quarter-chip.active,
+.dark-mode .tcv-month-chip.active {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border-color: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+}
+
+.dark-mode .tcv-month-chip.has-data {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+}
+
+.dark-mode .tcv-m-count {
+  background: #1e293b;
+  color: #94a3b8;
+  border-color: #334155;
+}
+
+.dark-mode .tcv-month-chip.active .tcv-m-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+/* Modals & Overlays */
+.dark-mode .update-modal-overlay,
+.dark-mode .gsheet-modal-overlay,
+.dark-mode .modal-backdrop-blur {
+  background: rgba(3, 7, 18, 0.82) !important;
+  backdrop-filter: blur(8px);
+}
+
+.dark-mode .update-modal-header,
+.dark-mode .gsheet-modal-header {
+  border-bottom-color: #1e293b;
+}
+
+.dark-mode .update-modal-footer,
+.dark-mode .gsheet-modal-footer {
+  border-top-color: #1e293b;
+  background: #0b1120;
+}
+
+/* Dark Mode Scrollbars */
+.dark-mode ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark-mode ::-webkit-scrollbar-track {
+  background: #0b1120;
+}
+
+.dark-mode ::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+.dark-mode ::-webkit-scrollbar-thumb:hover {
+  background: #334155;
 }

@@ -61,6 +61,32 @@ export function App() {
     }
   }, [projects]);
 
+  // Dark theme mode state with persistence
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      const savedTheme = localStorage.getItem("theme_mode");
+      if (savedTheme) return savedTheme === "dark";
+      return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    } catch (e) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("theme_mode", isDarkMode ? "dark" : "light");
+    } catch (e) {
+      console.error("Error saving theme to localStorage", e);
+    }
+    if (isDarkMode) {
+      document.documentElement.classList.add("dark-mode");
+      document.body.classList.add("dark-mode");
+    } else {
+      document.documentElement.classList.remove("dark-mode");
+      document.body.classList.remove("dark-mode");
+    }
+  }, [isDarkMode]);
+
   // Google Sheets integration state
   const [googleSheetColleges, setGoogleSheetColleges] = useState<GoogleSheetCollegeItem[]>(() =>
     loadCachedSheetItems()
@@ -530,7 +556,8 @@ export function App() {
             ? draft.collegeName || "Training Phase"
             : activeProject?.college_name
         }
-        onResetSampleData={handleResetSampleData}
+        isDarkMode={isDarkMode}
+        onToggleTheme={() => setIsDarkMode((prev) => !prev)}
         onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
         googleSheetCount={googleSheetColleges.length}
         isLiveSyncing={isLiveSyncing}
