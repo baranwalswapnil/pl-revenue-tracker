@@ -334,21 +334,9 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
       attpPercentage = rawPct.includes("%") ? rawPct : `${rawPct}%`;
     }
 
-    let invoiceCount = parseCleanNumber(colInvoices !== -1 ? row[colInvoices] : row[20], 0);
-    
-    // If EMI with number like EMI 12, extract 12
-    if (paymentType === "EMI" && invoiceCount <= 0) {
-      const emiMatch = String(rawPayType || rawPct).match(/\d+/);
-      invoiceCount = emiMatch ? parseInt(emiMatch[0], 10) : 5;
-    } else if (invoiceCount <= 0) {
-      if (paymentType === "FNF") invoiceCount = 1;
-      else if (paymentType === "ATP") invoiceCount = 2;
-      else if (paymentType === "ATTP") {
-        invoiceCount = computeAttpDetails(attpPercentage).invoiceCount;
-      } else if (paymentType === "EMI") {
-        invoiceCount = 5;
-      }
-    }
+    const rawInvoicesStr = colInvoices !== -1 ? (row[colInvoices] || "").trim() : (row[20] || "").trim();
+    const hasExplicitInvoices = rawInvoicesStr !== "" && !isNaN(Number(rawInvoicesStr.replace(/[^0-9]/g, "")));
+    let invoiceCount = hasExplicitInvoices ? parseCleanNumber(rawInvoicesStr, 0) : 0;
 
     const courseStream = colCourse !== -1 ? (row[colCourse] || "").trim() : "";
     const domain = colDomain !== -1 ? (row[colDomain] || "").trim() : "";
@@ -752,7 +740,12 @@ export function buildProjectsFromInvoiceTracker(
     const firstDate = invList.find((i) => i.date_raised)?.date_raised || "2026-01-15";
     const lastDate = invList[invList.length - 1]?.date_raised || "2026-03-31";
 
-    const plannedInvoiceCount = existing?.invoice_count || existing?.installment_count || invList.length;
+    const plannedInvoiceCount =
+      existing?.invoice_count !== undefined && existing.invoice_count > 0
+        ? existing.invoice_count
+        : existing?.installment_count !== undefined && existing.installment_count > 0
+        ? existing.installment_count
+        : 0;
 
     const project: Project = {
       id: existing?.id || `proj-${projectCode.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,

@@ -462,7 +462,18 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
                 </tr>
               ) : (
                 filteredProjects.map((project, index) => {
-                  const invoiceToBeRaised = Math.max(0, project.gst_cost - project.invoice_raised);
+                  const stats = getProjectInvoiceStats(project);
+                  
+                  const isMissingProjectCode = !project.project_code || project.project_code.trim() === "" || project.project_code === "N/A";
+                  const isMissingCollegeName = !project.college_name || project.college_name.trim() === "" || project.college_name === "Untitled College";
+                  
+                  const isMissingTotalCost = project.total_cost_value === undefined || project.total_cost_value === null || (project.total_cost_value === 0 && (!project.student_count || !project.cost_per_student));
+                  const isMissingGst = project.gst_cost === undefined || project.gst_cost === null || (project.gst_cost === 0 && isMissingTotalCost);
+                  
+                  const isMissingRaised = project.invoice_raised === undefined || project.invoice_raised === null || (project.invoice_raised === 0 && (!project.invoices || project.invoices.length === 0));
+                  
+                  const invoiceToBeRaised = (!isMissingGst && !isMissingRaised) ? Math.max(0, project.gst_cost - project.invoice_raised) : null;
+
                   return (
                     <tr
                       key={project.id}
@@ -475,37 +486,67 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
                       <td className="td-project">
                         <div className="project-cell-data">
                           <span className="project-code-highlight">
-                            {project.project_code || "N/A"}
+                            {isMissingProjectCode ? (
+                              <span className="missing-data-text">Missing data</span>
+                            ) : (
+                              project.project_code
+                            )}
                           </span>
                           <span className="college-name-sub">
-                            {project.college_name || "Untitled College"}
+                            {isMissingCollegeName ? (
+                              <span className="missing-data-text">Missing data</span>
+                            ) : (
+                              project.college_name
+                            )}
                           </span>
                         </div>
                       </td>
                       <td className="td-cost text-right">
-                        <span className="currency-val">
-                          {formatINR(project.total_cost_value)}
-                        </span>
+                        {isMissingTotalCost ? (
+                          <span className="missing-data-text">Missing data</span>
+                        ) : (
+                          <span className="currency-val">
+                            {formatINR(project.total_cost_value)}
+                          </span>
+                        )}
                       </td>
                       <td className="td-gst text-right">
-                        <span className="currency-val font-semibold">
-                          {formatINR(project.gst_cost)}
-                        </span>
+                        {isMissingGst ? (
+                          <span className="missing-data-text">Missing data</span>
+                        ) : (
+                          <span className="currency-val font-semibold">
+                            {formatINR(project.gst_cost)}
+                          </span>
+                        )}
                       </td>
                       <td className="td-raised text-center">
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
-                          <span className="badge-pill green-badge">
-                            {formatINR(project.invoice_raised)}
-                          </span>
-                          <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600 }}>
-                            {getProjectInvoiceStats(project).raisedCount} of {getProjectInvoiceStats(project).totalCount} Raised
-                          </span>
+                          {isMissingRaised ? (
+                            <span className="badge-pill missing-badge">Missing data</span>
+                          ) : (
+                            <span className="badge-pill green-badge">
+                              {formatINR(project.invoice_raised)}
+                            </span>
+                          )}
+                          {stats.isMissing ? (
+                            <span className="missing-data-subtext" style={{ fontSize: "11px", color: "var(--amber-600, #d97706)", fontWeight: 600 }}>
+                              Missing data
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: 600 }}>
+                              {stats.raisedCount} of {stats.totalCount} Raised
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="td-pending text-center">
-                        <span className="badge-pill amber-badge">
-                          {formatINR(invoiceToBeRaised)}
-                        </span>
+                        {invoiceToBeRaised === null ? (
+                          <span className="badge-pill missing-badge">Missing data</span>
+                        ) : (
+                          <span className="badge-pill amber-badge">
+                            {formatINR(invoiceToBeRaised)}
+                          </span>
+                        )}
                       </td>
                       <td className="td-actions text-center">
                         <div className="action-buttons-group">

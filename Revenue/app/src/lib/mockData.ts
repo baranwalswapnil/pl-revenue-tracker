@@ -893,20 +893,26 @@ export const generateMilestoneInvoices = (
  */
 export function getProjectInvoiceStats(project: Project) {
   // Total planned invoices (y in x of y Raised) comes directly from Sheet 1 Column U (No of Invoices)
-  const totalCount = Math.max(1, project.invoice_count || project.installment_count || 1);
+  const rawInvoiceCount = typeof project.invoice_count === "number" ? project.invoice_count : Number(project.invoice_count);
+  const rawInstallmentCount = typeof project.installment_count === "number" ? project.installment_count : Number(project.installment_count);
+  
+  const hasTotalCount = (!isNaN(rawInvoiceCount) && rawInvoiceCount > 0) || (!isNaN(rawInstallmentCount) && rawInstallmentCount > 0);
+  const totalCount = hasTotalCount ? (rawInvoiceCount > 0 ? rawInvoiceCount : rawInstallmentCount) : 0;
   const totalGst = Number(project.gst_cost) || (Number(project.total_cost_value) * 1.18);
 
   const hasDirectInvoices = Boolean(project.invoices && project.invoices.length > 0);
   const milestoneInvoices = hasDirectInvoices
     ? project.invoices!
-    : generateMilestoneInvoices(
-        project.payment_type || "FNF",
-        project.attp_percentage || "50%",
-        totalCount,
-        totalGst,
-        undefined,
-        project.invoice_raised || 0
-      );
+    : (totalCount > 0
+        ? generateMilestoneInvoices(
+            project.payment_type || "FNF",
+            project.attp_percentage || "50%",
+            totalCount,
+            totalGst,
+            undefined,
+            project.invoice_raised || 0
+          )
+        : []);
 
   // x = How many times Received based on Column M (Status) in Invoice Tracker sheet
   const receivedCount = milestoneInvoices.filter(
@@ -918,6 +924,9 @@ export function getProjectInvoiceStats(project: Project) {
   ).length;
 
   const raisedCount = receivedCount; // x is number of times received from Column M!
+
+  // If total planned count (Column U) is missing/0 or invoice data is missing
+  const isMissing = !hasTotalCount;
 
   const totalReceivedAmount = milestoneInvoices
     .filter((i) => i.isReceived || (i.status && i.status.toLowerCase().includes("rec")))
@@ -931,6 +940,8 @@ export function getProjectInvoiceStats(project: Project) {
     raisedCount,
     receivedCount,
     totalCount,
+    hasTotalCount,
+    isMissing,
     raisedAmount,
     pendingAmount,
     raisedPct,

@@ -911,6 +911,29 @@ a {
   border: 1px solid var(--amber-border);
 }
 
+.missing-badge {
+  background: var(--surface-2, #f8fafc);
+  color: var(--text-muted, #64748b);
+  border: 1px dashed var(--border-color, #cbd5e1);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 11.5px;
+}
+
+.missing-data-text {
+  color: var(--text-muted, #94a3b8);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.missing-data-subtext {
+  color: #d97706;
+  font-style: italic;
+  font-weight: 600;
+  font-size: 11px;
+}
+
 .action-buttons-group {
   display: flex;
   align-items: center;

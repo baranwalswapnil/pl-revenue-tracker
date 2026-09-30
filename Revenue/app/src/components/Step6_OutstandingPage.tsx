@@ -514,14 +514,18 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                       <td className="text-muted font-mono">{idx + 1}</td>
                       <td>
                         <div className="college-info-cell">
-                          <span className="college-main-name">{item.collegeName}</span>
-                          <span className="project-code-sub">{item.projectCode}</span>
+                          <span className="college-main-name">
+                            {item.collegeName ? item.collegeName : <span className="missing-data-text">Missing data</span>}
+                          </span>
+                          <span className="project-code-sub">
+                            {item.projectCode ? item.projectCode : <span className="missing-data-text">Missing data</span>}
+                          </span>
                         </div>
                       </td>
                       <td>
                         <div className="milestone-code-cell">
                           <div className="milestone-badge-row">
-                            <span className="invoice-code-badge">{item.invoiceCode}</span>
+                            <span className="invoice-code-badge">{item.invoiceCode || "INV"}</span>
                             {item.gaInvoiceCode && (
                               <span className="ga-code-badge" title={`GA Invoice Code / Tally ERP: ${item.gaInvoiceCode}`}>
                                 GA: {item.gaInvoiceCode}
@@ -542,12 +546,18 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                         </div>
                       </td>
                       <td>
-                        <span className="share-pct-pill">{item.percentage}%</span>
+                        <span className="share-pct-pill">
+                          {item.percentage !== undefined && item.percentage !== null ? `${item.percentage}%` : <span className="missing-data-text">Missing data</span>}
+                        </span>
                       </td>
                       <td className="text-right">
                         <div className="amount-cell-wrap">
                           <span className="font-semibold text-main">
-                            {formatINR(item.amountRaised || item.amount)}
+                            {(item.amountRaised || item.amount) ? (
+                              formatINR(item.amountRaised || item.amount)
+                            ) : (
+                              <span className="missing-data-text">Missing data</span>
+                            )}
                           </span>
                           {item.amountFromMou && item.amountFromMou !== (item.amountRaised || item.amount) && (
                             <span className="mou-amount-sub" title="MOU Planned Amount">

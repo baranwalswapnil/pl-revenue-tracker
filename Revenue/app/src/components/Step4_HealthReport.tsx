@@ -245,7 +245,11 @@ export const Step4_HealthReport: React.FC<Step4HealthReportProps> = ({
                 {formatINR(invoiceStats.raisedAmount)}
               </strong>
               <small className="fin-sub" style={{ color: "#7c3aed" }}>
-                {invoiceStats.raisedCount} of {invoiceStats.totalCount} Raised ({invoiceStats.raisedPct}%)
+                {invoiceStats.isMissing ? (
+                  <span style={{ color: "#d97706", fontWeight: 600 }}>Missing data</span>
+                ) : (
+                  `${invoiceStats.raisedCount} of ${invoiceStats.totalCount} Raised (${invoiceStats.raisedPct}%)`
+                )}
               </small>
             </div>
           </div>
