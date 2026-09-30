@@ -106,6 +106,7 @@ export function App() {
               cost_per_student: match.cost_per_student || p.cost_per_student,
               total_cost_value: match.total_cost_value || p.total_cost_value,
               gst_cost: match.gst_cost || p.gst_cost,
+              training_cost: match.training_cost !== undefined ? match.training_cost : p.training_cost,
               hours_planned: match.hours_planned || p.hours_planned,
               payment_type: match.payment_type || p.payment_type,
               academic_year: match.academic_year || p.academic_year,

@@ -204,8 +204,10 @@ export const Step4_HealthReport: React.FC<Step4HealthReportProps> = ({
               <Coins size={20} />
             </div>
             <div className="fin-box-data">
-              <span className="fin-label">Total Trainee Cost</span>
-              <strong className="fin-amount">{formatINR(trainingCost)}</strong>
+              <span className="fin-label">Total Training Cost</span>
+              <strong className="fin-amount">
+                {trainingCost > 0 ? formatINR(trainingCost) : <span className="missing-data-text">Missing data</span>}
+              </strong>
               <small className="fin-sub">Budget Allocated</small>
             </div>
           </div>
@@ -217,7 +219,9 @@ export const Step4_HealthReport: React.FC<Step4HealthReportProps> = ({
             </div>
             <div className="fin-box-data">
               <span className="fin-label">Total Contract Value</span>
-              <strong className="fin-amount">{formatINR(contractValue)}</strong>
+              <strong className="fin-amount">
+                {contractValue > 0 ? formatINR(contractValue) : <span className="missing-data-text">Missing data</span>}
+              </strong>
               <small className="fin-sub">Revenue Expected (Base)</small>
             </div>
           </div>
@@ -229,7 +233,9 @@ export const Step4_HealthReport: React.FC<Step4HealthReportProps> = ({
             </div>
             <div className="fin-box-data">
               <span className="fin-label">Total Contract Value with GST</span>
-              <strong className="fin-amount">{formatINR(contractValueWithGst)}</strong>
+              <strong className="fin-amount">
+                {contractValueWithGst > 0 ? formatINR(contractValueWithGst) : <span className="missing-data-text">Missing data</span>}
+              </strong>
               <small className="fin-sub">Total Value (with 18% GST)</small>
             </div>
           </div>

@@ -26,6 +26,7 @@ export interface GoogleSheetCollegeItem {
   cost_per_student: number;
   total_cost_value: number;
   gst_cost: number;
+  training_cost?: number;
   hours_planned: number;
   payment_type: PaymentType;
   attp_percentage?: string;
@@ -255,6 +256,7 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
   const colCostPerStudent = findColumnIndex(headers, "cost per student", "cost/student", "student cost");
   const colTotalValue = findColumnIndex(headers, "total contract value", "total cost value", "contract value", "total value");
   const colGstValue = findColumnIndex(headers, "total contract value (incl gst)", "total contract value (incl. gst)", "gst cost", "total with gst");
+  const colTrainingCost = findColumnIndex(headers, "total training cost", "training cost", "trainingcost", "trainer cost", "training_cost", "trainee cost");
   const colHoursPlanned = findColumnIndex(headers, "hrs/batch", "hours/batch", "hours planned", "hrs planned", "hours");
   const colPaymentType = findColumnIndex(headers, "type of payment", "payment type", "payment plan");
   const colPaymentPct = findColumnIndex(headers, "% of payment", "percentage of payment", "payment percentage", "attp percentage");
@@ -284,6 +286,10 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
     if (gstValue === 0 && totalValue > 0) {
       gstValue = totalValue * 1.18;
     }
+
+    // Column R in Sheet 1 = Total Training Cost
+    const rawTrainingCostStr = colTrainingCost !== -1 ? (row[colTrainingCost] || "").trim() : (row[17] || "").trim();
+    const trainingCost = parseCleanNumber(rawTrainingCostStr, 0);
 
     const rawYear = (colYear !== -1 ? row[colYear] : row[4] || "").trim();
     let passingYear = "2026";
@@ -318,12 +324,12 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
 
     const startDate = normalizeDate(colStartDate !== -1 ? row[colStartDate] : row[11]);
     const endDate = normalizeDate(colEndDate !== -1 ? row[colEndDate] : row[12]);
-    const hoursPlanned = parseCleanNumber(colHoursPlanned !== -1 ? row[colHoursPlanned] : row[17], 40);
+    const hoursPlanned = parseCleanNumber(colHoursPlanned !== -1 ? row[colHoursPlanned] : row[18], 40);
 
-    const rawPayType = colPaymentType !== -1 ? row[colPaymentType] : row[18];
+    const rawPayType = colPaymentType !== -1 ? row[colPaymentType] : row[19];
     const paymentType = normalizePaymentType(rawPayType);
     
-    const rawPct = (colPaymentPct !== -1 ? row[colPaymentPct] : row[19] || "").trim();
+    const rawPct = (colPaymentPct !== -1 ? row[colPaymentPct] : row[20] || "").trim();
     let attpPercentage = "50%";
     if (rawPct.includes("25")) attpPercentage = "25%";
     else if (rawPct.includes("33") || rawPct.includes("30-30-40") || rawPct.includes("20-40-40")) attpPercentage = "33.34%";
@@ -334,7 +340,7 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
       attpPercentage = rawPct.includes("%") ? rawPct : `${rawPct}%`;
     }
 
-    const rawInvoicesStr = colInvoices !== -1 ? (row[colInvoices] || "").trim() : (row[20] || "").trim();
+    const rawInvoicesStr = colInvoices !== -1 ? (row[colInvoices] || "").trim() : (row[21] || row[20] || "").trim();
     const hasExplicitInvoices = rawInvoicesStr !== "" && !isNaN(Number(rawInvoicesStr.replace(/[^0-9]/g, "")));
     let invoiceCount = hasExplicitInvoices ? parseCleanNumber(rawInvoicesStr, 0) : 0;
 
@@ -370,6 +376,7 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
       cost_per_student: costPerStudent,
       total_cost_value: totalValue,
       gst_cost: gstValue,
+      training_cost: trainingCost,
       hours_planned: hoursPlanned,
       payment_type: paymentType,
       attp_percentage: attpPercentage,
@@ -747,6 +754,8 @@ export function buildProjectsFromInvoiceTracker(
         ? existing.installment_count
         : 0;
 
+    const trainingCostVal = existing?.training_cost !== undefined && existing.training_cost > 0 ? existing.training_cost : totalContractValue;
+
     const project: Project = {
       id: existing?.id || `proj-${projectCode.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
       college_name: collegeName,
@@ -759,7 +768,7 @@ export function buildProjectsFromInvoiceTracker(
       gst_cost: gstCost,
       hours_planned: existing?.hours_planned || 40,
       hours_given: existing?.hours_given || 40,
-      training_cost: totalContractValue,
+      training_cost: trainingCostVal,
       payment_type: first.payment_type || existing?.payment_type || "ATP",
       attp_percentage: existing?.attp_percentage || `${first.payment_percentage || 50}%`,
       installment_count: plannedInvoiceCount,
@@ -778,7 +787,7 @@ export function buildProjectsFromInvoiceTracker(
                 endDate: lastDate,
                 hoursPlanned: 40,
                 hoursGiven: 40,
-                trainingCost: totalContractValue,
+                trainingCost: trainingCostVal,
                 paymentType: first.payment_type || "ATP",
                 invoiceCount: plannedInvoiceCount,
               },
@@ -802,6 +811,8 @@ export function buildProjectsFromInvoiceTracker(
  * Converts a GoogleSheetCollegeItem into a Project entity
  */
 export function convertSheetItemToProject(item: GoogleSheetCollegeItem): Project {
+  const trainingCost = item.training_cost !== undefined && item.training_cost > 0 ? item.training_cost : item.total_cost_value;
+
   return {
     id: item.id || `proj-${Date.now()}`,
     college_name: item.college_name,
@@ -820,7 +831,7 @@ export function convertSheetItemToProject(item: GoogleSheetCollegeItem): Project
         endDate: item.training_end_date || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
         hoursPlanned: item.hours_planned,
         hoursGiven: item.hours_planned,
-        trainingCost: item.total_cost_value,
+        trainingCost: trainingCost,
         paymentType: item.payment_type,
         attpPercentage: item.attp_percentage,
         invoiceCount: item.invoice_count,
@@ -828,7 +839,7 @@ export function convertSheetItemToProject(item: GoogleSheetCollegeItem): Project
     ],
     hours_planned: item.hours_planned,
     hours_given: item.hours_planned,
-    training_cost: item.total_cost_value,
+    training_cost: trainingCost,
     payment_type: item.payment_type,
     attp_percentage: item.attp_percentage,
     installment_count: item.invoice_count,
@@ -845,6 +856,8 @@ export function convertSheetItemToProject(item: GoogleSheetCollegeItem): Project
  * Converts a GoogleSheetCollegeItem into a ProjectDraft for Add College / Step 2 & 3
  */
 export function convertSheetItemToDraft(item: GoogleSheetCollegeItem): ProjectDraft {
+  const trainingCostVal = item.training_cost !== undefined && item.training_cost > 0 ? item.training_cost : item.total_cost_value;
+
   return {
     collegeName: item.college_name,
     projectCode: item.project_code,
@@ -862,7 +875,7 @@ export function convertSheetItemToDraft(item: GoogleSheetCollegeItem): ProjectDr
     phaseEndDate: item.training_end_date || "",
     hoursPlanned: String(item.hours_planned || 40),
     hoursGiven: String(item.hours_planned || 40),
-    trainingCost: String(item.total_cost_value || ""),
+    trainingCost: String(trainingCostVal || ""),
     paymentType: item.payment_type,
     attpPercentage: item.attp_percentage || "50%",
     installmentCount: String(item.invoice_count || 1),
@@ -876,7 +889,7 @@ export function convertSheetItemToDraft(item: GoogleSheetCollegeItem): ProjectDr
         endDate: item.training_end_date || "",
         hoursPlanned: item.hours_planned || 40,
         hoursGiven: item.hours_planned || 40,
-        trainingCost: item.total_cost_value || 0,
+        trainingCost: trainingCostVal || 0,
         paymentType: item.payment_type,
         attpPercentage: item.attp_percentage,
         invoiceCount: item.invoice_count,
