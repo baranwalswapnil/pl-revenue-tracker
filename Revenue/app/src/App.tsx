@@ -38,18 +38,26 @@ const LOCAL_STORAGE_KEY = "company_finance_projects_v3";
 type AppView = "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv";
 
 export function App() {
-  // Load initial projects from localStorage or default mock data
+  // Load initial projects from localStorage (filtering out legacy sample mock items)
   const [projects, setProjects] = useState<Project[]>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(
+            (p: any) =>
+              p &&
+              typeof p === "object" &&
+              (!p.id || !String(p.id).startsWith("proj-"))
+          );
+          return filtered;
+        }
       }
     } catch (e) {
       console.error("Error reading localStorage", e);
     }
-    return INITIAL_PROJECTS;
+    return [];
   });
 
   // Save to localStorage whenever projects change
@@ -533,14 +541,6 @@ export function App() {
     }
   };
 
-  const handleResetSampleData = () => {
-    setProjects(INITIAL_PROJECTS);
-    setActiveProject(INITIAL_PROJECTS[0]);
-    setDraft(createEmptyDraft(INITIAL_PROJECTS[0]));
-    showToast("Restored default 8 sample colleges.", "success");
-    navigateTo("dashboard", INITIAL_PROJECTS[0]);
-  };
-
   return (
     <div className="finance-app-standalone-container">
       {/* Top Header Bar */}
@@ -613,9 +613,9 @@ export function App() {
         )}
 
         {/* Step 4: Health Report & Project Overview (Circular Donut Gauge & Financials) */}
-        {currentView === "health-report" && (
+        {currentView === "health-report" && (activeProject || projects[0]) && (
           <Step4_HealthReport
-            project={activeProject || projects[0]}
+            project={(activeProject || projects[0])!}
             onEditDetails={(proj) => {
               setActiveProject(proj);
               setDraft(createEmptyDraft(proj));
