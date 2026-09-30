@@ -425,6 +425,7 @@ export async function fetchGoogleSheetData(sheetUrlOrId: string, sheetName = "")
     headers: {
       "Accept": "text/csv,text/plain,*/*",
     },
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!response.ok) {
@@ -673,6 +674,7 @@ export async function fetchInvoiceTrackerData(
     headers: {
       Accept: "text/csv,text/plain,*/*",
     },
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!response.ok) {
@@ -1971,6 +1973,7 @@ export async function fetchMOUData(
     headers: {
       Accept: "text/csv,text/plain,*/*",
     },
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!response.ok) {

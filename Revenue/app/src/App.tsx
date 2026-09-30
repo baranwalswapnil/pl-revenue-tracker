@@ -167,8 +167,8 @@ export function App() {
       }
     };
 
-    // 1. Initial fetch on mount
-    performBackgroundSync(false);
+    // 1. Initial fetch on mount (silent to avoid UI flashing)
+    performBackgroundSync(true);
 
     // 2. Window focus listener (syncs automatically when user returns to this tab from spreadsheet)
     const handleWindowFocus = () => {
@@ -280,7 +280,6 @@ export function App() {
       showToast("Please configure Google Sheet URL in sync settings first.", "warning");
       return;
     }
-    setIsLiveSyncing(true);
     try {
       const fetched = await fetchMOUData(config.sheetUrl, "MOUs 26-27");
       if (fetched && fetched.length > 0) {
@@ -292,8 +291,6 @@ export function App() {
       }
     } catch (err: any) {
       showToast(`Error refreshing MOU data: ${err.message || err}`, "error");
-    } finally {
-      setIsLiveSyncing(false);
     }
   };
 
@@ -642,7 +639,6 @@ export function App() {
             mouItems={mouItems}
             onBackToDashboard={() => navigateTo("dashboard")}
             onRefreshData={handleRefreshTCVData}
-            isSyncing={isLiveSyncing}
           />
         )}
       </main>

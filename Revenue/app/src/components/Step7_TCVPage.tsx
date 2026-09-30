@@ -48,6 +48,9 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
   onRefreshData,
   isSyncing = false,
 }) => {
+  // Local refreshing state to prevent unwanted perpetual spinning
+  const [isLocalRefreshing, setIsLocalRefreshing] = useState<boolean>(false);
+
   // State for College filter
   const [selectedCollege, setSelectedCollege] = useState<string>("all");
   const [collegeSearchTerm, setCollegeSearchTerm] = useState<string>("");
@@ -61,6 +64,18 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
   // Search filter for table
   const [tableSearchTerm, setTableSearchTerm] = useState<string>("");
+
+  const handleRefreshClick = async () => {
+    if (!onRefreshData || isLocalRefreshing) return;
+    setIsLocalRefreshing(true);
+    try {
+      await onRefreshData();
+    } catch (e) {
+      console.error("TCV refresh error:", e);
+    } finally {
+      setIsLocalRefreshing(false);
+    }
+  };
 
   // Refs for synchronized horizontal scrolling
   const topScrollRef = useRef<HTMLDivElement>(null);
@@ -432,13 +447,13 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
             {onRefreshData && (
               <button
                 type="button"
-                className={`outstanding-refresh-btn ${isSyncing ? "spinning" : ""}`}
-                onClick={() => onRefreshData()}
-                disabled={isSyncing}
+                className={`outstanding-refresh-btn ${isLocalRefreshing ? "spinning" : ""}`}
+                onClick={handleRefreshClick}
+                disabled={isLocalRefreshing}
                 title="Sync latest data from MOUs 26-27 sheet"
               >
                 <RefreshCw size={15} />
-                <span>{isSyncing ? "Syncing..." : "Sync Sheet"}</span>
+                <span>{isLocalRefreshing ? "Syncing..." : "Sync Sheet"}</span>
               </button>
             )}
 
