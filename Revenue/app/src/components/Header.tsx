@@ -2,7 +2,7 @@ import React from "react";
 import { ArrowLeft, Building2, FileSpreadsheet } from "lucide-react";
 
 interface HeaderProps {
-  currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding";
+  currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv";
   onBackToDashboard: () => void;
   selectedCollegeName?: string;
   onResetSampleData?: () => void;
@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {selectedCollegeName && currentView !== "dashboard" && currentView !== "outstanding" && (
+          {selectedCollegeName && currentView !== "dashboard" && currentView !== "outstanding" && currentView !== "tcv" && (
             <div className="active-college-pill" title={`Currently working on: ${selectedCollegeName}`}>
               <span className="live-status-dot"></span>
               <span style={{ color: "var(--text-muted)", fontWeight: 500, fontSize: "12px" }}>College:</span>

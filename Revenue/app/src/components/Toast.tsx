@@ -1,7 +1,7 @@
 import React from "react";
-import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
+import { CheckCircle2, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 
-export type ToastType = "success" | "error" | "info";
+export type ToastType = "success" | "error" | "info" | "warning";
 
 interface ToastProps {
   message: string;
@@ -21,6 +21,7 @@ export const Toast: React.FC<ToastProps> = ({
       <div className="toast-icon">
         {type === "success" && <CheckCircle2 size={18} />}
         {type === "error" && <AlertCircle size={18} />}
+        {type === "warning" && <AlertTriangle size={18} />}
         {type === "info" && <Info size={18} />}
       </div>
       <div className="toast-message">{message}</div>
