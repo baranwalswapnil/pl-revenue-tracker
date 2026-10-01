@@ -277,20 +277,20 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
   // Determine active date bounds from all timelines to build day-by-day grid
   const dateBounds = useMemo(() => {
-    let minYear = 2026;
-    let minMonth = 7; // Aug (0-indexed)
+    let minYear = 2024;
+    let minMonth = 0; // Jan (0-indexed)
     let maxYear = 2026;
-    let maxMonth = 9; // Oct (0-indexed)
+    let maxMonth = 11; // Dec (0-indexed)
 
     const validDates: Date[] = [];
     allTimelines.forEach((t) => {
       if (t.start_date) {
         const [y, m] = t.start_date.split("-").map(Number);
-        if (!isNaN(y) && !isNaN(m)) validDates.push(new Date(y, m - 1, 1));
+        if (!isNaN(y) && !isNaN(m) && y >= 2020 && y <= 2035) validDates.push(new Date(y, m - 1, 1));
       }
       if (t.end_date) {
         const [y, m] = t.end_date.split("-").map(Number);
-        if (!isNaN(y) && !isNaN(m)) validDates.push(new Date(y, m - 1, 1));
+        if (!isNaN(y) && !isNaN(m) && y >= 2020 && y <= 2035) validDates.push(new Date(y, m - 1, 1));
       }
     });
 
@@ -300,48 +300,30 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       const last = validDates[validDates.length - 1];
 
       minYear = first.getFullYear();
-      minMonth = Math.max(0, first.getMonth() - 1); // 1 month buffer before
+      minMonth = 0;
       maxYear = last.getFullYear();
-      maxMonth = Math.min(11, last.getMonth() + 1); // 1 month buffer after
+      maxMonth = 11;
     }
 
     return { minYear, minMonth, maxYear, maxMonth };
   }, [allTimelines]);
 
-  // Generate Day-by-Day Grid Data based on Selected Year & Month
+  // Generate Continuous Day-by-Day Grid Data:
+  // ALWAYS generate the full 12-month calendar for selectedYear (or all years for 'all')
+  // so the grid is never cropped to a single month, allowing full horizontal scrolling across all dates!
   const gridData = useMemo(() => {
     if (selectedYear === "all") {
-      if (selectedMonth === "all") {
-        return generateDayGridData(
-          dateBounds.minYear,
-          dateBounds.minMonth,
-          dateBounds.maxYear,
-          dateBounds.maxMonth
-        );
-      } else {
-        return generateDayGridData(
-          dateBounds.minYear,
-          selectedMonth - 1,
-          dateBounds.maxYear,
-          selectedMonth - 1
-        );
-      }
-    }
-
-    // Specific Year
-    if (selectedMonth === "all") {
-      // Full 12 months for this year
-      return generateDayGridData(selectedYear, 0, selectedYear, 11);
-    } else {
-      // Single month for this year
       return generateDayGridData(
-        selectedYear,
-        selectedMonth - 1,
-        selectedYear,
-        selectedMonth - 1
+        dateBounds.minYear,
+        dateBounds.minMonth,
+        dateBounds.maxYear,
+        dateBounds.maxMonth
       );
     }
-  }, [selectedYear, selectedMonth, dateBounds]);
+
+    // Full 12 calendar months (Jan to Dec) for this year
+    return generateDayGridData(selectedYear, 0, selectedYear, 11);
+  }, [selectedYear, dateBounds]);
 
   // Helper to find starting and ending day column index for a college item in current grid
   const getCollegeDayRange = (startDateStr?: string, endDateStr?: string) => {
@@ -399,6 +381,68 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       actualEndDate: normEnd,
     };
   };
+
+  // Smooth horizontal scroll helper
+  const handleScrollHorizontal = (offsetPx: number) => {
+    if (!gridScrollRef.current) return;
+    gridScrollRef.current.scrollBy({
+      left: offsetPx,
+      behavior: "smooth",
+    });
+  };
+
+  // Jump scroll directly to any month in the current grid
+  const handleJumpToMonth = (monthNum: number) => {
+    if (!gridScrollRef.current || gridData.days.length === 0) return;
+    
+    const targetMonthKey = selectedYear !== "all"
+      ? `${selectedYear}-${String(monthNum).padStart(2, "0")}`
+      : `-${String(monthNum).padStart(2, "0")}`;
+
+    const targetIdx = gridData.days.findIndex((d) =>
+      selectedYear !== "all"
+        ? d.monthKey === targetMonthKey
+        : d.dateStr.includes(targetMonthKey)
+    );
+
+    if (targetIdx !== -1) {
+      const scrollPos = Math.max(0, targetIdx * dayCellWidth - 70);
+      gridScrollRef.current.scrollTo({
+        left: scrollPos,
+        behavior: "smooth",
+      });
+    }
+  };
+
+  // Auto-scroll grid to selected month whenever selectedMonth or selectedYear changes
+  useEffect(() => {
+    if (!gridScrollRef.current || gridData.days.length === 0) return;
+
+    if (selectedMonth === "all") {
+      if (gridData.todayColIndex !== null) {
+        const scrollPos = Math.max(0, gridData.todayColIndex * dayCellWidth - 220);
+        gridScrollRef.current.scrollTo({ left: scrollPos, behavior: "smooth" });
+      } else {
+        gridScrollRef.current.scrollTo({ left: 0, behavior: "smooth" });
+      }
+    } else {
+      const targetMonthKey = selectedYear !== "all"
+        ? `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`
+        : `-${String(selectedMonth).padStart(2, "0")}`;
+
+      const targetIdx = gridData.days.findIndex((d) =>
+        selectedYear !== "all"
+          ? d.monthKey === targetMonthKey
+          : d.dateStr.includes(targetMonthKey)
+      );
+
+      if (targetIdx !== -1) {
+        // Scroll with a 70px offset so the preceding month's end is visible before the 1st
+        const scrollPos = Math.max(0, targetIdx * dayCellWidth - 70);
+        gridScrollRef.current.scrollTo({ left: scrollPos, behavior: "smooth" });
+      }
+    }
+  }, [selectedMonth, selectedYear, dayCellWidth, gridData]);
 
   // Scroll to Today Column in Grid
   const handleJumpToToday = () => {
@@ -997,9 +1041,38 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
                   }}
                 >
-                  {/* 1. TOP HEADER BANNER: "Project Timeline" */}
+                  {/* 1. TOP HEADER BANNER: "Project Timeline" with Navigation Controls */}
                   <div className="spreadsheet-title-banner">
-                    <h2>Project Timeline</h2>
+                    <div className="title-banner-left">
+                      <button
+                        type="button"
+                        className="grid-nav-scroll-btn"
+                        onClick={() => handleScrollHorizontal(-28 * dayCellWidth)}
+                        title="Scroll Left (Previous Days/Month)"
+                      >
+                        <ChevronLeft size={16} />
+                        <span>Scroll Left</span>
+                      </button>
+                    </div>
+
+                    <div className="title-banner-center">
+                      <h2>Project Timeline</h2>
+                      <span className="scroll-hint-text">
+                        ↔ Scroll horizontally to view all dates & exact starting points
+                      </span>
+                    </div>
+
+                    <div className="title-banner-right">
+                      <button
+                        type="button"
+                        className="grid-nav-scroll-btn"
+                        onClick={() => handleScrollHorizontal(28 * dayCellWidth)}
+                        title="Scroll Right (Next Days/Month)"
+                      >
+                        <span>Scroll Right</span>
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
                   </div>
 
                   {/* 2. EXCEL COLUMN LETTERS ROW (A, B, C ... Z, AA, AB ...) */}
@@ -1016,16 +1089,18 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     ))}
                   </div>
 
-                  {/* 3. MONTH SPANNING HEADERS ROW (August 2026, September 2026...) */}
+                  {/* 3. MONTH SPANNING HEADERS ROW (Clickable to jump directly to month) */}
                   <div className="spreadsheet-months-row">
                     <div className="row-number-header-cell month-stub" />
                     {gridData.months.map((m) => (
                       <div
                         key={m.monthKey}
-                        className="month-group-cell"
+                        className="month-group-cell clickable-month-header"
                         style={{
                           width: `${m.daysCount * dayCellWidth}px`,
                         }}
+                        onClick={() => handleJumpToMonth(m.monthIndex + 1)}
+                        title={`Click to jump to ${m.monthLabel}`}
                       >
                         {m.monthLabel}
                       </div>
