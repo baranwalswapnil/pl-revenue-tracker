@@ -16,7 +16,7 @@ export interface CollegeTimelineRecord {
   updated_at?: string;
 }
 
-export type TimelineStatus = "Active" | "Upcoming" | "Completed" | "No Dates";
+export type TimelineStatus = "Active" | "Upcoming" | "Completed" | "Incomplete Data";
 
 export interface EnrichedTimelineItem extends CollegeTimelineRecord {
   status: TimelineStatus;
@@ -101,7 +101,9 @@ export function formatDisplayDate(dateStr?: string): string {
 }
 
 /**
- * Calculates timeline status, duration, progress % relative to reference date (today)
+ * Calculates timeline status, duration, progress % relative to reference date (today).
+ * If Training Start Date (Col L) or Training End Date (Col M) is not present, returns 'Incomplete Data'.
+ * No synthetic or guessed dates are predicted.
  */
 export function computeTimelineStatus(
   startDateStr?: string,
@@ -118,9 +120,10 @@ export function computeTimelineStatus(
   const normStart = normalizeDateStr(startDateStr);
   const normEnd = normalizeDateStr(endDateStr);
 
-  if (!normStart && !normEnd) {
+  // If Training Start Date or Training End Date is missing, show Incomplete Data (do NOT predict anything)
+  if (!normStart || !normEnd) {
     return {
-      status: "No Dates",
+      status: "Incomplete Data",
       durationDays: 0,
       progressPct: 0,
       daysRemaining: 0,
@@ -132,33 +135,12 @@ export function computeTimelineStatus(
   const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
   const todayTime = today.getTime();
 
-  let startD: Date | null = null;
-  let endD: Date | null = null;
+  const [sy, sm, sd] = normStart.split("-").map(Number);
+  const [ey, em, ed] = normEnd.split("-").map(Number);
 
-  if (normStart) {
-    const [y, m, d] = normStart.split("-").map(Number);
-    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-      startD = new Date(y, m - 1, d);
-    }
-  }
-
-  if (normEnd) {
-    const [y, m, d] = normEnd.split("-").map(Number);
-    if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-      endD = new Date(y, m - 1, d);
-    }
-  }
-
-  // If only start date is present, default end date to start date + 30 days
-  if (startD && !endD) {
-    endD = new Date(startD.getTime() + 30 * 24 * 60 * 60 * 1000);
-  } else if (!startD && endD) {
-    startD = new Date(endD.getTime() - 30 * 24 * 60 * 60 * 1000);
-  }
-
-  if (!startD || !endD) {
+  if (isNaN(sy) || isNaN(sm) || isNaN(sd) || isNaN(ey) || isNaN(em) || isNaN(ed)) {
     return {
-      status: "No Dates",
+      status: "Incomplete Data",
       durationDays: 0,
       progressPct: 0,
       daysRemaining: 0,
@@ -167,8 +149,22 @@ export function computeTimelineStatus(
     };
   }
 
+  const startD = new Date(sy, sm - 1, sd);
+  const endD = new Date(ey, em - 1, ed);
   const startTime = startD.getTime();
   const endTime = endD.getTime();
+
+  if (isNaN(startTime) || isNaN(endTime)) {
+    return {
+      status: "Incomplete Data",
+      durationDays: 0,
+      progressPct: 0,
+      daysRemaining: 0,
+      daysElapsed: 0,
+      isOngoingToday: false,
+    };
+  }
+
   const totalDurationMs = Math.max(1, endTime - startTime);
   const durationDays = Math.round(totalDurationMs / (1000 * 60 * 60 * 24)) + 1;
 
@@ -198,7 +194,7 @@ export function computeTimelineStatus(
     // Active / Ongoing
     const elapsedMs = todayTime - startTime;
     const daysElapsed = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
-    const daysRemaining = Math.ceil((endTime - todayTime) / (1000 * 60 * 60 * 24));
+    const daysRemaining = Math.max(0, Math.ceil((endTime - todayTime) / (1000 * 60 * 60 * 24)));
     const progressPct = Math.min(100, Math.max(5, Math.round((elapsedMs / totalDurationMs) * 100)));
 
     return {
@@ -253,23 +249,9 @@ export function getAllEnrichedTimelines(
     const collegeName = (sheetItem.college_name || "").trim();
     if (!projCode && !collegeName) return;
 
-    let s = normalizeDateStr(sheetItem.training_start_date);
-    let e = normalizeDateStr(sheetItem.training_end_date);
-
-    // If only start date is provided, default end date to start date + 30 days (same timeframe)
-    if (s && !e) {
-      const [yr, mo, dy] = s.split("-").map(Number);
-      if (!isNaN(yr) && !isNaN(mo) && !isNaN(dy)) {
-        const endD = new Date(yr, mo - 1, dy + 30);
-        e = normalizeDateStr(endD.toISOString().slice(0, 10));
-      }
-    } else if (!s && e) {
-      const [yr, mo, dy] = e.split("-").map(Number);
-      if (!isNaN(yr) && !isNaN(mo) && !isNaN(dy)) {
-        const startD = new Date(yr, mo - 1, dy - 30);
-        s = normalizeDateStr(startD.toISOString().slice(0, 10));
-      }
-    }
+    // Do NOT predict anything: strictly preserve actual dates from Sheet1
+    const s = normalizeDateStr(sheetItem.training_start_date);
+    const e = normalizeDateStr(sheetItem.training_end_date);
 
     const key = (projCode || collegeName).toLowerCase();
     map.set(key, {
@@ -392,11 +374,13 @@ export function getAllEnrichedTimelines(
     };
   });
 
-  // Sort list: Active first, then Upcoming (soonest start), then Completed, then No Dates
+  // Sort list: Active first, then Upcoming (soonest start), then Completed, then Incomplete Data
   return enrichedList.sort((a, b) => {
-    const statusWeight = { Active: 0, Upcoming: 1, Completed: 2, "No Dates": 3 };
-    if (statusWeight[a.status] !== statusWeight[b.status]) {
-      return statusWeight[a.status] - statusWeight[b.status];
+    const statusWeight: Record<string, number> = { Active: 0, Upcoming: 1, Completed: 2, "Incomplete Data": 3, "No Dates": 3 };
+    const weightA = statusWeight[a.status] ?? 3;
+    const weightB = statusWeight[b.status] ?? 3;
+    if (weightA !== weightB) {
+      return weightA - weightB;
     }
     if (a.start_date && b.start_date) {
       return a.start_date.localeCompare(b.start_date);

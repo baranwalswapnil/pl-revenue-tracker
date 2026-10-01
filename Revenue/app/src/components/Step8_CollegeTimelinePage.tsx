@@ -173,27 +173,13 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     year: number | "all",
     month: number | "all"
   ) => {
-    let s = normalizeDateStr(item.start_date);
-    let e = normalizeDateStr(item.end_date);
+    const s = normalizeDateStr(item.start_date);
+    const e = normalizeDateStr(item.end_date);
 
-    if (!s && !e) return false;
-
-    if (s && !e) {
-      const [yr, mo, dy] = s.split("-").map(Number);
-      if (!isNaN(yr) && !isNaN(mo) && !isNaN(dy)) {
-        const endD = new Date(yr, mo - 1, dy + 30);
-        e = normalizeDateStr(endD.toISOString().slice(0, 10));
-      } else {
-        e = s;
-      }
-    } else if (!s && e) {
-      const [yr, mo, dy] = e.split("-").map(Number);
-      if (!isNaN(yr) && !isNaN(mo) && !isNaN(dy)) {
-        const startD = new Date(yr, mo - 1, dy - 30);
-        s = normalizeDateStr(startD.toISOString().slice(0, 10));
-      } else {
-        s = e;
-      }
+    // If Training Start Date or Training End Date is missing, do NOT predict anything
+    if (!s || !e) {
+      // Incomplete data items only match when viewing "All Years" and "All Months"
+      return year === "all" && month === "all";
     }
 
     if (year === "all" && month === "all") return true;
@@ -283,9 +269,10 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     const active = allTimelines.filter((t) => t.status === "Active").length;
     const upcoming = allTimelines.filter((t) => t.status === "Upcoming").length;
     const completed = allTimelines.filter((t) => t.status === "Completed").length;
+    const incomplete = allTimelines.filter((t) => t.status === "Incomplete Data").length;
     const withDates = allTimelines.filter((t) => t.start_date && t.end_date).length;
 
-    return { total, active, upcoming, completed, withDates };
+    return { total, active, upcoming, completed, incomplete, withDates };
   }, [allTimelines]);
 
   // Determine active date bounds from all timelines to build day-by-day grid
@@ -357,32 +344,14 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   }, [selectedYear, selectedMonth, dateBounds]);
 
   // Helper to find starting and ending day column index for a college item in current grid
-  const getCollegeDayRange = (startDateStr: string, endDateStr: string) => {
-    if (!startDateStr && !endDateStr) return null;
+  const getCollegeDayRange = (startDateStr?: string, endDateStr?: string) => {
+    if (!startDateStr || !endDateStr) return null;
     if (gridData.days.length === 0) return null;
 
-    let normStart = normalizeDateStr(startDateStr);
-    let normEnd = normalizeDateStr(endDateStr);
+    const normStart = normalizeDateStr(startDateStr);
+    const normEnd = normalizeDateStr(endDateStr);
 
-    if (!normStart && !normEnd) return null;
-
-    if (normStart && !normEnd) {
-      const [y, m, d] = normStart.split("-").map(Number);
-      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-        const endD = new Date(y, m - 1, d + 30);
-        normEnd = normalizeDateStr(endD.toISOString().slice(0, 10));
-      } else {
-        normEnd = normStart;
-      }
-    } else if (!normStart && normEnd) {
-      const [y, m, d] = normEnd.split("-").map(Number);
-      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
-        const startD = new Date(y, m - 1, d - 30);
-        normStart = normalizeDateStr(startD.toISOString().slice(0, 10));
-      } else {
-        normStart = normEnd;
-      }
-    }
+    if (!normStart || !normEnd) return null;
 
     const firstGridDate = gridData.days[0].dateStr;
     const lastGridDate = gridData.days[gridData.days.length - 1].dateStr;
@@ -765,9 +734,15 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                   <span className="kpi-unit">Records</span>
                 </div>
                 <div className="kpi-footer-row">
-                  <span className="kpi-tag sheet-tag">
-                    📊 {stats.withDates} with Start & End Dates
-                  </span>
+                  {stats.incomplete > 0 ? (
+                    <span className="kpi-tag incomplete-tag">
+                      ⚠️ {stats.incomplete} Incomplete Data · {stats.withDates} Complete
+                    </span>
+                  ) : (
+                    <span className="kpi-tag sheet-tag">
+                      📊 {stats.withDates} with Start & End Dates
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -825,6 +800,15 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               >
                 ⚪ Completed ({stats.completed})
               </button>
+              {stats.incomplete > 0 && (
+                <button
+                  type="button"
+                  className={`status-pill incomplete-pill ${statusFilter === "Incomplete Data" ? "active" : ""}`}
+                  onClick={() => setStatusFilter("Incomplete Data")}
+                >
+                  ⚠️ Incomplete ({stats.incomplete})
+                </button>
+              )}
             </div>
 
             {/* Jump to Today Button */}
@@ -1083,11 +1067,12 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         const theme = getTimelineBarTheme(item.college_name || item.project_code);
                         const isPinned = pinnedItem?.id === item.id;
                         const isHovered = hoveredItem?.item.id === item.id;
+                        const isIncomplete = item.status === "Incomplete Data" || !item.start_date || !item.end_date;
 
                         return (
                           <div
                             key={item.id || rowIdx}
-                            className={`spreadsheet-row ${isPinned ? "row-pinned" : ""}`}
+                            className={`spreadsheet-row ${isPinned ? "row-pinned" : ""} ${isIncomplete ? "row-incomplete" : ""}`}
                           >
                             {/* Left Row Number (1, 2, 3...) */}
                             <div className="row-index-cell">{rowIdx + 1}</div>
@@ -1114,7 +1099,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                               )}
 
                               {/* The Colored College Schedule Bar */}
-                              {dayRange && (
+                              {dayRange ? (
                                 <div
                                   className={`timeline-block-bar ${isPinned ? "bar-pinned" : ""}`}
                                   style={{
@@ -1168,7 +1153,36 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                                     </div>
                                   </div>
                                 </div>
-                              )}
+                              ) : isIncomplete ? (
+                                <div
+                                  className="incomplete-row-placeholder"
+                                  onClick={() => setPinnedItem(pinnedItem?.id === item.id ? null : item)}
+                                >
+                                  <span className="incomplete-badge-tag">
+                                    ⚠️ Incomplete Data
+                                  </span>
+                                  <span className="incomplete-college-title">
+                                    {item.college_name || item.project_code}
+                                  </span>
+                                  <span className="incomplete-missing-desc">
+                                    {!item.start_date && !item.end_date
+                                      ? "(Dates not set in Sheet1)"
+                                      : !item.start_date
+                                      ? "(Start Date missing in Sheet1)"
+                                      : "(End Date missing in Sheet1)"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="incomplete-set-dates-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditItem(item);
+                                    }}
+                                  >
+                                    + Set Dates
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
                           </div>
                         );
@@ -1227,22 +1241,24 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
                         <div className="popover-field-row">
                           <span className="popover-label">START DATE:</span>
-                          <span className="popover-value text-green font-bold">
-                            {formatTimelinePopupDate(currentPopupItem.start_date)}
+                          <span className={`popover-value font-bold ${currentPopupItem.start_date ? "text-green" : "text-muted italic"}`}>
+                            {currentPopupItem.start_date ? formatTimelinePopupDate(currentPopupItem.start_date) : "Not set (Incomplete)"}
                           </span>
                         </div>
 
                         <div className="popover-field-row">
                           <span className="popover-label">END DATE:</span>
-                          <span className="popover-value text-blue font-bold">
-                            {formatTimelinePopupDate(currentPopupItem.end_date)}
+                          <span className={`popover-value font-bold ${currentPopupItem.end_date ? "text-blue" : "text-muted italic"}`}>
+                            {currentPopupItem.end_date ? formatTimelinePopupDate(currentPopupItem.end_date) : "Not set (Incomplete)"}
                           </span>
                         </div>
 
                         <div className="popover-field-row">
                           <span className="popover-label">STATUS:</span>
-                          <span className={`popover-status-badge status-${currentPopupItem.status.toLowerCase()}`}>
-                            {currentPopupItem.status} ({currentPopupItem.durationDays} Days)
+                          <span className={`popover-status-badge status-${currentPopupItem.status.toLowerCase().replace(/\s+/g, "-")}`}>
+                            {currentPopupItem.status === "Incomplete Data"
+                              ? "⚠️ Incomplete Data (Missing Dates)"
+                              : `${currentPopupItem.status} (${currentPopupItem.durationDays} Days)`}
                           </span>
                         </div>
                       </div>
@@ -1319,6 +1335,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                             {item.status === "Active" && "🟢 "}
                             {item.status === "Upcoming" && "🔵 "}
                             {item.status === "Completed" && "⚪ "}
+                            {item.status === "Incomplete Data" && "⚠️ "}
                             {item.status}
                           </span>
                         </td>
