@@ -1,5 +1,6 @@
 import React from "react";
-import { ArrowLeft, Building2, FileSpreadsheet, CalendarClock } from "lucide-react";
+import { ArrowLeft, Building2, FileSpreadsheet } from "lucide-react";
+import tvaLogo from "../assets/tva_timeline_logo.jpg";
 
 interface HeaderProps {
   currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv" | "college-timeline";
@@ -44,17 +45,21 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Small circle button beside Company Finance Estimation & Tracking */}
+          {/* Time Variance Authority TVA Medallion button to go to Active College Timeline & Schedule */}
           {onOpenCollegeTimeline && (
             <button
               type="button"
               className={`topbar-timeline-circle-btn ${currentView === "college-timeline" ? "active" : ""}`}
               onClick={onOpenCollegeTimeline}
-              title="Active College Timeline & Schedule (Add / View)"
-              aria-label="Active College Timeline"
+              title="Active College Timeline & Schedule (Time Variance Authority)"
+              aria-label="Active College Timeline & Schedule"
             >
               <span className="timeline-pulse-ring" />
-              <CalendarClock size={16} className="timeline-circle-icon" />
+              <img
+                src={tvaLogo}
+                alt="Active College Timeline & Schedule"
+                className="topbar-timeline-logo-img"
+              />
               {activeTimelineCount > 0 && (
                 <span className="timeline-circle-badge" title={`${activeTimelineCount} Active Colleges`}>
                   {activeTimelineCount}

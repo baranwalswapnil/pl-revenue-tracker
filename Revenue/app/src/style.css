@@ -5659,39 +5659,43 @@ a {
 }
 
 /* ==========================================================================
-   Header Circle Timeline Button (Beside "Company Finance Estimation & Tracking")
+   Header Circle Timeline Button (Time Variance Authority Black Medallion)
    ========================================================================== */
 .topbar-timeline-circle-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  border: 1.5px solid #86efac;
-  color: #15803d;
+  background: #000000;
+  border: 1.5px solid #d4af37;
   cursor: pointer;
   margin-left: 12px;
-  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 8px rgba(212, 175, 55, 0.2);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
+  padding: 0;
+}
+
+.topbar-timeline-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 .topbar-timeline-circle-btn:hover {
-  transform: translateY(-1px) scale(1.05);
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-  border-color: #4ade80;
-  color: #166534;
-  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);
+  transform: translateY(-1px) scale(1.08);
+  border-color: #fbbf24;
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.45), 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .topbar-timeline-circle-btn.active {
-  background: #16a34a;
-  border-color: #15803d;
-  color: #ffffff;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.35);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.45), 0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
 .timeline-pulse-ring {
@@ -5701,10 +5705,10 @@ a {
   right: -3px;
   bottom: -3px;
   border-radius: 50%;
-  border: 2px solid #22c55e;
-  animation: timelinePulse 2.2s infinite ease-in-out;
+  border: 2px solid #d4af37;
+  animation: timelinePulse 2.4s infinite ease-in-out;
   pointer-events: none;
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
 @keyframes timelinePulse {
@@ -5713,7 +5717,7 @@ a {
     opacity: 0.8;
   }
   50% {
-    transform: scale(1.15);
+    transform: scale(1.18);
     opacity: 0;
   }
   100% {
@@ -5734,6 +5738,8 @@ a {
   border-radius: 10px;
   border: 1.5px solid #ffffff;
   line-height: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  z-index: 5;
 }
 
 /* ==========================================================================
