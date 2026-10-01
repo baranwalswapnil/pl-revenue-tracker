@@ -5788,14 +5788,16 @@ a {
 /* ==========================================================================
    Active College Timeline Page Container & Hero
    ========================================================================== */
+.timeline-page-container,
 .college-timeline-page-container {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  max-width: 1440px;
+  max-width: 1540px;
   margin: 0 auto;
   width: 100%;
-  padding-bottom: 40px;
+  padding: 0 54px 40px 54px;
+  box-sizing: border-box;
 }
 
 .timeline-hero-header-card {
@@ -7143,55 +7145,112 @@ a {
   margin-top: 14px;
 }
 
-/* Floating Left and Right Slide Buttons - Scoped strictly to Timeline Graph */
-.timeline-side-slide-btn {
+/* Full-Height Left and Right Slide Rails (Scoped strictly to Timeline Graph) */
+.timeline-side-slide-rail {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 45;
+  top: 0;
+  bottom: 0;
   width: 44px;
-  height: 96px;
+  z-index: 45;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.timeline-side-slide-rail.slide-left-rail {
+  left: -48px;
+}
+
+.timeline-side-slide-rail.slide-right-rail {
+  right: -48px;
+}
+
+/* The vertical visual line/strip spanning the entire height of the graph */
+.timeline-side-slide-rail .timeline-slide-rail-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(30, 58, 138, 0.1) 0%, rgba(37, 99, 235, 0.18) 30%, rgba(124, 58, 237, 0.22) 50%, rgba(37, 99, 235, 0.18) 70%, rgba(30, 58, 138, 0.1) 100%);
+  border: 2px solid rgba(59, 130, 246, 0.35);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+  overflow: visible;
+}
+
+.timeline-side-slide-rail:hover .timeline-slide-rail-track {
+  background: linear-gradient(180deg, rgba(30, 58, 138, 0.2) 0%, rgba(37, 99, 235, 0.35) 30%, rgba(124, 58, 237, 0.4) 50%, rgba(37, 99, 235, 0.35) 70%, rgba(30, 58, 138, 0.2) 100%);
+  border-color: #2563eb;
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.4), 0 4px 16px rgba(15, 23, 42, 0.12);
+}
+
+.timeline-slide-rail-top-arrow,
+.timeline-slide-rail-bottom-arrow {
+  color: #2563eb;
+  opacity: 0.65;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.timeline-side-slide-rail:hover .timeline-slide-rail-top-arrow,
+.timeline-side-slide-rail:hover .timeline-slide-rail-bottom-arrow {
+  color: #1d4ed8;
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+/* Sticky floating button handle that stays centered in view at all times while scrolling the graph rows */
+.timeline-slide-rail-handle {
+  position: sticky;
+  top: calc(50vh - 55px);
+  width: 44px;
+  height: 108px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #6366f1 100%);
+  color: #ffffff;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 8px 24px rgba(30, 58, 138, 0.5), 0 0 14px rgba(37, 99, 235, 0.45);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-  color: #ffffff;
-  border: 2.5px solid #ffffff;
-  border-radius: 22px;
-  box-shadow: 0 8px 24px rgba(30, 58, 138, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
-  cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  user-select: none;
-  touch-action: manipulation;
+  z-index: 50;
+  flex-shrink: 0;
 }
 
-.timeline-side-slide-btn.slide-left-btn {
-  left: -20px;
+.timeline-side-slide-rail:hover .timeline-slide-rail-handle {
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 60%, #7c3aed 100%);
+  transform: scale(1.08);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.75), 0 0 0 2px #ffffff;
 }
 
-.timeline-side-slide-btn.slide-right-btn {
-  right: -20px;
+.timeline-side-slide-rail:active .timeline-slide-rail-handle {
+  transform: scale(0.94);
+  box-shadow: 0 4px 12px rgba(30, 58, 138, 0.5);
 }
 
-.timeline-side-slide-btn:hover {
-  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
-  transform: translateY(-50%) scale(1.1);
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.7), 0 0 0 2px #ffffff;
-}
-
-.timeline-side-slide-btn:active {
-  transform: translateY(-50%) scale(0.95);
-  box-shadow: 0 4px 14px rgba(30, 58, 138, 0.5);
-}
-
-.timeline-side-slide-btn .slide-btn-label {
+.timeline-slide-rail-handle .slide-rail-label {
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
-  color: #e0f2fe;
+  color: #f0f9ff;
+  line-height: 1;
 }
 
 .spreadsheet-scroll-box {

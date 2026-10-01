@@ -1379,39 +1379,61 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           {/* SPREADSHEET PROJECT TIMELINE GRID (MATCHING REFERENCE IMAGE) */}
           {viewMode === "grid" && (
             <div className="spreadsheet-timeline-wrapper">
-              {/* Floating Left Slide Button (Attached directly to graph) */}
-              <button
-                type="button"
-                className="timeline-side-slide-btn slide-left-btn"
+              {/* Full-Height Left Slide Rail (Active along entire vertical height of graph) */}
+              <div
+                className="timeline-side-slide-rail slide-left-rail"
                 onMouseDown={() => startContinuousScroll("left")}
                 onMouseUp={stopContinuousScroll}
                 onMouseLeave={stopContinuousScroll}
                 onTouchStart={() => startContinuousScroll("left")}
                 onTouchEnd={stopContinuousScroll}
                 onClick={() => handleScrollHorizontal(-24 * dayCellWidth)}
-                title="Slide Towards Left (Click or Hold to Glide Earlier)"
+                title="Slide Towards Left (Click anywhere along this vertical bar or hold to glide earlier)"
                 aria-label="Slide Left"
+                role="button"
+                tabIndex={0}
               >
-                <ChevronLeft size={24} strokeWidth={2.5} />
-                <span className="slide-btn-label">LEFT</span>
-              </button>
+                <div className="timeline-slide-rail-track">
+                  <div className="timeline-slide-rail-top-arrow">
+                    <ChevronLeft size={16} />
+                  </div>
+                  <div className="timeline-slide-rail-handle">
+                    <ChevronLeft size={22} strokeWidth={2.8} />
+                    <span className="slide-rail-label">LEFT</span>
+                  </div>
+                  <div className="timeline-slide-rail-bottom-arrow">
+                    <ChevronLeft size={16} />
+                  </div>
+                </div>
+              </div>
 
-              {/* Floating Right Slide Button (Attached directly to graph) */}
-              <button
-                type="button"
-                className="timeline-side-slide-btn slide-right-btn"
+              {/* Full-Height Right Slide Rail (Active along entire vertical height of graph) */}
+              <div
+                className="timeline-side-slide-rail slide-right-rail"
                 onMouseDown={() => startContinuousScroll("right")}
                 onMouseUp={stopContinuousScroll}
                 onMouseLeave={stopContinuousScroll}
                 onTouchStart={() => startContinuousScroll("right")}
                 onTouchEnd={stopContinuousScroll}
                 onClick={() => handleScrollHorizontal(24 * dayCellWidth)}
-                title="Slide Towards Right (Click or Hold to Glide Later)"
+                title="Slide Towards Right (Click anywhere along this vertical bar or hold to glide later)"
                 aria-label="Slide Right"
+                role="button"
+                tabIndex={0}
               >
-                <ChevronRight size={24} strokeWidth={2.5} />
-                <span className="slide-btn-label">RIGHT</span>
-              </button>
+                <div className="timeline-slide-rail-track">
+                  <div className="timeline-slide-rail-top-arrow">
+                    <ChevronRight size={16} />
+                  </div>
+                  <div className="timeline-slide-rail-handle">
+                    <ChevronRight size={22} strokeWidth={2.8} />
+                    <span className="slide-rail-label">RIGHT</span>
+                  </div>
+                  <div className="timeline-slide-rail-bottom-arrow">
+                    <ChevronRight size={16} />
+                  </div>
+                </div>
+              </div>
 
               <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
                   <div
