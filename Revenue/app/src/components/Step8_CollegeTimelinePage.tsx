@@ -88,17 +88,13 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   } | null>(null);
   const [pinnedItem, setPinnedItem] = useState<EnrichedTimelineItem | null>(null);
 
-  // Add / Edit Form State
+  // Add / Edit Form State (Core Fields: Project Code, College Name, Start Date, End Date)
   const [formData, setFormData] = useState({
     id: "",
     project_code: "",
     college_name: "",
     start_date: "",
     end_date: "",
-    academic_year: "4th Year",
-    student_count: "",
-    course_stream: "",
-    notes: "",
   });
 
   const [formSuccessMsg, setFormSuccessMsg] = useState<string | null>(null);
@@ -307,7 +303,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     name: string;
     code: string;
     academicYear?: string;
-    students?: number;
     startDate?: string;
     endDate?: string;
   }) => {
@@ -315,8 +310,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       ...prev,
       college_name: item.name,
       project_code: item.code,
-      academic_year: item.academicYear || prev.academic_year,
-      student_count: item.students ? String(item.students) : prev.student_count,
       start_date: item.startDate || prev.start_date,
       end_date: item.endDate || prev.end_date,
     }));
@@ -360,10 +353,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       college_name: collegeName,
       start_date: startDate,
       end_date: endDate,
-      academic_year: formData.academic_year,
-      student_count: Number(formData.student_count) || 0,
-      course_stream: formData.course_stream,
-      notes: formData.notes,
     });
 
     if (onSaveCollegeTimeline) {
@@ -393,10 +382,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         college_name: "",
         start_date: "",
         end_date: "",
-        academic_year: "4th Year",
-        student_count: "",
-        course_stream: "",
-        notes: "",
       });
     }
   };
@@ -409,10 +394,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       college_name: item.college_name,
       start_date: normalizeDateStr(item.start_date),
       end_date: normalizeDateStr(item.end_date),
-      academic_year: item.academic_year || "4th Year",
-      student_count: item.student_count ? String(item.student_count) : "",
-      course_stream: item.course_stream || "",
-      notes: item.notes || "",
     });
     setIsEditingExisting(true);
     setActiveTab("add");
@@ -1173,10 +1154,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       college_name: "",
                       start_date: "",
                       end_date: "",
-                      academic_year: "4th Year",
-                      student_count: "",
-                      course_stream: "",
-                      notes: "",
                     });
                   }}
                 >
@@ -1215,18 +1192,18 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               </div>
             )}
 
-            {/* Autocomplete Quick-Select from Sheet1 */}
+            {/* Autocomplete Quick-Select */}
             {!isEditingExisting && sheet1CollegeOptions.length > 0 && (
               <div className="quick-autocomplete-section" ref={collegePickerRef}>
                 <label className="input-label">
                   <Sparkles size={14} className="text-accent" />
-                  <span>Quick Autocomplete from Sheet1 (Col B & Col C):</span>
+                  <span>Quick Autocomplete College:</span>
                 </label>
                 <div className="autocomplete-input-wrap">
                   <Search size={16} className="autocomplete-icon" />
                   <input
                     type="text"
-                    placeholder="Search from existing Sheet1 colleges to pre-fill..."
+                    placeholder="Search from existing colleges to pre-fill..."
                     value={collegeSearchPicker}
                     onChange={(e) => {
                       setCollegeSearchPicker(e.target.value);
@@ -1290,7 +1267,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     onChange={(e) => setFormData({ ...formData, project_code: e.target.value })}
                     className="form-text-input font-mono"
                   />
-                  <span className="input-helper">Matches Column B in Sheet1</span>
                 </div>
 
                 <div className="form-group">
@@ -1306,7 +1282,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     onChange={(e) => setFormData({ ...formData, college_name: e.target.value })}
                     className="form-text-input"
                   />
-                  <span className="input-helper">Matches Column C in Sheet1</span>
                 </div>
               </div>
 
@@ -1326,7 +1301,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     className="form-text-input date-input"
                     required
                   />
-                  <span className="input-helper">Matches Column L in Sheet1</span>
                 </div>
 
                 <div className="form-group">
@@ -1341,7 +1315,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                     className="form-text-input date-input"
                   />
-                  <span className="input-helper">Matches Column M in Sheet1</span>
                 </div>
               </div>
 
@@ -1380,69 +1353,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                   </div>
                 </div>
               )}
-
-              {/* Row 3: Optional Stream, Academic Year, Notes */}
-              <div className="form-grid-3col">
-                <div className="form-group">
-                  <label htmlFor="course_stream" className="input-label">
-                    Course / Stream
-                  </label>
-                  <input
-                    id="course_stream"
-                    type="text"
-                    placeholder="e.g. B.Tech / MBA / SAP-FICO"
-                    value={formData.course_stream}
-                    onChange={(e) => setFormData({ ...formData, course_stream: e.target.value })}
-                    className="form-text-input"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="academic_year" className="input-label">
-                    Academic Year
-                  </label>
-                  <select
-                    id="academic_year"
-                    value={formData.academic_year}
-                    onChange={(e) => setFormData({ ...formData, academic_year: e.target.value })}
-                    className="form-text-input select-input"
-                  >
-                    <option value="1st Year">1st Year</option>
-                    <option value="2nd Year">2nd Year</option>
-                    <option value="3rd Year">3rd Year</option>
-                    <option value="4th Year">4th Year</option>
-                    <option value="All Years">All Years</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="student_count" className="input-label">
-                    Student Count
-                  </label>
-                  <input
-                    id="student_count"
-                    type="number"
-                    placeholder="e.g. 150"
-                    value={formData.student_count}
-                    onChange={(e) => setFormData({ ...formData, student_count: e.target.value })}
-                    className="form-text-input font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="notes" className="input-label">
-                  Additional Notes
-                </label>
-                <textarea
-                  id="notes"
-                  rows={2}
-                  placeholder="Optional notes or details..."
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="form-text-input textarea-input"
-                />
-              </div>
 
               {/* Action Buttons */}
               <div className="form-actions-row">
