@@ -1616,43 +1616,12 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         const isPinned = pinnedItem?.id === item.id;
                         const isHovered = hoveredItem?.item.id === item.id;
                         const isIncomplete = item.status === "Incomplete Data" || !item.start_date || !item.end_date;
-                        const showCategoryBanner =
-                          rowIdx === 0 ||
-                          filteredTimelines[rowIdx - 1].categoryOrder !== item.categoryOrder;
 
                         return (
-                          <React.Fragment key={item.id || rowIdx}>
-                            {/* CATEGORY SECTION DIVIDER BANNER */}
-                            {showCategoryBanner && (
-                              <div
-                                className={`spreadsheet-category-section-banner banner-${item.periodCategory}`}
-                                style={{
-                                  minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
-                                }}
-                              >
-                                <div className="category-banner-sticky-title">
-                                  <span className="banner-order-badge">
-                                    {item.categoryOrder === 1 && "1"}
-                                    {item.categoryOrder === 2 && "2"}
-                                    {item.categoryOrder === 3 && "3"}
-                                    {item.categoryOrder === 4 && "•"}
-                                  </span>
-                                  <span className="banner-title-text">
-                                    {item.categoryOrder === 1 && `COLLEGES STARTING IN ${currentPeriodInfo.label.toUpperCase()}`}
-                                    {item.categoryOrder === 2 && `COLLEGES ENDING IN ${currentPeriodInfo.label.toUpperCase()} (STARTED EARLIER)`}
-                                    {item.categoryOrder === 3 && `COLLEGES ONGOING ACROSS ${currentPeriodInfo.label.toUpperCase()} (STARTED BEFORE & ENDING AFTER)`}
-                                    {item.categoryOrder === 4 && "INCOMPLETE / MISSING SCHEDULES"}
-                                  </span>
-                                  <span className="banner-count-badge">
-                                    {categoryCounts[item.periodCategory]} {categoryCounts[item.periodCategory] === 1 ? "College" : "Colleges"}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-
-                            <div
-                              className={`spreadsheet-row ${isPinned ? "row-pinned" : ""} ${isIncomplete ? "row-incomplete" : ""}`}
-                            >
+                          <div
+                            key={item.id || rowIdx}
+                            className={`spreadsheet-row ${isPinned ? "row-pinned" : ""} ${isIncomplete ? "row-incomplete" : ""}`}
+                          >
                               {/* Left Row Number (1, 2, 3...) */}
                               <div className="row-index-cell">{rowIdx + 1}</div>
 
@@ -1764,7 +1733,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                                 ) : null}
                               </div>
                             </div>
-                          </React.Fragment>
                         );
                       })
                     )}
