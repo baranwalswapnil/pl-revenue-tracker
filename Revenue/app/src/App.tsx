@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import type { Project, ProjectDraft } from "./lib/models";
 import { INITIAL_PROJECTS, createEmptyDraft, computeAttpDetails } from "./lib/mockData";
 import {
@@ -19,6 +19,7 @@ import {
   type GoogleSheetInvoiceTrackerItem,
   type GoogleSheetMOUItem,
 } from "./lib/googleSheetsService";
+import { getAllEnrichedTimelines } from "./lib/collegeTimelineService";
 import { Header } from "./components/Header";
 import { Step1_Dashboard } from "./components/Step1_Dashboard";
 import { Step2_NewEntry } from "./components/Step2_NewEntry";
@@ -28,6 +29,7 @@ import { Step5_UpdateModal } from "./components/Step5_UpdateModal";
 import { Step5_UpdatePage } from "./components/Step5_UpdatePage";
 import { Step6_OutstandingPage } from "./components/Step6_OutstandingPage";
 import { Step7_TCVPage } from "./components/Step7_TCVPage";
+import { Step8_CollegeTimelinePage } from "./components/Step8_CollegeTimelinePage";
 import { GoogleSheetSyncModal } from "./components/GoogleSheetSyncModal";
 import { Toast, type ToastType } from "./components/Toast";
 import { type OutstandingPeriod, getDefaultPeriod } from "./lib/outstandingService";
@@ -35,7 +37,15 @@ import "./style.css";
 
 const LOCAL_STORAGE_KEY = "company_finance_projects_v3";
 
-type AppView = "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv";
+type AppView =
+  | "dashboard"
+  | "new-entry"
+  | "training-phase"
+  | "health-report"
+  | "update-page"
+  | "outstanding"
+  | "tcv"
+  | "college-timeline";
 
 export function App() {
   // Load initial projects from localStorage (filtering out legacy sample mock items)
@@ -521,6 +531,60 @@ export function App() {
     }
   };
 
+  // Timeline count & handlers
+  const activeTimelineCount = useMemo(() => {
+    const list = getAllEnrichedTimelines(projects, googleSheetColleges);
+    return list.filter((item) => item.status === "Active").length;
+  }, [projects, googleSheetColleges]);
+
+  const handleOpenCollegeTimeline = () => {
+    setCurrentView("college-timeline");
+  };
+
+  const handleSaveCollegeTimeline = (record: {
+    project_code: string;
+    college_name: string;
+    start_date: string;
+    end_date: string;
+  }) => {
+    setProjects((prev) => {
+      const matchIdx = prev.findIndex(
+        (p) =>
+          (p.project_code && p.project_code.toLowerCase() === record.project_code.toLowerCase()) ||
+          (p.college_name && p.college_name.toLowerCase() === record.college_name.toLowerCase())
+      );
+      if (matchIdx !== -1) {
+        const updated = [...prev];
+        const p = updated[matchIdx];
+        const updatedPhases = p.phases && p.phases.length > 0 ? [...p.phases] : [{
+          phase: "Phase 1" as const,
+          startDate: record.start_date,
+          endDate: record.end_date,
+          hoursPlanned: p.hours_planned || 40,
+          hoursGiven: p.hours_given || 0,
+          paymentType: p.payment_type || "ATP",
+        }];
+        if (updatedPhases.length > 0) {
+          updatedPhases[0] = {
+            ...updatedPhases[0],
+            startDate: record.start_date,
+            endDate: record.end_date || updatedPhases[0].endDate,
+          };
+        }
+        updated[matchIdx] = {
+          ...p,
+          college_name: record.college_name || p.college_name,
+          project_code: record.project_code || p.project_code,
+          phases: updatedPhases,
+          updated_at: new Date().toISOString(),
+        };
+        return updated;
+      }
+      return prev;
+    });
+    showToast("College timeline schedule saved!", "success");
+  };
+
   return (
     <div className="finance-app-standalone-container">
       {/* Top Header Bar */}
@@ -528,7 +592,7 @@ export function App() {
         currentView={currentView}
         onBackToDashboard={() => navigateTo("dashboard")}
         selectedCollegeName={
-          currentView === "outstanding"
+          currentView === "outstanding" || currentView === "college-timeline"
             ? undefined
             : currentView === "new-entry"
             ? draft.collegeName || "New College"
@@ -537,6 +601,8 @@ export function App() {
             : activeProject?.college_name
         }
         onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
+        onOpenCollegeTimeline={handleOpenCollegeTimeline}
+        activeTimelineCount={activeTimelineCount}
         googleSheetCount={googleSheetColleges.length}
         isLiveSyncing={isLiveSyncing}
         lastLiveSyncTime={lastLiveSyncTime}
@@ -639,6 +705,17 @@ export function App() {
             mouItems={mouItems}
             onBackToDashboard={() => navigateTo("dashboard")}
             onRefreshData={handleRefreshTCVData}
+          />
+        )}
+
+        {/* Step 8: Active College Timeline Explorer & Schedule Screen */}
+        {currentView === "college-timeline" && (
+          <Step8_CollegeTimelinePage
+            projects={projects}
+            googleSheetColleges={googleSheetColleges}
+            onBackToDashboard={() => navigateTo("dashboard")}
+            onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
+            onSaveCollegeTimeline={handleSaveCollegeTimeline}
           />
         )}
       </main>

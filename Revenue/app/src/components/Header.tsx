@@ -1,12 +1,14 @@
 import React from "react";
-import { ArrowLeft, Building2, FileSpreadsheet } from "lucide-react";
+import { ArrowLeft, Building2, FileSpreadsheet, CalendarClock } from "lucide-react";
 
 interface HeaderProps {
-  currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv";
+  currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv" | "college-timeline";
   onBackToDashboard: () => void;
   selectedCollegeName?: string;
   onOpenGoogleSheetSync?: () => void;
+  onOpenCollegeTimeline?: () => void;
   googleSheetCount?: number;
+  activeTimelineCount?: number;
   isLiveSyncing?: boolean;
   lastLiveSyncTime?: string | null;
 }
@@ -16,7 +18,9 @@ export const Header: React.FC<HeaderProps> = ({
   onBackToDashboard,
   selectedCollegeName,
   onOpenGoogleSheetSync,
+  onOpenCollegeTimeline,
   googleSheetCount = 0,
+  activeTimelineCount = 0,
   isLiveSyncing = false,
   lastLiveSyncTime = null,
 }) => {
@@ -39,6 +43,25 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="brand-name-sub">Estimation & Tracking</span>
             </div>
           </div>
+
+          {/* Small circle button beside Company Finance Estimation & Tracking */}
+          {onOpenCollegeTimeline && (
+            <button
+              type="button"
+              className={`topbar-timeline-circle-btn ${currentView === "college-timeline" ? "active" : ""}`}
+              onClick={onOpenCollegeTimeline}
+              title="Active College Timeline & Schedule (Add / View)"
+              aria-label="Active College Timeline"
+            >
+              <span className="timeline-pulse-ring" />
+              <CalendarClock size={16} className="timeline-circle-icon" />
+              {activeTimelineCount > 0 && (
+                <span className="timeline-circle-badge" title={`${activeTimelineCount} Active Colleges`}>
+                  {activeTimelineCount}
+                </span>
+              )}
+            </button>
+          )}
 
           {currentView !== "dashboard" && (
             <button
