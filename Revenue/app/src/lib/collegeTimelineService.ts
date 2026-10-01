@@ -1,18 +1,18 @@
 import type { Project } from "./models";
-import type { GoogleSheetCollegeItem } from "./googleSheetsService";
+import type { GoogleSheetCollegeItem, GoogleSheetMOUItem } from "./googleSheetsService";
 
 export interface CollegeTimelineRecord {
   id: string;
-  project_code: string;       // Column B in Sheet1
-  college_name: string;       // Column C in Sheet1
-  start_date: string;         // Column L in Sheet1 (YYYY-MM-DD)
-  end_date: string;           // Column M in Sheet1 (YYYY-MM-DD)
+  project_code: string;       // Column B in Sheet1 or MOUs Project Code
+  college_name: string;       // Column C in Sheet1 or Total Engineering College
+  start_date: string;         // Training Start Date (YYYY-MM-DD)
+  end_date: string;           // Training End Date (YYYY-MM-DD)
   academic_year?: string;
   student_count?: number;
   course_stream?: string;
   domain_of_training?: string;
   notes?: string;
-  source?: "sheet1" | "manual" | "project";
+  source?: "sheet1" | "manual" | "project" | "mou_trainee";
   updated_at?: string;
 }
 
@@ -350,12 +350,13 @@ export function resolveDistinctCollegeDates(record: {
  */
 export function getAllEnrichedTimelines(
   projects: Project[] = [],
-  googleSheetColleges: GoogleSheetCollegeItem[] = []
+  googleSheetColleges: GoogleSheetCollegeItem[] = [],
+  mouItems: GoogleSheetMOUItem[] = []
 ): EnrichedTimelineItem[] {
   const savedTimelines = loadSavedTimelines();
   const map = new Map<string, CollegeTimelineRecord>();
 
-  // 1. Process Google Sheet 1 items (Col B: Project Code, Col C: College Name, Col L: Start Date, Col M: End Date)
+  // 1. Process Google Sheet 1 items
   googleSheetColleges.forEach((sheetItem) => {
     const projCode = (sheetItem.project_code || "").trim();
     const collegeName = (sheetItem.college_name || "").trim();
@@ -393,7 +394,62 @@ export function getAllEnrichedTimelines(
     });
   });
 
-  // 2. Process registered Projects (training phase dates or project dates)
+  // 2. Process College Trainee link / MOUs 26-27 items (Top priority real active training schedules)
+  mouItems.forEach((mouItem) => {
+    const projCode = (mouItem.projectCode || "").trim();
+    const collegeName = (mouItem.collegeName || "").trim();
+    if (!projCode && !collegeName) return;
+
+    const resolvedDates = resolveDistinctCollegeDates({
+      project_code: projCode,
+      college_name: collegeName,
+      start_date: mouItem.trainingStartDate,
+      end_date: mouItem.trainingEndDate,
+      mou_signed_date: mouItem.mouSignedDate,
+      course_stream: mouItem.courseStream,
+      domain_of_training: mouItem.domainOfTraining,
+      type_of_project: mouItem.typeOfProject,
+      academic_year: mouItem.academicYear || "26-27",
+      student_count: mouItem.studentCount,
+      source: "mou_trainee",
+    });
+
+    const key = (projCode || collegeName).toLowerCase();
+    const existing = map.get(key);
+
+    if (existing) {
+      map.set(key, {
+        ...existing,
+        project_code: projCode || existing.project_code,
+        college_name: collegeName || existing.college_name,
+        start_date: resolvedDates.start_date || existing.start_date,
+        end_date: resolvedDates.end_date || existing.end_date,
+        academic_year: mouItem.academicYear || existing.academic_year || "26-27",
+        student_count: mouItem.studentCount || existing.student_count || 0,
+        course_stream: mouItem.courseStream || existing.course_stream || "",
+        domain_of_training: mouItem.domainOfTraining || existing.domain_of_training || "",
+        notes: mouItem.contractType ? `Contract: ${mouItem.contractType} · Month: ${mouItem.month}` : existing.notes,
+        source: "mou_trainee",
+      });
+    } else {
+      map.set(key, {
+        id: mouItem.id || `mou-${projCode || collegeName}`,
+        project_code: projCode,
+        college_name: collegeName,
+        start_date: resolvedDates.start_date,
+        end_date: resolvedDates.end_date,
+        academic_year: mouItem.academicYear || "26-27",
+        student_count: mouItem.studentCount || 0,
+        course_stream: mouItem.courseStream || "",
+        domain_of_training: mouItem.domainOfTraining || "",
+        notes: mouItem.contractType ? `Contract: ${mouItem.contractType} · Month: ${mouItem.month}` : "",
+        source: "mou_trainee",
+        updated_at: new Date().toISOString(),
+      });
+    }
+  });
+
+  // 3. Process registered Projects (training phase dates or project dates)
   projects.forEach((proj) => {
     const projCode = (proj.project_code || "").trim();
     const collegeName = (proj.college_name || "").trim();
@@ -424,8 +480,8 @@ export function getAllEnrichedTimelines(
         id: proj.id || existing.id,
         project_code: projCode || existing.project_code,
         college_name: collegeName || existing.college_name,
-        start_date: resolvedDates.start_date,
-        end_date: resolvedDates.end_date,
+        start_date: existing.source === "mou_trainee" && existing.start_date ? existing.start_date : resolvedDates.start_date,
+        end_date: existing.source === "mou_trainee" && existing.end_date ? existing.end_date : resolvedDates.end_date,
         academic_year: existing.academic_year || proj.academic_year,
         student_count: existing.student_count || proj.student_count,
         source: existing.source || "project",

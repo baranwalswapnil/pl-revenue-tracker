@@ -713,6 +713,7 @@ export function App() {
           <Step8_CollegeTimelinePage
             projects={projects}
             googleSheetColleges={googleSheetColleges}
+            mouItems={mouItems}
             onBackToDashboard={() => navigateTo("dashboard")}
             onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
             onSaveCollegeTimeline={handleSaveCollegeTimeline}

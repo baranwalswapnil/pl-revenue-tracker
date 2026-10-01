@@ -31,7 +31,7 @@ import {
   Grid,
 } from "lucide-react";
 import type { Project } from "../lib/models";
-import type { GoogleSheetCollegeItem } from "../lib/googleSheetsService";
+import type { GoogleSheetCollegeItem, GoogleSheetMOUItem } from "../lib/googleSheetsService";
 import {
   getAllEnrichedTimelines,
   saveCollegeTimelineRecord,
@@ -59,6 +59,7 @@ export interface CategorizedTimelineItem extends EnrichedTimelineItem {
 interface Step8CollegeTimelinePageProps {
   projects: Project[];
   googleSheetColleges: GoogleSheetCollegeItem[];
+  mouItems?: GoogleSheetMOUItem[];
   onBackToDashboard: () => void;
   onOpenGoogleSheetSync?: () => void;
   onSaveCollegeTimeline?: (record: {
@@ -72,6 +73,7 @@ interface Step8CollegeTimelinePageProps {
 export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> = ({
   projects,
   googleSheetColleges,
+  mouItems = [],
   onBackToDashboard,
   onOpenGoogleSheetSync,
   onSaveCollegeTimeline,
@@ -143,10 +145,10 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Compute all enriched college timeline records
+  // Compute all enriched college timeline records (from College Trainee MOUs, Sheet1 & registered projects)
   const allTimelines = useMemo(() => {
-    return getAllEnrichedTimelines(projects, googleSheetColleges);
-  }, [projects, googleSheetColleges, refreshKey]);
+    return getAllEnrichedTimelines(projects, googleSheetColleges, mouItems);
+  }, [projects, googleSheetColleges, mouItems, refreshKey]);
 
   // List of all 12 calendar months
   const MONTHS_LIST = useMemo(
@@ -1026,6 +1028,23 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       }
     });
 
+    mouItems.forEach((m) => {
+      const code = m.projectCode || "";
+      const name = m.collegeName || "";
+      const key = `${code}-${name}`.toLowerCase();
+      if (!seen.has(key) && (name || code)) {
+        seen.add(key);
+        list.push({
+          name,
+          code,
+          academicYear: m.academicYear || "26-27",
+          students: m.studentCount,
+          startDate: normalizeDateStr(m.trainingStartDate),
+          endDate: normalizeDateStr(m.trainingEndDate),
+        });
+      }
+    });
+
     projects.forEach((p) => {
       const code = p.project_code || "";
       const name = p.college_name || "";
@@ -1042,7 +1061,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     });
 
     return list;
-  }, [googleSheetColleges, projects]);
+  }, [googleSheetColleges, mouItems, projects]);
 
   const filteredAutocompleteColleges = useMemo(() => {
     if (!collegeSearchPicker.trim()) return sheet1CollegeOptions.slice(0, 10);
