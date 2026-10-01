@@ -58,8 +58,8 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   onOpenGoogleSheetSync,
   onSaveCollegeTimeline,
 }) => {
-  // Navigation Tabs: 'view' (Timeline Graph) | 'add' (Add / Register Form)
-  const [activeTab, setActiveTab] = useState<"view" | "add">("view");
+  // Navigation Tabs: 'add' (Add / Register Form) | 'view' (Timeline Graph)
+  const [activeTab, setActiveTab] = useState<"add" | "view">("add");
 
   // Filter and Search States
   const [searchTerm, setSearchTerm] = useState("");
@@ -476,8 +476,17 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           </div>
         </div>
 
-        {/* 2 Main Tabs Switcher: 1- Add, 2- View */}
+        {/* 2 Main Tabs Switcher: Add, View */}
         <div className="timeline-main-mode-switcher">
+          <button
+            type="button"
+            className={`mode-tab-btn ${activeTab === "add" ? "active" : ""}`}
+            onClick={() => setActiveTab("add")}
+          >
+            <PlusCircle size={17} />
+            <span>{isEditingExisting ? "Edit" : "Add"}</span>
+          </button>
+
           <button
             type="button"
             className={`mode-tab-btn ${activeTab === "view" ? "active" : ""}`}
@@ -487,17 +496,8 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
             }}
           >
             <BarChart3 size={17} />
-            <span>1. View Timeline Graph</span>
+            <span>View</span>
             <span className="tab-count-badge">{allTimelines.length}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`mode-tab-btn ${activeTab === "add" ? "active" : ""}`}
-            onClick={() => setActiveTab("add")}
-          >
-            <PlusCircle size={17} />
-            <span>{isEditingExisting ? "2. Edit College Timeline" : "2. Add College Timeline"}</span>
           </button>
         </div>
       </div>
