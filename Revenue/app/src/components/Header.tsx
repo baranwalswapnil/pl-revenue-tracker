@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {currentView !== "dashboard" && (
+          {currentView !== "dashboard" && currentView !== "college-timeline" && (
             <button
               type="button"
               className="topbar-back-button"
