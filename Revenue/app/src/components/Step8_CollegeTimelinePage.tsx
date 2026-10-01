@@ -65,7 +65,7 @@ export interface CategorizedTimelineItem extends EnrichedTimelineItem {
 }
 
 interface Step8CollegeTimelinePageProps {
-  projects: Project[];
+  projects?: Project[];
   googleSheetColleges: GoogleSheetCollegeItem[];
   mouItems?: GoogleSheetMOUItem[];
   onBackToDashboard: () => void;
@@ -79,9 +79,8 @@ interface Step8CollegeTimelinePageProps {
 }
 
 export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> = ({
-  projects,
+  projects = [],
   googleSheetColleges,
-  mouItems = [],
   onBackToDashboard,
   onOpenGoogleSheetSync,
   onSaveCollegeTimeline,
@@ -89,15 +88,10 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   // Navigation Tabs: 'add' (Add / Register Form) | 'view' (Timeline Graph)
   const [activeTab, setActiveTab] = useState<"add" | "view">("add");
 
-  // Local state fallbacks to guarantee immediate rendering of College Training & MOUs 26-27 records
+  // Local state fallback to guarantee immediate rendering of College Training records
   const [localSheetColleges, setLocalSheetColleges] = useState<GoogleSheetCollegeItem[]>(() => {
     if (googleSheetColleges && googleSheetColleges.length > 0) return googleSheetColleges;
     return loadCachedSheetItems();
-  });
-
-  const [localMOUItems, setLocalMOUItems] = useState<GoogleSheetMOUItem[]>(() => {
-    if (mouItems && mouItems.length > 0) return mouItems;
-    return loadCachedMOUItems();
   });
 
   useEffect(() => {
@@ -106,13 +100,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     }
   }, [googleSheetColleges]);
 
-  useEffect(() => {
-    if (mouItems && mouItems.length > 0) {
-      setLocalMOUItems(mouItems);
-    }
-  }, [mouItems]);
-
-  // Auto-sync College Training & MOUs 26-27 on mount if local cache is empty
+  // Auto-sync College Training exclusively on mount if local cache is empty
   useEffect(() => {
     const config = loadSavedSheetConfig();
     if (!config.sheetUrl || !config.sheetUrl.trim()) return;
@@ -122,16 +110,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         .then((items) => {
           if (items && items.length > 0) {
             setLocalSheetColleges(items);
-          }
-        })
-        .catch(() => {});
-    }
-
-    if (localMOUItems.length === 0) {
-      fetchMOUData(config.sheetUrl, "MOUs 26-27")
-        .then((mous) => {
-          if (mous && mous.length > 0) {
-            setLocalMOUItems(mous);
           }
         })
         .catch(() => {});
@@ -202,10 +180,10 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Compute all enriched college timeline records (from College Training, MOUs 26-27 & registered projects)
+  // Compute all enriched college timeline records exclusively from the 'College Training' tab
   const allTimelines = useMemo(() => {
-    return getAllEnrichedTimelines(projects, localSheetColleges, localMOUItems);
-  }, [projects, localSheetColleges, localMOUItems, refreshKey]);
+    return getAllEnrichedTimelines(localSheetColleges);
+  }, [localSheetColleges, refreshKey]);
 
   // List of all 12 calendar months
   const MONTHS_LIST = useMemo(
@@ -1056,7 +1034,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     }
   };
 
-  // List of unique colleges for auto-complete
+  // List of unique colleges from 'College Training' for auto-complete
   const sheet1CollegeOptions = useMemo(() => {
     const list: {
       name: string;
@@ -1085,40 +1063,8 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       }
     });
 
-    localMOUItems.forEach((m) => {
-      const code = m.projectCode || "";
-      const name = m.collegeName || "";
-      const key = `${code}-${name}`.toLowerCase();
-      if (!seen.has(key) && (name || code)) {
-        seen.add(key);
-        list.push({
-          name,
-          code,
-          academicYear: m.academicYear || "26-27",
-          students: m.studentCount,
-          startDate: normalizeDateStr(m.trainingStartDate),
-          endDate: normalizeDateStr(m.trainingEndDate),
-        });
-      }
-    });
-
-    projects.forEach((p) => {
-      const code = p.project_code || "";
-      const name = p.college_name || "";
-      const key = `${code}-${name}`.toLowerCase();
-      if (!seen.has(key) && (name || code)) {
-        seen.add(key);
-        list.push({
-          name,
-          code,
-          academicYear: p.academic_year,
-          students: p.student_count,
-        });
-      }
-    });
-
     return list;
-  }, [localSheetColleges, localMOUItems, projects]);
+  }, [localSheetColleges]);
 
   const filteredAutocompleteColleges = useMemo(() => {
     if (!collegeSearchPicker.trim()) return sheet1CollegeOptions.slice(0, 10);

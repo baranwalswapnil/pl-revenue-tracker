@@ -533,9 +533,9 @@ export function App() {
 
   // Timeline count & handlers
   const activeTimelineCount = useMemo(() => {
-    const list = getAllEnrichedTimelines(projects, googleSheetColleges, mouItems);
+    const list = getAllEnrichedTimelines(googleSheetColleges);
     return list.filter((item) => item.status === "Active").length;
-  }, [projects, googleSheetColleges, mouItems]);
+  }, [googleSheetColleges]);
 
   const handleOpenCollegeTimeline = () => {
     setCurrentView("college-timeline");
@@ -711,9 +711,7 @@ export function App() {
         {/* Step 8: Active College Timeline Explorer & Schedule Screen */}
         {currentView === "college-timeline" && (
           <Step8_CollegeTimelinePage
-            projects={projects}
             googleSheetColleges={googleSheetColleges}
-            mouItems={mouItems}
             onBackToDashboard={() => navigateTo("dashboard")}
             onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
             onSaveCollegeTimeline={handleSaveCollegeTimeline}

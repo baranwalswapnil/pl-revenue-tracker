@@ -448,13 +448,13 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
 
 /**
  * Fetches Google Sheet CSV directly via browser fetch()
- * Prioritizes 'College Training' tab and falls back to 'Sheet1' or default tab
+ * Exclusively extracts from the 'College Training' tab
  */
 export async function fetchGoogleSheetData(sheetUrlOrId: string, sheetName = ""): Promise<GoogleSheetCollegeItem[]> {
   const targetSheetName = (sheetName && sheetName.trim()) || DEFAULT_SHEET_NAME;
-  let csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, targetSheetName);
+  const csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, targetSheetName);
   
-  let response = await fetch(csvUrl, {
+  const response = await fetch(csvUrl, {
     method: "GET",
     headers: {
       "Accept": "text/csv,text/plain,*/*",
@@ -462,20 +462,8 @@ export async function fetchGoogleSheetData(sheetUrlOrId: string, sheetName = "")
     signal: AbortSignal.timeout(8000),
   });
 
-  // Fallback if College Training is not found or fails
-  if (!response.ok && targetSheetName === "College Training") {
-    csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, "Sheet1");
-    response = await fetch(csvUrl, {
-      method: "GET",
-      headers: {
-        "Accept": "text/csv,text/plain,*/*",
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-  }
-
   if (!response.ok) {
-    throw new Error(`Failed to fetch spreadsheet. Status: ${response.status} (${response.statusText}). Make sure the Google Sheet sharing is set to "Anyone with the link can view".`);
+    throw new Error(`Failed to fetch '${targetSheetName}' tab. Status: ${response.status} (${response.statusText}). Make sure the Google Sheet sharing is set to "Anyone with the link can view".`);
   }
 
   const csvText = await response.text();

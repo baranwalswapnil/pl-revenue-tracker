@@ -345,24 +345,23 @@ export function resolveDistinctCollegeDates(record: {
 }
 
 /**
- * Combines Sheet1 items, registered Projects, and local Timeline records
- * into a single enriched list sorted by Start Date
+ * Combines Google Sheet 'College Training' items and local manual override records
+ * into a single enriched list sorted by Start Date.
+ * Exclusively extracts data from the 'College Training' tab.
  */
 export function getAllEnrichedTimelines(
-  projects: Project[] = [],
-  googleSheetColleges: GoogleSheetCollegeItem[] = [],
-  mouItems: GoogleSheetMOUItem[] = []
+  googleSheetColleges: GoogleSheetCollegeItem[] = []
 ): EnrichedTimelineItem[] {
   const savedTimelines = loadSavedTimelines();
   const map = new Map<string, CollegeTimelineRecord>();
 
-  // 1. Process Google Sheet 'College Training' items
+  // 1. Process Google Sheet 'College Training' items exclusively
   googleSheetColleges.forEach((sheetItem) => {
     const projCode = (sheetItem.project_code || "").trim();
     const collegeName = (sheetItem.college_name || "").trim();
     if (!projCode && !collegeName) return;
 
-    // Resolve distinct, realistic training start & end dates
+    // Resolve distinct training start & end dates from College Training
     const resolvedDates = resolveDistinctCollegeDates({
       project_code: projCode,
       college_name: collegeName,
@@ -394,114 +393,7 @@ export function getAllEnrichedTimelines(
     });
   });
 
-  // 2. Process College Trainee link / MOUs 26-27 items (Top priority real active training schedules)
-  mouItems.forEach((mouItem) => {
-    const projCode = (mouItem.projectCode || "").trim();
-    const collegeName = (mouItem.collegeName || "").trim();
-    if (!projCode && !collegeName) return;
-
-    const resolvedDates = resolveDistinctCollegeDates({
-      project_code: projCode,
-      college_name: collegeName,
-      start_date: mouItem.trainingStartDate,
-      end_date: mouItem.trainingEndDate,
-      mou_signed_date: mouItem.mouSignedDate,
-      course_stream: mouItem.courseStream,
-      domain_of_training: mouItem.domainOfTraining,
-      type_of_project: mouItem.typeOfProject,
-      academic_year: mouItem.academicYear || "26-27",
-      student_count: mouItem.studentCount,
-      source: "mou_trainee",
-    });
-
-    const key = (projCode || collegeName).toLowerCase();
-    const existing = map.get(key);
-
-    if (existing) {
-      map.set(key, {
-        ...existing,
-        project_code: projCode || existing.project_code,
-        college_name: collegeName || existing.college_name,
-        start_date: resolvedDates.start_date || existing.start_date,
-        end_date: resolvedDates.end_date || existing.end_date,
-        academic_year: mouItem.academicYear || existing.academic_year || "26-27",
-        student_count: mouItem.studentCount || existing.student_count || 0,
-        course_stream: mouItem.courseStream || existing.course_stream || "",
-        domain_of_training: mouItem.domainOfTraining || existing.domain_of_training || "",
-        notes: mouItem.contractType ? `Contract: ${mouItem.contractType} · Month: ${mouItem.month}` : existing.notes,
-        source: "mou_trainee",
-      });
-    } else {
-      map.set(key, {
-        id: mouItem.id || `mou-${projCode || collegeName}`,
-        project_code: projCode,
-        college_name: collegeName,
-        start_date: resolvedDates.start_date,
-        end_date: resolvedDates.end_date,
-        academic_year: mouItem.academicYear || "26-27",
-        student_count: mouItem.studentCount || 0,
-        course_stream: mouItem.courseStream || "",
-        domain_of_training: mouItem.domainOfTraining || "",
-        notes: mouItem.contractType ? `Contract: ${mouItem.contractType} · Month: ${mouItem.month}` : "",
-        source: "mou_trainee",
-        updated_at: new Date().toISOString(),
-      });
-    }
-  });
-
-  // 3. Process registered Projects (training phase dates or project dates)
-  projects.forEach((proj) => {
-    const projCode = (proj.project_code || "").trim();
-    const collegeName = (proj.college_name || "").trim();
-    if (!projCode && !collegeName) return;
-
-    const key = (projCode || collegeName).toLowerCase();
-    const existing = map.get(key);
-
-    const firstPhase = proj.phases && proj.phases.length > 0 ? proj.phases[0] : null;
-    const lastPhase = proj.phases && proj.phases.length > 0 ? proj.phases[proj.phases.length - 1] : null;
-
-    const phaseStart = normalizeDateStr(firstPhase?.startDate || "");
-    const phaseEnd = normalizeDateStr(lastPhase?.endDate || firstPhase?.endDate || "");
-
-    const resolvedDates = resolveDistinctCollegeDates({
-      project_code: projCode,
-      college_name: collegeName,
-      start_date: existing?.start_date || phaseStart,
-      end_date: existing?.end_date || phaseEnd,
-      academic_year: proj.academic_year,
-      student_count: proj.student_count,
-      source: "project",
-    });
-
-    if (existing) {
-      map.set(key, {
-        ...existing,
-        id: proj.id || existing.id,
-        project_code: projCode || existing.project_code,
-        college_name: collegeName || existing.college_name,
-        start_date: existing.start_date || resolvedDates.start_date,
-        end_date: existing.end_date || resolvedDates.end_date,
-        academic_year: existing.academic_year || proj.academic_year,
-        student_count: existing.student_count || proj.student_count,
-        source: existing.source || "project",
-      });
-    } else {
-      map.set(key, {
-        id: proj.id || `proj-${projCode || collegeName}`,
-        project_code: projCode,
-        college_name: collegeName,
-        start_date: resolvedDates.start_date,
-        end_date: resolvedDates.end_date,
-        academic_year: proj.academic_year || "",
-        student_count: proj.student_count || 0,
-        source: "project",
-        updated_at: proj.updated_at || new Date().toISOString(),
-      });
-    }
-  });
-
-  // 3. Apply manual overrides / user additions
+  // 2. Apply manual overrides / user additions
   savedTimelines.forEach((saved) => {
     const key = (saved.project_code || saved.college_name).toLowerCase();
     const existing = map.get(key);
