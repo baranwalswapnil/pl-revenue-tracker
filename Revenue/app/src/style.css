@@ -7143,14 +7143,14 @@ a {
   margin-top: 14px;
 }
 
-/* Floating Left and Right Slide Buttons (Yellow Highlight Area) */
+/* Floating Left and Right Slide Buttons - Always present throughout at all times */
 .timeline-side-slide-btn {
-  position: absolute;
-  top: 50%;
+  position: fixed;
+  top: 55%;
   transform: translateY(-50%);
-  z-index: 45;
-  width: 44px;
-  height: 96px;
+  z-index: 9999;
+  width: 46px;
+  height: 104px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -7160,7 +7160,7 @@ a {
   color: #ffffff;
   border: 2.5px solid #ffffff;
   border-radius: 24px;
-  box-shadow: 0 8px 24px rgba(30, 58, 138, 0.5), 0 3px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.45), 0 0 0 1px rgba(37, 99, 235, 0.4);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
@@ -7168,26 +7168,26 @@ a {
 }
 
 .timeline-side-slide-btn.slide-left-btn {
-  left: -22px;
+  left: 16px;
 }
 
 .timeline-side-slide-btn.slide-right-btn {
-  right: -22px;
+  right: 16px;
 }
 
 .timeline-side-slide-btn:hover {
   background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
   transform: translateY(-50%) scale(1.12);
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.7), 0 4px 12px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 12px 36px rgba(37, 99, 235, 0.75), 0 0 0 2px #ffffff;
 }
 
 .timeline-side-slide-btn:active {
   transform: translateY(-50%) scale(0.95);
-  box-shadow: 0 4px 12px rgba(30, 58, 138, 0.4);
+  box-shadow: 0 4px 14px rgba(30, 58, 138, 0.5);
 }
 
 .timeline-side-slide-btn .slide-btn-label {
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.6px;
   text-transform: uppercase;
