@@ -7255,15 +7255,19 @@ a {
 
 .spreadsheet-scroll-box {
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: auto;
+  max-height: calc(100vh - 160px);
+  min-height: 480px;
   max-width: 100%;
   border-radius: 11px;
   scroll-behavior: smooth;
   scrollbar-width: thin;
   scrollbar-color: #3b82f6 #e2e8f0;
+  position: relative;
 }
 
 .spreadsheet-scroll-box::-webkit-scrollbar {
+  width: 10px;
   height: 12px;
 }
 
@@ -7281,6 +7285,15 @@ a {
 
 .spreadsheet-scroll-box::-webkit-scrollbar-thumb:hover {
   background: #2563eb;
+}
+
+/* Sticky Date Header Block (Pinned at top while scrolling rows) */
+.spreadsheet-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 35;
+  background: #1e3a8a;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22);
 }
 
 .spreadsheet-grid-canvas {

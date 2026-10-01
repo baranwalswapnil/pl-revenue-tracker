@@ -1499,97 +1499,100 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
                     }}
                   >
-                  {/* 1. TOP HEADER BANNER: "Project Timeline" */}
-                  <div className="spreadsheet-title-banner">
-                    <div className="title-banner-left">
-                      <button
-                        type="button"
-                        className="grid-nav-scroll-btn"
-                        onClick={() => handleScrollHorizontal(-28 * dayCellWidth)}
-                        title="Scroll Left (Previous Days/Month)"
-                      >
-                        <ChevronLeft size={16} />
-                        <span>Scroll Left</span>
-                      </button>
-                    </div>
-
-                    <div className="title-banner-center">
-                      <h2>Project Timeline</h2>
-                      <span className="scroll-hint-text">
-                        ↔ Use the Left / Right Slide buttons to glide across all months
-                      </span>
-                    </div>
-
-                    <div className="title-banner-right">
-                      <button
-                        type="button"
-                        className="grid-nav-scroll-btn"
-                        onClick={() => handleScrollHorizontal(28 * dayCellWidth)}
-                        title="Scroll Right (Next Days/Month)"
-                      >
-                        <span>Scroll Right</span>
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 2. EXCEL COLUMN LETTERS ROW (A, B, C ... Z, AA, AB ...) */}
-                  <div className="spreadsheet-col-letters-row">
-                    <div className="row-number-header-cell">#</div>
-                    {gridData.days.map((day) => (
-                      <div
-                        key={day.colIndex}
-                        className="col-letter-cell"
-                        style={{ width: `${dayCellWidth}px` }}
-                      >
-                        {day.colLetter}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 3. MONTH SPANNING HEADERS ROW (Clickable to jump directly to month) */}
-                  <div className="spreadsheet-months-row">
-                    <div className="row-number-header-cell month-stub" />
-                    {gridData.months.map((m) => (
-                      <div
-                        key={m.monthKey}
-                        className="month-group-cell clickable-month-header"
-                        style={{
-                          width: `${m.daysCount * dayCellWidth}px`,
-                        }}
-                        onClick={() => {
-                          setSelectedMonth(m.monthIndex + 1);
-                          setSelectedSpecificDate(null);
-                          handleJumpToMonth(m.monthIndex + 1);
-                        }}
-                        title={`Click to filter & jump to ${m.monthLabel}`}
-                      >
-                        {m.monthLabel}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 4. DAY NUMBERS ROW (17, 18, 19 ... 23 (Red for Sunday), 24 ...) */}
-                  <div className="spreadsheet-days-row">
-                    <div className="row-number-header-cell day-stub" />
-                    {gridData.days.map((day) => {
-                      const isSelected = selectedSpecificDate === day.dateStr;
-                      return (
-                        <div
-                          key={day.dateStr}
-                          className={`day-number-cell ${day.isSunday ? "sunday-cell" : ""} ${day.isToday ? "today-cell" : ""} ${isSelected ? "selected-day-cell" : ""}`}
-                          style={{ width: `${dayCellWidth}px` }}
-                          onClick={() =>
-                            setSelectedSpecificDate(
-                              selectedSpecificDate === day.dateStr ? null : day.dateStr
-                            )
-                          }
-                          title={`${day.dayOfWeekName}, ${day.dayNum} ${day.monthLabel} · Click to focus & group timeline on this day`}
+                  {/* STICKY DATE & MONTH HEADER (Pinned at top while scrolling rows) */}
+                  <div className="spreadsheet-sticky-header">
+                    {/* 1. TOP HEADER BANNER: "Project Timeline" */}
+                    <div className="spreadsheet-title-banner">
+                      <div className="title-banner-left">
+                        <button
+                          type="button"
+                          className="grid-nav-scroll-btn"
+                          onClick={() => handleScrollHorizontal(-28 * dayCellWidth)}
+                          title="Scroll Left (Previous Days/Month)"
                         >
-                          {day.dayNum}
+                          <ChevronLeft size={16} />
+                          <span>Scroll Left</span>
+                        </button>
+                      </div>
+
+                      <div className="title-banner-center">
+                        <h2>Project Timeline</h2>
+                        <span className="scroll-hint-text">
+                          ↔ Use the Left / Right Slide buttons to glide across all months
+                        </span>
+                      </div>
+
+                      <div className="title-banner-right">
+                        <button
+                          type="button"
+                          className="grid-nav-scroll-btn"
+                          onClick={() => handleScrollHorizontal(28 * dayCellWidth)}
+                          title="Scroll Right (Next Days/Month)"
+                        >
+                          <span>Scroll Right</span>
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 2. EXCEL COLUMN LETTERS ROW (A, B, C ... Z, AA, AB ...) */}
+                    <div className="spreadsheet-col-letters-row">
+                      <div className="row-number-header-cell">#</div>
+                      {gridData.days.map((day) => (
+                        <div
+                          key={day.colIndex}
+                          className="col-letter-cell"
+                          style={{ width: `${dayCellWidth}px` }}
+                        >
+                          {day.colLetter}
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
+
+                    {/* 3. MONTH SPANNING HEADERS ROW (Clickable to jump directly to month) */}
+                    <div className="spreadsheet-months-row">
+                      <div className="row-number-header-cell month-stub" />
+                      {gridData.months.map((m) => (
+                        <div
+                          key={m.monthKey}
+                          className="month-group-cell clickable-month-header"
+                          style={{
+                            width: `${m.daysCount * dayCellWidth}px`,
+                          }}
+                          onClick={() => {
+                            setSelectedMonth(m.monthIndex + 1);
+                            setSelectedSpecificDate(null);
+                            handleJumpToMonth(m.monthIndex + 1);
+                          }}
+                          title={`Click to filter & jump to ${m.monthLabel}`}
+                        >
+                          {m.monthLabel}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 4. DAY NUMBERS ROW (17, 18, 19 ... 23 (Red for Sunday), 24 ...) */}
+                    <div className="spreadsheet-days-row">
+                      <div className="row-number-header-cell day-stub" />
+                      {gridData.days.map((day) => {
+                        const isSelected = selectedSpecificDate === day.dateStr;
+                        return (
+                          <div
+                            key={day.dateStr}
+                            className={`day-number-cell ${day.isSunday ? "sunday-cell" : ""} ${day.isToday ? "today-cell" : ""} ${isSelected ? "selected-day-cell" : ""}`}
+                            style={{ width: `${dayCellWidth}px` }}
+                            onClick={() =>
+                              setSelectedSpecificDate(
+                                selectedSpecificDate === day.dateStr ? null : day.dateStr
+                              )
+                            }
+                            title={`${day.dayOfWeekName}, ${day.dayNum} ${day.monthLabel} · Click to focus & group timeline on this day`}
+                          >
+                            {day.dayNum}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* 5. GRID BODY ROWS WITH TIMELINE BARS */}
