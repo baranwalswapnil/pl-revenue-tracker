@@ -492,26 +492,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     <div className="timeline-page-container">
       {/* Top Header Card */}
       <div className="timeline-hero-banner">
-        <div className="timeline-hero-top-row">
-          <button
-            type="button"
-            className="timeline-back-link"
-            onClick={onBackToDashboard}
-            title="Return to Dashboard"
-          >
-            <ArrowLeft size={16} />
-            <span>Back to Dashboard</span>
-          </button>
-
-          <div className="timeline-breadcrumbs">
-            <span className="crumb-item" onClick={onBackToDashboard} style={{ cursor: "pointer" }}>
-              Dashboard
-            </span>
-            <ChevronRight size={14} className="crumb-separator" />
-            <span className="crumb-active">Active College Timeline</span>
-          </div>
-        </div>
-
         <div className="timeline-hero-title-row">
           <div className="timeline-hero-icon-box">
             <CalendarDays size={28} />
