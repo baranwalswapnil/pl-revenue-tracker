@@ -24,6 +24,11 @@ import {
   X,
   Layers,
   ArrowRight,
+  Maximize2,
+  Minimize2,
+  ChevronLeft,
+  Crosshair,
+  Grid,
 } from "lucide-react";
 import type { Project } from "../lib/models";
 import type { GoogleSheetCollegeItem } from "../lib/googleSheetsService";
@@ -34,8 +39,13 @@ import {
   computeTimelineStatus,
   formatDisplayDate,
   normalizeDateStr,
+  generateDayGridData,
+  getTimelineBarTheme,
+  formatTimelinePopupDate,
   type EnrichedTimelineItem,
   type TimelineStatus,
+  type TimelineDayColumn,
+  type TimelineMonthGroup,
 } from "../lib/collegeTimelineService";
 
 interface Step8CollegeTimelinePageProps {
@@ -64,8 +74,19 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   // Filter and Search States
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | TimelineStatus>("all");
-  const [selectedYear, setSelectedYear] = useState<number | "all">("all");
-  const [viewMode, setViewMode] = useState<"gantt" | "table" | "roadmap">("gantt");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+
+  // Spreadsheet Grid Display Settings
+  const [selectedMonthView, setSelectedMonthView] = useState<string>("active"); // 'active' | 'all' | '2026-08' | '2026-09' etc.
+  const [dayCellWidth, setDayCellWidth] = useState<number>(34); // px per day column (26 compact, 34 standard, 46 wide)
+
+  // Floating Popover Card on Bar Hover / Click
+  const [hoveredItem, setHoveredItem] = useState<{
+    item: EnrichedTimelineItem;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [pinnedItem, setPinnedItem] = useState<EnrichedTimelineItem | null>(null);
 
   // Add / Edit Form State
   const [formData, setFormData] = useState({
@@ -86,6 +107,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   const [collegeSearchPicker, setCollegeSearchPicker] = useState("");
   const [isCollegePickerOpen, setIsCollegePickerOpen] = useState(false);
   const collegePickerRef = useRef<HTMLDivElement>(null);
+  const gridScrollRef = useRef<HTMLDivElement>(null);
 
   // Local state trigger to refresh lists after adds/deletes
   const [refreshKey, setRefreshKey] = useState(0);
@@ -109,7 +131,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return getAllEnrichedTimelines(projects, googleSheetColleges);
   }, [projects, googleSheetColleges, refreshKey]);
 
-  // Filtered timeline items based on search, status, and year
+  // Filtered timeline items based on search, status, etc.
   const filteredTimelines = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
 
@@ -132,18 +154,9 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         }
       }
 
-      // 3. Year filter
-      if (selectedYear !== "all") {
-        const startYr = item.start_date ? parseInt(item.start_date.slice(0, 4), 10) : 0;
-        const endYr = item.end_date ? parseInt(item.end_date.slice(0, 4), 10) : 0;
-        if (startYr !== selectedYear && endYr !== selectedYear) {
-          return false;
-        }
-      }
-
       return true;
     });
-  }, [allTimelines, searchTerm, statusFilter, selectedYear]);
+  }, [allTimelines, searchTerm, statusFilter]);
 
   // Overall KPI statistics
   const stats = useMemo(() => {
@@ -156,95 +169,132 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return { total, active, upcoming, completed, withDates };
   }, [allTimelines]);
 
-  // Calculate dynamic month range for Gantt chart
-  const ganttMonthRange = useMemo(() => {
-    const currentYr = selectedYear !== "all" ? Number(selectedYear) : 2026;
-    const months: { monthIndex: number; year: number; label: string; short: string; key: string }[] = [];
+  // Determine active date bounds from all timelines to build day-by-day grid
+  const dateBounds = useMemo(() => {
+    let minYear = 2026;
+    let minMonth = 7; // Aug (0-indexed)
+    let maxYear = 2026;
+    let maxMonth = 9; // Oct (0-indexed)
 
-    // Span from Jan of currentYr (or currentYr-1) to Dec of currentYr (or currentYr+1)
-    const startYear = selectedYear !== "all" ? currentYr : 2026;
-    const endYear = selectedYear !== "all" ? currentYr : 2026;
+    const validDates: Date[] = [];
+    allTimelines.forEach((t) => {
+      if (t.start_date) {
+        const [y, m] = t.start_date.split("-").map(Number);
+        if (!isNaN(y) && !isNaN(m)) validDates.push(new Date(y, m - 1, 1));
+      }
+      if (t.end_date) {
+        const [y, m] = t.end_date.split("-").map(Number);
+        if (!isNaN(y) && !isNaN(m)) validDates.push(new Date(y, m - 1, 1));
+      }
+    });
 
-    for (let yr = startYear; yr <= endYear; yr++) {
-      for (let m = 0; m < 12; m++) {
-        const d = new Date(yr, m, 1);
-        months.push({
-          monthIndex: m,
-          year: yr,
-          label: d.toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
-          short: d.toLocaleDateString("en-IN", { month: "short" }),
-          key: `${yr}-${m + 1}`,
+    if (validDates.length > 0) {
+      validDates.sort((a, b) => a.getTime() - b.getTime());
+      const first = validDates[0];
+      const last = validDates[validDates.length - 1];
+
+      minYear = first.getFullYear();
+      minMonth = Math.max(0, first.getMonth() - 1); // 1 month buffer before
+      maxYear = last.getFullYear();
+      maxMonth = Math.min(11, last.getMonth() + 1); // 1 month buffer after
+    }
+
+    return { minYear, minMonth, maxYear, maxMonth };
+  }, [allTimelines]);
+
+  // Generate Day-by-Day Grid Data (Days, Month groups, Today column index)
+  const gridData = useMemo(() => {
+    if (selectedMonthView === "all") {
+      return generateDayGridData(dateBounds.minYear, 0, dateBounds.maxYear, 11);
+    }
+
+    if (selectedMonthView !== "active" && selectedMonthView.includes("-")) {
+      const [yr, mo] = selectedMonthView.split("-").map(Number);
+      return generateDayGridData(yr, mo - 1, yr, mo - 1);
+    }
+
+    // Default 'active' range
+    return generateDayGridData(
+      dateBounds.minYear,
+      dateBounds.minMonth,
+      dateBounds.maxYear,
+      dateBounds.maxMonth
+    );
+  }, [selectedMonthView, dateBounds]);
+
+  // Quick list of distinct months present in the grid for quick filtering
+  const availableMonthTabs = useMemo(() => {
+    const list: { key: string; label: string; short: string; year: number }[] = [];
+    const seen = new Set<string>();
+
+    gridData.months.forEach((m) => {
+      if (!seen.has(m.monthKey)) {
+        seen.add(m.monthKey);
+        list.push({
+          key: m.monthKey,
+          label: m.monthLabel,
+          short: m.monthLabel.split(" ")[0],
+          year: m.year,
         });
+      }
+    });
+
+    return list;
+  }, [gridData.months]);
+
+  // Helper to find starting and ending day column index for a college item in current grid
+  const getCollegeDayRange = (startDateStr: string, endDateStr: string) => {
+    if (!startDateStr && !endDateStr) return null;
+    if (gridData.days.length === 0) return null;
+
+    const normStart = normalizeDateStr(startDateStr) || normalizeDateStr(endDateStr);
+    const normEnd = normalizeDateStr(endDateStr) || normStart;
+
+    if (!normStart) return null;
+
+    const firstGridDate = gridData.days[0].dateStr;
+    const lastGridDate = gridData.days[gridData.days.length - 1].dateStr;
+
+    // Check if fully outside grid
+    if (normEnd < firstGridDate || normStart > lastGridDate) {
+      return null;
+    }
+
+    let startCol = 0;
+    let endCol = gridData.days.length - 1;
+
+    for (let i = 0; i < gridData.days.length; i++) {
+      if (gridData.days[i].dateStr <= normStart) {
+        startCol = i;
+      }
+      if (gridData.days[i].dateStr <= normEnd) {
+        endCol = i;
       }
     }
 
-    return months;
-  }, [selectedYear]);
-
-  // Helper to compute percentage position on the Gantt timeline
-  const getGanttPosition = (startDateStr: string, endDateStr: string) => {
-    if (ganttMonthRange.length === 0) return { left: 0, width: 0, isVisible: false };
-
-    const firstMonth = ganttMonthRange[0];
-    const lastMonth = ganttMonthRange[ganttMonthRange.length - 1];
-
-    const timelineStart = new Date(firstMonth.year, firstMonth.monthIndex, 1).getTime();
-    const timelineEnd = new Date(lastMonth.year, lastMonth.monthIndex + 1, 0, 23, 59, 59).getTime();
-    const totalTimelineMs = timelineEnd - timelineStart;
-
-    const normStart = normalizeDateStr(startDateStr);
-    const normEnd = normalizeDateStr(endDateStr);
-
-    if (!normStart) return { left: 0, width: 0, isVisible: false };
-
-    const [sy, sm, sd] = normStart.split("-").map(Number);
-    const startD = new Date(sy, sm - 1, sd || 1);
-
-    let endD: Date;
-    if (normEnd) {
-      const [ey, em, ed] = normEnd.split("-").map(Number);
-      endD = new Date(ey, em - 1, ed || 28);
-    } else {
-      endD = new Date(startD.getTime() + 30 * 24 * 60 * 60 * 1000);
-    }
-
-    const startMs = startD.getTime();
-    const endMs = endD.getTime();
-
-    // Check if within bounds
-    if (endMs < timelineStart || startMs > timelineEnd) {
-      return { left: 0, width: 0, isVisible: false };
-    }
-
-    const clampedStart = Math.max(timelineStart, startMs);
-    const clampedEnd = Math.min(timelineEnd, endMs);
-
-    const leftPct = ((clampedStart - timelineStart) / totalTimelineMs) * 100;
-    const widthPct = Math.max(2, ((clampedEnd - clampedStart) / totalTimelineMs) * 100);
+    if (normStart < firstGridDate) startCol = 0;
+    if (normEnd > lastGridDate) endCol = gridData.days.length - 1;
 
     return {
-      left: Math.max(0, Math.min(98, leftPct)),
-      width: Math.max(2, Math.min(100 - leftPct, widthPct)),
-      isVisible: true,
+      startCol,
+      endCol,
+      span: Math.max(1, endCol - startCol + 1),
     };
   };
 
-  // Compute Today marker position on the Gantt timeline
-  const todayGanttPosition = useMemo(() => {
-    if (ganttMonthRange.length === 0) return null;
-    const firstMonth = ganttMonthRange[0];
-    const lastMonth = ganttMonthRange[ganttMonthRange.length - 1];
-
-    const timelineStart = new Date(firstMonth.year, firstMonth.monthIndex, 1).getTime();
-    const timelineEnd = new Date(lastMonth.year, lastMonth.monthIndex + 1, 0, 23, 59, 59).getTime();
-    const totalTimelineMs = timelineEnd - timelineStart;
-
-    const now = new Date().getTime();
-    if (now < timelineStart || now > timelineEnd) return null;
-
-    const pos = ((now - timelineStart) / totalTimelineMs) * 100;
-    return Math.max(0, Math.min(100, pos));
-  }, [ganttMonthRange]);
+  // Scroll to Today Column in Grid
+  const handleJumpToToday = () => {
+    if (!gridScrollRef.current) return;
+    if (gridData.todayColIndex !== null) {
+      const scrollPos = Math.max(0, gridData.todayColIndex * dayCellWidth - 250);
+      gridScrollRef.current.scrollTo({
+        left: scrollPos,
+        behavior: "smooth",
+      });
+    } else {
+      setSelectedMonthView("active");
+    }
+  };
 
   // Live calculation of duration and status in Add Form
   const formStatusPreview = useMemo(() => {
@@ -298,25 +348,24 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     if (startDate && endDate) {
       const s = new Date(startDate).getTime();
       const eTime = new Date(endDate).getTime();
-      if (!isNaN(s) && !isNaN(eTime) && eTime < s) {
-        setFormErrorMsg("End Date (Column M) cannot be earlier than Start Date (Column L).");
+      if (s > eTime) {
+        setFormErrorMsg("Start Date cannot be later than End Date.");
         return;
       }
     }
 
-    // Save record to local storage service
-    const saved = saveCollegeTimelineRecord({
+    // Save to local storage
+    saveCollegeTimelineRecord({
       project_code: projCode,
       college_name: collegeName,
       start_date: startDate,
       end_date: endDate,
       academic_year: formData.academic_year,
-      student_count: formData.student_count ? parseInt(formData.student_count, 10) : 0,
+      student_count: Number(formData.student_count) || 0,
       course_stream: formData.course_stream,
       notes: formData.notes,
     });
 
-    // Invoke parent callback to update App projects state if provided
     if (onSaveCollegeTimeline) {
       onSaveCollegeTimeline({
         project_code: projCode,
@@ -328,7 +377,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
     setRefreshKey((prev) => prev + 1);
     setFormSuccessMsg(
-      `Timeline successfully saved for "${collegeName || projCode}"! Linked to Sheet1 Columns B, C, L, and M.`
+      `Timeline successfully saved for "${collegeName || projCode}"!`
     );
 
     if (isEditingExisting) {
@@ -369,22 +418,23 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     setActiveTab("add");
     setFormErrorMsg(null);
     setFormSuccessMsg(null);
+    setHoveredItem(null);
+    setPinnedItem(null);
+    window.scrollTo({ top: 120, behavior: "smooth" });
   };
 
-  // Delete a timeline override
-  const handleDeleteItem = (item: EnrichedTimelineItem) => {
-    if (
-      window.confirm(
-        `Are you sure you want to delete the timeline for "${item.college_name || item.project_code}"?`
-      )
-    ) {
-      removeSavedTimeline(item.id || item.project_code);
+  // Delete a saved timeline record
+  const handleDeleteItem = (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to remove the timeline schedule for "${name}"?`)) {
+      removeSavedTimeline(id);
       setRefreshKey((prev) => prev + 1);
+      setHoveredItem(null);
+      setPinnedItem(null);
     }
   };
 
-  // Unique college list for autocomplete
-  const availableCollegesForPicker = useMemo(() => {
+  // List of unique Sheet1 colleges for auto-complete
+  const sheet1CollegeOptions = useMemo(() => {
     const list: {
       name: string;
       code: string;
@@ -393,50 +443,59 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       startDate?: string;
       endDate?: string;
     }[] = [];
-
-    projects.forEach((p) => {
-      const firstPhase = p.phases && p.phases.length > 0 ? p.phases[0] : null;
-      const lastPhase = p.phases && p.phases.length > 0 ? p.phases[p.phases.length - 1] : null;
-      list.push({
-        name: p.college_name,
-        code: p.project_code,
-        academicYear: p.academic_year,
-        students: p.student_count,
-        startDate: firstPhase?.startDate,
-        endDate: lastPhase?.endDate,
-      });
-    });
+    const seen = new Set<string>();
 
     googleSheetColleges.forEach((g) => {
-      if (!list.some((item) => item.code === g.project_code || item.name === g.college_name)) {
+      const code = g.project_code || "";
+      const name = g.college_name || "";
+      const key = `${code}-${name}`.toLowerCase();
+      if (!seen.has(key) && (name || code)) {
+        seen.add(key);
         list.push({
-          name: g.college_name,
-          code: g.project_code,
+          name,
+          code,
           academicYear: g.academic_year,
           students: g.student_count,
-          startDate: g.training_start_date,
-          endDate: g.training_end_date,
+          startDate: normalizeDateStr(g.training_start_date),
+          endDate: normalizeDateStr(g.training_end_date),
         });
       }
     });
 
-    if (!collegeSearchPicker) return list;
-    const term = collegeSearchPicker.toLowerCase().trim();
-    return list.filter(
-      (c) =>
-        c.name.toLowerCase().includes(term) ||
-        c.code.toLowerCase().includes(term)
-    );
-  }, [projects, googleSheetColleges, collegeSearchPicker]);
+    projects.forEach((p) => {
+      const code = p.project_code || "";
+      const name = p.college_name || "";
+      const key = `${code}-${name}`.toLowerCase();
+      if (!seen.has(key) && (name || code)) {
+        seen.add(key);
+        list.push({
+          name,
+          code,
+          academicYear: p.academic_year,
+          students: p.student_count,
+        });
+      }
+    });
+
+    return list;
+  }, [googleSheetColleges, projects]);
+
+  const filteredAutocompleteColleges = useMemo(() => {
+    if (!collegeSearchPicker.trim()) return sheet1CollegeOptions.slice(0, 10);
+    const q = collegeSearchPicker.toLowerCase();
+    return sheet1CollegeOptions
+      .filter((c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q))
+      .slice(0, 12);
+  }, [sheet1CollegeOptions, collegeSearchPicker]);
 
   return (
-    <div className="college-timeline-page-container">
-      {/* Top Header & Breadcrumbs */}
-      <div className="timeline-hero-header-card">
+    <div className="timeline-page-container">
+      {/* Top Header Card */}
+      <div className="timeline-hero-banner">
         <div className="timeline-hero-top-row">
           <button
             type="button"
-            className="timeline-back-btn"
+            className="timeline-back-link"
             onClick={onBackToDashboard}
             title="Return to Dashboard"
           >
@@ -455,7 +514,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
         <div className="timeline-hero-title-row">
           <div className="timeline-hero-icon-box">
-            <CalendarClockIcon size={30} />
+            <CalendarDays size={28} />
           </div>
           <div className="timeline-hero-text">
             <h1 className="timeline-main-title">Active College Timeline & Schedule</h1>
@@ -518,13 +577,12 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               <span className="kpi-unit">Colleges</span>
             </div>
             <div className="kpi-footer-row">
-              <span className="kpi-count-text">Currently in training today</span>
-              <span className="kpi-period-tag live-tag">🟢 Live</span>
+              <span className="kpi-tag live-tag">🟢 In Training Today</span>
             </div>
           </div>
         </div>
 
-        {/* Card 2: Upcoming Colleges */}
+        {/* Card 2: Upcoming Schedules */}
         <div className="timeline-kpi-card upcoming-kpi-card">
           <div className="kpi-card-inner">
             <div className="kpi-header-row">
@@ -538,13 +596,12 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               <span className="kpi-unit">Colleges</span>
             </div>
             <div className="kpi-footer-row">
-              <span className="kpi-count-text">Start date scheduled ahead</span>
-              <span className="kpi-period-tag upcoming-tag">🔵 Scheduled</span>
+              <span className="kpi-tag upcoming-tag">🔵 Future Start Dates</span>
             </div>
           </div>
         </div>
 
-        {/* Card 3: Completed Training */}
+        {/* Card 3: Completed Schedules */}
         <div className="timeline-kpi-card completed-kpi-card">
           <div className="kpi-card-inner">
             <div className="kpi-header-row">
@@ -558,48 +615,46 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               <span className="kpi-unit">Colleges</span>
             </div>
             <div className="kpi-footer-row">
-              <span className="kpi-count-text">Training successfully finished</span>
-              <span className="kpi-period-tag completed-tag">⚪ Finished</span>
+              <span className="kpi-tag completed-tag">⚪ Training Concluded</span>
             </div>
           </div>
         </div>
 
-        {/* Card 4: Total Tracked in Sheet1 */}
+        {/* Card 4: Total Colleges Tracked */}
         <div className="timeline-kpi-card total-kpi-card">
           <div className="kpi-card-inner">
             <div className="kpi-header-row">
-              <span className="kpi-title">Total Colleges Tracked</span>
+              <span className="kpi-title">Total Active Schedules</span>
               <span className="kpi-badge-icon total-icon">
                 <Building2 size={18} />
               </span>
             </div>
             <div className="kpi-value-row">
               <span className="kpi-amount">{stats.total}</span>
-              <span className="kpi-unit">Colleges</span>
+              <span className="kpi-unit">Records</span>
             </div>
             <div className="kpi-footer-row">
-              <span className="kpi-count-text">
-                <strong>{stats.withDates}</strong> with start & end dates
+              <span className="kpi-tag sheet-tag">
+                📊 {stats.withDates} with Start & End Dates
               </span>
-              <span className="kpi-period-tag sheet-tag">Sheet1</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* =========================================================================
-          TAB 1: VIEW TIMELINE GRAPH & GANTT VISUALIZATION
+          TAB 1: VIEW TIMELINE GRAPH (PROJECT TIMELINE SPREADSHEET GRID)
           ========================================================================= */}
       {activeTab === "view" && (
         <div className="timeline-view-section">
-          {/* Controls & Search Bar */}
+          {/* Controls Bar: Search, Status Filter, Month Tabs, Zoom */}
           <div className="timeline-controls-bar">
             {/* Search Input */}
             <div className="timeline-search-box">
-              <Search size={16} className="search-icon" />
+              <Search size={15} className="text-muted" />
               <input
                 type="text"
-                placeholder="Search college name, project code, or stream..."
+                placeholder="Search college name or project code..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="timeline-search-input"
@@ -647,30 +702,86 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               </button>
             </div>
 
-            {/* Year Filter */}
-            <div className="timeline-year-pills-wrap">
-              {(["all", 2024, 2025, 2026, 2027] as const).map((yr) => (
+            {/* Month Range Selector */}
+            <div className="timeline-month-selector-wrap">
+              <span className="filter-label">Month:</span>
+              <button
+                type="button"
+                className={`month-tab-pill ${selectedMonthView === "active" ? "active" : ""}`}
+                onClick={() => setSelectedMonthView("active")}
+                title="Auto-span all active college months"
+              >
+                Active Range
+              </button>
+              {availableMonthTabs.map((m) => (
                 <button
-                  key={yr}
+                  key={m.key}
                   type="button"
-                  className={`year-pill ${selectedYear === yr ? "active" : ""}`}
-                  onClick={() => setSelectedYear(yr)}
+                  className={`month-tab-pill ${selectedMonthView === m.key ? "active" : ""}`}
+                  onClick={() => setSelectedMonthView(m.key)}
                 >
-                  {yr === "all" ? "All Years" : yr}
+                  {m.short} {m.year}
                 </button>
               ))}
+              <button
+                type="button"
+                className={`month-tab-pill ${selectedMonthView === "all" ? "active" : ""}`}
+                onClick={() => setSelectedMonthView("all")}
+                title="Full Year 12 Months"
+              >
+                Full Year
+              </button>
             </div>
 
-            {/* View Mode Toggle */}
+            {/* Jump to Today Button */}
+            <button
+              type="button"
+              className="jump-today-btn"
+              onClick={handleJumpToToday}
+              title="Jump directly to Today's date column"
+            >
+              <Crosshair size={14} />
+              <span>Jump to Today</span>
+            </button>
+
+            {/* Cell Zoom Controls */}
+            <div className="zoom-controls-wrap">
+              <button
+                type="button"
+                className={`zoom-btn ${dayCellWidth === 26 ? "active" : ""}`}
+                onClick={() => setDayCellWidth(26)}
+                title="Compact Day Width"
+              >
+                S
+              </button>
+              <button
+                type="button"
+                className={`zoom-btn ${dayCellWidth === 34 ? "active" : ""}`}
+                onClick={() => setDayCellWidth(34)}
+                title="Standard Day Width"
+              >
+                M
+              </button>
+              <button
+                type="button"
+                className={`zoom-btn ${dayCellWidth === 46 ? "active" : ""}`}
+                onClick={() => setDayCellWidth(46)}
+                title="Expanded Day Width"
+              >
+                L
+              </button>
+            </div>
+
+            {/* View Mode Toggle: Grid vs Table */}
             <div className="view-mode-toggle-wrap">
               <button
                 type="button"
-                className={`view-mode-btn ${viewMode === "gantt" ? "active" : ""}`}
-                onClick={() => setViewMode("gantt")}
-                title="Interactive Gantt Timeline Graph"
+                className={`view-mode-btn ${viewMode === "grid" ? "active" : ""}`}
+                onClick={() => setViewMode("grid")}
+                title="Project Timeline Spreadsheet Grid (Reference Style)"
               >
-                <BarChart3 size={15} />
-                <span>Gantt</span>
+                <Grid size={15} />
+                <span>Timeline Grid</span>
               </button>
               <button
                 type="button"
@@ -684,11 +795,11 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
             </div>
           </div>
 
-          {/* Active Filter Notice */}
-          {(searchTerm || statusFilter !== "all" || selectedYear !== "all") && (
+          {/* Active Filter Bar */}
+          {(searchTerm || statusFilter !== "all" || selectedMonthView !== "active") && (
             <div className="active-filters-bar">
               <span>
-                Showing <strong>{filteredTimelines.length}</strong> of {allTimelines.length} colleges
+                Showing <strong>{filteredTimelines.length}</strong> of {allTimelines.length} college schedules
               </span>
               <button
                 type="button"
@@ -696,202 +807,267 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 onClick={() => {
                   setSearchTerm("");
                   setStatusFilter("all");
-                  setSelectedYear("all");
+                  setSelectedMonthView("active");
                 }}
               >
-                Reset All Filters
+                Reset Filters
               </button>
             </div>
           )}
 
-          {/* GANTT TIMELINE GRAPH VIEW */}
-          {viewMode === "gantt" && (
-            <div className="gantt-chart-card">
-              <div className="gantt-card-header">
-                <div className="gantt-title-wrap">
-                  <CalendarDays size={18} className="gantt-title-icon" />
-                  <h3>College Schedule Timeline Graph</h3>
-                </div>
-                <div className="gantt-legend">
-                  <span className="legend-item">
-                    <span className="legend-dot active-dot" /> Active (Today in Range)
-                  </span>
-                  <span className="legend-item">
-                    <span className="legend-dot upcoming-dot" /> Upcoming
-                  </span>
-                  <span className="legend-item">
-                    <span className="legend-dot completed-dot" /> Completed
-                  </span>
-                  <span className="legend-item">
-                    <span className="legend-line today-line-legend" /> Today: {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                  </span>
-                </div>
-              </div>
+          {/* SPREADSHEET PROJECT TIMELINE GRID (MATCHING REFERENCE IMAGE) */}
+          {viewMode === "grid" && (
+            <div className="spreadsheet-timeline-wrapper">
+              <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
+                <div
+                  className="spreadsheet-grid-canvas"
+                  style={{
+                    minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
+                  }}
+                >
+                  {/* 1. TOP HEADER BANNER: "Project Timeline" */}
+                  <div className="spreadsheet-title-banner">
+                    <h2>Project Timeline</h2>
+                  </div>
 
-              {filteredTimelines.length === 0 ? (
-                <div className="empty-timeline-box">
-                  <CalendarRange size={42} className="empty-icon" />
-                  <h4>No College Schedules Found</h4>
-                  <p>Try adjusting your search term or status filter, or click "Add College Timeline" to register a schedule.</p>
-                  <button
-                    type="button"
-                    className="add-new-timeline-btn"
-                    onClick={() => setActiveTab("add")}
-                  >
-                    <PlusCircle size={15} />
-                    <span>Add College Timeline</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="gantt-scrollable-container">
-                  <div className="gantt-inner-wrapper">
-                    {/* Gantt Header Row with Months */}
-                    <div className="gantt-header-row">
-                      <div className="gantt-col-info-header">
-                        <span>College Name & Project Code</span>
+                  {/* 2. EXCEL COLUMN LETTERS ROW (A, B, C ... Z, AA, AB ...) */}
+                  <div className="spreadsheet-col-letters-row">
+                    <div className="row-number-header-cell">#</div>
+                    {gridData.days.map((day) => (
+                      <div
+                        key={day.colIndex}
+                        className="col-letter-cell"
+                        style={{ width: `${dayCellWidth}px` }}
+                      >
+                        {day.colLetter}
                       </div>
-                      <div className="gantt-timeline-header-track">
-                        {ganttMonthRange.map((m) => (
-                          <div key={m.key} className="gantt-month-cell">
-                            <span className="month-label-main">{m.short}</span>
-                            <span className="month-label-sub">{m.year}</span>
-                          </div>
-                        ))}
+                    ))}
+                  </div>
 
-                        {/* Red Today Line in Header */}
-                        {todayGanttPosition !== null && (
-                          <div
-                            className="gantt-today-indicator-line"
-                            style={{ left: `${todayGanttPosition}%` }}
-                            title={`Today: ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
-                          >
-                            <span className="today-flag">Today</span>
-                          </div>
-                        )}
+                  {/* 3. MONTH SPANNING HEADERS ROW (August 2026, September 2026...) */}
+                  <div className="spreadsheet-months-row">
+                    <div className="row-number-header-cell month-stub" />
+                    {gridData.months.map((m) => (
+                      <div
+                        key={m.monthKey}
+                        className="month-group-cell"
+                        style={{
+                          width: `${m.daysCount * dayCellWidth}px`,
+                        }}
+                      >
+                        {m.monthLabel}
                       </div>
-                    </div>
+                    ))}
+                  </div>
 
-                    {/* Gantt Row for Each College */}
-                    <div className="gantt-body-rows">
-                      {filteredTimelines.map((item, idx) => {
-                        const pos = getGanttPosition(item.start_date, item.end_date);
-                        const hasDates = Boolean(item.start_date && item.end_date);
+                  {/* 4. DAY NUMBERS ROW (17, 18, 19 ... 23 (Red for Sunday), 24 ...) */}
+                  <div className="spreadsheet-days-row">
+                    <div className="row-number-header-cell day-stub" />
+                    {gridData.days.map((day) => (
+                      <div
+                        key={day.dateStr}
+                        className={`day-number-cell ${day.isSunday ? "sunday-cell" : ""} ${day.isToday ? "today-cell" : ""}`}
+                        style={{ width: `${dayCellWidth}px` }}
+                        title={`${day.dayOfWeekName}, ${day.dayNum} ${day.monthLabel}`}
+                      >
+                        {day.dayNum}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 5. GRID BODY ROWS WITH TIMELINE BARS */}
+                  <div className="spreadsheet-body-matrix">
+                    {filteredTimelines.length === 0 ? (
+                      <div className="empty-grid-placeholder">
+                        <CalendarRange size={36} />
+                        <p>No college timeline matches your search criteria.</p>
+                        <button
+                          type="button"
+                          className="add-new-timeline-btn"
+                          onClick={() => setActiveTab("add")}
+                        >
+                          + Add College Timeline
+                        </button>
+                      </div>
+                    ) : (
+                      filteredTimelines.map((item, rowIdx) => {
+                        const dayRange = getCollegeDayRange(item.start_date, item.end_date);
+                        const theme = getTimelineBarTheme(item.college_name || item.project_code);
+                        const isPinned = pinnedItem?.id === item.id;
+                        const isHovered = hoveredItem?.item.id === item.id;
 
                         return (
-                          <div key={item.id || idx} className="gantt-college-row">
-                            {/* Left Meta Info */}
-                            <div className="gantt-college-info-col">
-                              <div className="college-header-line">
-                                <span className="college-title-name" title={item.college_name}>
-                                  {item.college_name || "Unnamed College"}
-                                </span>
-                                <span
-                                  className={`status-chip status-${item.status.toLowerCase().replace(/\s+/g, "-")}`}
-                                >
-                                  {item.status === "Active" && "🟢 "}
-                                  {item.status === "Upcoming" && "🔵 "}
-                                  {item.status === "Completed" && "⚪ "}
-                                  {item.status}
-                                </span>
-                              </div>
+                          <div
+                            key={item.id || rowIdx}
+                            className={`spreadsheet-row ${isPinned ? "row-pinned" : ""}`}
+                          >
+                            {/* Left Row Number (1, 2, 3...) */}
+                            <div className="row-index-cell">{rowIdx + 1}</div>
 
-                              <div className="college-sub-line">
-                                <span className="project-code-badge font-mono">{item.project_code}</span>
-                                {item.academic_year && (
-                                  <span className="acad-year-pill">{item.academic_year}</span>
-                                )}
-                                {item.course_stream && (
-                                  <span className="stream-pill">{item.course_stream}</span>
-                                )}
-                              </div>
-
-                              <div className="college-date-info-line">
-                                <span className="date-range-text">
-                                  📅 {item.formattedStartDate} → {item.formattedEndDate}
-                                </span>
-                                {item.durationDays > 0 && (
-                                  <span className="duration-pill">{item.durationDays} Days</span>
-                                )}
-                                <button
-                                  type="button"
-                                  className="gantt-quick-edit-btn"
-                                  onClick={() => handleEditItem(item)}
-                                  title="Edit Dates (Col L & M)"
-                                >
-                                  <Edit3 size={13} />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Right Timeline Canvas with Bar */}
-                            <div className="gantt-timeline-track">
-                              {/* Background Month Grid Gridlines */}
-                              {ganttMonthRange.map((m) => (
-                                <div key={m.key} className="gantt-gridline-cell" />
+                            {/* Background Day Cells */}
+                            <div className="row-cells-track">
+                              {gridData.days.map((day) => (
+                                <div
+                                  key={day.dateStr}
+                                  className={`matrix-grid-cell ${day.isSunday ? "sunday-matrix-cell" : ""}`}
+                                  style={{ width: `${dayCellWidth}px` }}
+                                />
                               ))}
 
-                              {/* Today Line Indicator */}
-                              {todayGanttPosition !== null && (
+                              {/* Today Vertical Line Marker */}
+                              {gridData.todayColIndex !== null && (
                                 <div
-                                  className="gantt-today-track-line"
-                                  style={{ left: `${todayGanttPosition}%` }}
+                                  className="matrix-today-vertical-line"
+                                  style={{
+                                    left: `${gridData.todayColIndex * dayCellWidth + dayCellWidth / 2}px`,
+                                  }}
+                                  title={`Today: ${new Date().toLocaleDateString("en-IN")}`}
                                 />
                               )}
 
-                              {/* Timeline Bar */}
-                              {hasDates && pos.isVisible ? (
+                              {/* The Colored College Schedule Bar */}
+                              {dayRange && (
                                 <div
-                                  className={`gantt-bar-pill bar-status-${item.status.toLowerCase()}`}
+                                  className={`timeline-block-bar ${isPinned ? "bar-pinned" : ""}`}
                                   style={{
-                                    left: `${pos.left}%`,
-                                    width: `${pos.width}%`,
+                                    left: `${dayRange.startCol * dayCellWidth + 2}px`,
+                                    width: `${dayRange.span * dayCellWidth - 4}px`,
+                                    background: theme.bg,
+                                    borderColor: theme.borderColor,
+                                    boxShadow: isHovered || isPinned ? "0 4px 14px rgba(0,0,0,0.3)" : theme.shadow,
                                   }}
-                                  onClick={() => handleEditItem(item)}
-                                  title={`${item.college_name} (${item.project_code})\nStart: ${item.formattedStartDate} (Col L)\nEnd: ${item.formattedEndDate} (Col M)\nStatus: ${item.status} (${item.durationDays} Days)`}
+                                  onMouseEnter={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setHoveredItem({
+                                      item,
+                                      x: rect.left + rect.width / 2,
+                                      y: rect.bottom + 8,
+                                    });
+                                  }}
+                                  onMouseLeave={() => {
+                                    if (!pinnedItem) setHoveredItem(null);
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPinnedItem(pinnedItem?.id === item.id ? null : item);
+                                  }}
                                 >
-                                  {/* Progress Fill Gradient */}
-                                  {item.status === "Active" && (
-                                    <div
-                                      className="bar-progress-fill"
-                                      style={{ width: `${item.progressPct}%` }}
-                                    />
-                                  )}
-
-                                  <div className="bar-content-label">
-                                    <span className="bar-text-main">
-                                      {item.college_name.length > 22
-                                        ? `${item.college_name.slice(0, 20)}...`
-                                        : item.college_name}
+                                  <div className="bar-inner-text">
+                                    <span className="bar-college-name" title={item.college_name}>
+                                      {item.college_name || "College Name"}
                                     </span>
-                                    <span className="bar-text-dates">
-                                      {item.durationDays}d
-                                    </span>
+                                    {item.project_code && (
+                                      <span className="bar-project-code" title={item.project_code}>
+                                        {item.project_code}
+                                      </span>
+                                    )}
                                   </div>
-                                </div>
-                              ) : (
-                                <div className="no-dates-placeholder-line">
-                                  <span>No Start/End date set</span>
-                                  <button
-                                    type="button"
-                                    className="set-dates-link-btn"
-                                    onClick={() => handleEditItem(item)}
-                                  >
-                                    + Set Dates
-                                  </button>
                                 </div>
                               )}
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
+                      })
+                    )}
                   </div>
                 </div>
+              </div>
+
+              {/* Floating Excel-Style Popover Note Card (Matching Reference Image) */}
+              {(hoveredItem || pinnedItem) && (
+                (() => {
+                  const currentPopupItem = pinnedItem || hoveredItem?.item;
+                  if (!currentPopupItem) return null;
+
+                  return (
+                    <div className="spreadsheet-floating-popover-card">
+                      <div className="popover-card-header">
+                        <span className="popover-header-title">COLLEGE SCHEDULE DETAILS</span>
+                        <button
+                          type="button"
+                          className="popover-close-btn"
+                          onClick={() => {
+                            setPinnedItem(null);
+                            setHoveredItem(null);
+                          }}
+                        >
+                          &times;
+                        </button>
+                      </div>
+
+                      <div className="popover-card-body">
+                        <div className="popover-field-row">
+                          <span className="popover-label">COLLEGE:</span>
+                          <span className="popover-value font-bold">{currentPopupItem.college_name || "N/A"}</span>
+                        </div>
+
+                        <div className="popover-field-row">
+                          <span className="popover-label">PROJECT CODE:</span>
+                          <span className="popover-value font-mono font-bold text-accent">
+                            {currentPopupItem.project_code || "N/A"}
+                          </span>
+                        </div>
+
+                        <div className="popover-field-row">
+                          <span className="popover-label">DESCRIPTION:</span>
+                          <span className="popover-value">
+                            {currentPopupItem.course_stream || currentPopupItem.academic_year || "Training Schedule"}
+                          </span>
+                        </div>
+
+                        <div className="popover-field-row">
+                          <span className="popover-label">ASSIGNED PERSON:</span>
+                          <span className="popover-value">MG</span>
+                        </div>
+
+                        <div className="popover-field-row">
+                          <span className="popover-label">START DATE:</span>
+                          <span className="popover-value text-green font-bold">
+                            {formatTimelinePopupDate(currentPopupItem.start_date)}
+                          </span>
+                        </div>
+
+                        <div className="popover-field-row">
+                          <span className="popover-label">END DATE:</span>
+                          <span className="popover-value text-blue font-bold">
+                            {formatTimelinePopupDate(currentPopupItem.end_date)}
+                          </span>
+                        </div>
+
+                        <div className="popover-field-row">
+                          <span className="popover-label">STATUS:</span>
+                          <span className={`popover-status-badge status-${currentPopupItem.status.toLowerCase()}`}>
+                            {currentPopupItem.status} ({currentPopupItem.durationDays} Days)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="popover-card-footer">
+                        <button
+                          type="button"
+                          className="popover-edit-btn"
+                          onClick={() => handleEditItem(currentPopupItem)}
+                        >
+                          <Edit3 size={13} />
+                          <span>Edit Schedule</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="popover-delete-btn"
+                          onClick={() => handleDeleteItem(currentPopupItem.id, currentPopupItem.college_name)}
+                          title="Delete timeline"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()
               )}
             </div>
           )}
 
-          {/* DETAILED SPREADSHEET TABLE VIEW */}
+          {/* TABLE VIEW OPTION */}
           {viewMode === "table" && (
             <div className="timeline-table-card">
               <div className="timeline-table-wrap">
@@ -913,26 +1089,28 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       <tr key={item.id || idx} className="timeline-row">
                         <td className="text-muted font-mono">{idx + 1}</td>
                         <td>
-                          <div className="college-info-cell">
-                            <span className="college-main-name">{item.college_name}</span>
-                            <span className="project-code-sub font-mono">{item.project_code}</span>
+                          <div className="table-college-cell">
+                            <span className="table-college-name">{item.college_name || "Unnamed"}</span>
+                            <span className="table-project-code font-mono">{item.project_code}</span>
                           </div>
                         </td>
                         <td>
-                          <span className="date-badge-pill start-date-pill">
-                            📅 {item.formattedStartDate}
+                          <span className="date-badge start-badge">
+                            {formatDisplayDate(item.start_date)}
                           </span>
                         </td>
                         <td>
-                          <span className="date-badge-pill end-date-pill">
-                            🏁 {item.formattedEndDate}
+                          <span className="date-badge end-badge">
+                            {formatDisplayDate(item.end_date)}
                           </span>
                         </td>
-                        <td className="text-center font-semibold">
-                          {item.durationDays > 0 ? `${item.durationDays} Days` : "—"}
+                        <td className="text-center font-mono">
+                          {item.durationDays > 0 ? `${item.durationDays} Days` : "-"}
                         </td>
                         <td className="text-center">
-                          <span className={`status-chip status-${item.status.toLowerCase().replace(/\s+/g, "-")}`}>
+                          <span
+                            className={`status-chip status-${item.status.toLowerCase().replace(/\s+/g, "-")}`}
+                          >
                             {item.status === "Active" && "🟢 "}
                             {item.status === "Upcoming" && "🔵 "}
                             {item.status === "Completed" && "⚪ "}
@@ -942,35 +1120,36 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         <td className="text-center">
                           {item.status === "Active" ? (
                             <div className="progress-bar-wrap">
-                              <div className="progress-bar-fill" style={{ width: `${item.progressPct}%` }} />
+                              <div
+                                className="progress-bar-fill"
+                                style={{ width: `${item.progressPct}%` }}
+                              />
                               <span className="progress-text">{item.progressPct}%</span>
                             </div>
-                          ) : item.status === "Completed" ? (
-                            <span className="completed-check">100% Complete</span>
                           ) : (
-                            <span className="text-muted">Upcoming</span>
+                            <span className="text-muted text-xs">
+                              {item.status === "Completed" ? "100%" : "0%"}
+                            </span>
                           )}
                         </td>
                         <td className="text-right">
                           <div className="table-actions-cell">
                             <button
                               type="button"
-                              className="action-icon-btn edit-icon-btn"
+                              className="action-btn edit-action-btn"
                               onClick={() => handleEditItem(item)}
                               title="Edit Schedule"
                             >
-                              <Edit3 size={15} />
+                              <Edit3 size={14} />
                             </button>
-                            {item.source === "manual" && (
-                              <button
-                                type="button"
-                                className="action-icon-btn delete-icon-btn"
-                                onClick={() => handleDeleteItem(item)}
-                                title="Delete Schedule"
-                              >
-                                <Trash2 size={15} />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              className="action-btn delete-action-btn"
+                              onClick={() => handleDeleteItem(item.id, item.college_name)}
+                              title="Delete Record"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -991,7 +1170,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           <div className="timeline-form-card">
             <div className="form-card-header">
               <div className="form-title-wrap">
-                <CalendarPlusIcon size={22} className="form-icon" />
+                <PlusCircle size={22} className="form-icon" />
                 <div>
                   <h2 className="form-title">
                     {isEditingExisting ? "Edit College Timeline Schedule" : "Add Active College Timeline"}
@@ -1029,245 +1208,279 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
             {/* Success & Error alerts */}
             {formSuccessMsg && (
-              <div className="form-alert success-alert">
+              <div className="form-alert-banner alert-success">
                 <CheckCircle2 size={18} />
                 <span>{formSuccessMsg}</span>
+                <button
+                  type="button"
+                  className="alert-close-btn"
+                  onClick={() => setFormSuccessMsg(null)}
+                >
+                  &times;
+                </button>
               </div>
             )}
 
             {formErrorMsg && (
-              <div className="form-alert error-alert">
+              <div className="form-alert-banner alert-error">
                 <AlertCircle size={18} />
                 <span>{formErrorMsg}</span>
+                <button
+                  type="button"
+                  className="alert-close-btn"
+                  onClick={() => setFormErrorMsg(null)}
+                >
+                  &times;
+                </button>
               </div>
             )}
 
-            <form onSubmit={handleFormSubmit} className="timeline-form-body">
-              {/* College Quick Selector Autocomplete */}
-              <div className="form-group-full" ref={collegePickerRef}>
-                <label className="form-field-label">
-                  <Building2 size={15} />
-                  <span>1. Select Existing College or Type New</span>
-                  <span className="field-hint-text">(Auto-fills Project Code & College Name from Sheet1)</span>
+            {/* Autocomplete Quick-Select from Sheet1 */}
+            {!isEditingExisting && sheet1CollegeOptions.length > 0 && (
+              <div className="quick-autocomplete-section" ref={collegePickerRef}>
+                <label className="input-label">
+                  <Sparkles size={14} className="text-accent" />
+                  <span>Quick Autocomplete from Sheet1 (Col B & Col C):</span>
                 </label>
-
-                <div className="college-picker-input-wrap">
-                  <button
-                    type="button"
-                    className="college-picker-trigger-btn"
-                    onClick={() => setIsCollegePickerOpen(!isCollegePickerOpen)}
-                  >
-                    <span>
-                      {formData.college_name || formData.project_code
-                        ? `${formData.college_name || "College"} (${formData.project_code || "Code"})`
-                        : "Click to pick an existing college from Sheet1 or registered list..."}
-                    </span>
-                    <ChevronRight size={16} />
-                  </button>
-
-                  {isCollegePickerOpen && (
-                    <div className="college-picker-dropdown-menu">
-                      <div className="picker-search-bar">
-                        <Search size={14} />
-                        <input
-                          type="text"
-                          placeholder="Search colleges from Sheet1..."
-                          value={collegeSearchPicker}
-                          onChange={(e) => setCollegeSearchPicker(e.target.value)}
-                          autoFocus
-                          className="picker-search-input"
-                        />
-                      </div>
-
-                      <div className="picker-options-list">
-                        {availableCollegesForPicker.map((c, idx) => (
-                          <div
-                            key={idx}
-                            className="picker-option-item"
-                            onClick={() => handleSelectExistingCollege(c)}
-                          >
-                            <div className="picker-option-left">
-                              <span className="picker-col-name">{c.name}</span>
-                              <span className="picker-col-code font-mono">{c.code}</span>
-                            </div>
-                            {c.startDate && (
-                              <span className="picker-date-tag">
-                                {c.startDate} → {c.endDate || "Ongoing"}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                <div className="autocomplete-input-wrap">
+                  <Search size={16} className="autocomplete-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search from existing Sheet1 colleges to pre-fill..."
+                    value={collegeSearchPicker}
+                    onChange={(e) => {
+                      setCollegeSearchPicker(e.target.value);
+                      setIsCollegePickerOpen(true);
+                    }}
+                    onFocus={() => setIsCollegePickerOpen(true)}
+                    className="autocomplete-search-input"
+                  />
+                  {collegeSearchPicker && (
+                    <button
+                      type="button"
+                      className="clear-search-btn"
+                      onClick={() => setCollegeSearchPicker("")}
+                    >
+                      &times;
+                    </button>
                   )}
                 </div>
-              </div>
 
-              {/* Row 1: Project Code (Col B) & College Name (Col C) */}
-              <div className="form-row-two-cols">
-                <div className="form-group">
-                  <label className="form-field-label">
-                    <span>Project Code</span>
-                    <span className="col-ref-badge">Column B in Sheet1</span>
-                    <span className="required-star">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. KDK/Engg/4th/TP/26-27"
-                    className="timeline-form-input font-mono"
-                    value={formData.project_code}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, project_code: e.target.value }))
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-field-label">
-                    <span>College Name</span>
-                    <span className="col-ref-badge">Column C in Sheet1</span>
-                    <span className="required-star">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. KDK College of Engineering, Nagpur"
-                    className="timeline-form-input"
-                    value={formData.college_name}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, college_name: e.target.value }))
-                    }
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Row 2: Start Date (Col L) & End Date (Col M) */}
-              <div className="form-row-two-cols">
-                <div className="form-group">
-                  <label className="form-field-label">
-                    <Calendar size={15} />
-                    <span>Start Date</span>
-                    <span className="col-ref-badge">Column L in Sheet1</span>
-                    <span className="required-star">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    className="timeline-form-input date-input"
-                    value={formData.start_date}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, start_date: e.target.value }))
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-field-label">
-                    <Calendar size={15} />
-                    <span>End Date</span>
-                    <span className="col-ref-badge">Column M in Sheet1</span>
-                  </label>
-                  <input
-                    type="date"
-                    className="timeline-form-input date-input"
-                    value={formData.end_date}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, end_date: e.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Live Preview Box */}
-              {formStatusPreview && (
-                <div className="timeline-live-preview-card">
-                  <div className="preview-header">
-                    <Info size={16} />
-                    <span className="preview-title">Live Schedule Duration & Status Preview</span>
-                  </div>
-                  <div className="preview-body-row">
-                    <div className="preview-stat-item">
-                      <span className="preview-lbl">Total Duration</span>
-                      <span className="preview-val font-semibold">{formStatusPreview.durationDays} Days</span>
+                {isCollegePickerOpen && filteredAutocompleteColleges.length > 0 && (
+                  <div className="autocomplete-dropdown-menu">
+                    <div className="dropdown-header">
+                      <span>Select College to Autofill:</span>
+                      <span className="dropdown-count">{filteredAutocompleteColleges.length} results</span>
                     </div>
-                    <div className="preview-stat-item">
-                      <span className="preview-lbl">Current Status</span>
-                      <span className={`status-chip status-${formStatusPreview.status.toLowerCase().replace(/\s+/g, "-")}`}>
-                        {formStatusPreview.status === "Active" && "🟢 Active Today"}
-                        {formStatusPreview.status === "Upcoming" && `🔵 Starts in ${formStatusPreview.daysRemaining} days`}
-                        {formStatusPreview.status === "Completed" && "⚪ Completed"}
-                      </span>
+                    {filteredAutocompleteColleges.map((c, idx) => (
+                      <div
+                        key={idx}
+                        className="autocomplete-dropdown-item"
+                        onClick={() => handleSelectExistingCollege(c)}
+                      >
+                        <div className="item-main">
+                          <span className="item-college-name">{c.name || "Unnamed"}</span>
+                          <span className="item-project-code font-mono">{c.code}</span>
+                        </div>
+                        {c.startDate && (
+                          <div className="item-dates-tag">
+                            📅 {formatDisplayDate(c.startDate)} → {formatDisplayDate(c.endDate)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <form onSubmit={handleFormSubmit} className="timeline-input-form">
+              {/* Row 1: Project Code & College Name */}
+              <div className="form-grid-2col">
+                <div className="form-group">
+                  <label htmlFor="project_code" className="input-label">
+                    <span>Project Code</span>
+                    <span className="required-star">*</span>
+                  </label>
+                  <input
+                    id="project_code"
+                    type="text"
+                    placeholder="e.g. ICEM/Engg/ALL/OT/26-27"
+                    value={formData.project_code}
+                    onChange={(e) => setFormData({ ...formData, project_code: e.target.value })}
+                    className="form-text-input font-mono"
+                  />
+                  <span className="input-helper">Matches Column B in Sheet1</span>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="college_name" className="input-label">
+                    <span>College Name</span>
+                    <span className="required-star">*</span>
+                  </label>
+                  <input
+                    id="college_name"
+                    type="text"
+                    placeholder="e.g. Indira College of Engineering and Management"
+                    value={formData.college_name}
+                    onChange={(e) => setFormData({ ...formData, college_name: e.target.value })}
+                    className="form-text-input"
+                  />
+                  <span className="input-helper">Matches Column C in Sheet1</span>
+                </div>
+              </div>
+
+              {/* Row 2: Training Start Date & Training End Date */}
+              <div className="form-grid-2col">
+                <div className="form-group">
+                  <label htmlFor="start_date" className="input-label">
+                    <Calendar size={14} className="text-accent" />
+                    <span>Training Start Date</span>
+                    <span className="required-star">*</span>
+                  </label>
+                  <input
+                    id="start_date"
+                    type="date"
+                    value={formData.start_date}
+                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                    className="form-text-input date-input"
+                    required
+                  />
+                  <span className="input-helper">Matches Column L in Sheet1</span>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="end_date" className="input-label">
+                    <Calendar size={14} className="text-accent" />
+                    <span>Training End Date</span>
+                  </label>
+                  <input
+                    id="end_date"
+                    type="date"
+                    value={formData.end_date}
+                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                    className="form-text-input date-input"
+                  />
+                  <span className="input-helper">Matches Column M in Sheet1</span>
+                </div>
+              </div>
+
+              {/* Live Preview Card: Duration & Status */}
+              {formStatusPreview && (
+                <div className={`live-preview-box status-${formStatusPreview.status.toLowerCase()}`}>
+                  <div className="preview-header">
+                    <div className="preview-status-pill">
+                      {formStatusPreview.status === "Active" && "🟢 Active in Training Today"}
+                      {formStatusPreview.status === "Upcoming" && "🔵 Upcoming Schedule"}
+                      {formStatusPreview.status === "Completed" && "⚪ Concluded Training"}
+                      {formStatusPreview.status === "No Dates" && "⚠️ Dates Needed"}
+                    </div>
+                    <span className="preview-duration-badge font-mono font-bold">
+                      {formStatusPreview.durationDays} Days Duration
+                    </span>
+                  </div>
+
+                  <div className="preview-details-grid">
+                    <div className="preview-stat">
+                      <span className="stat-label">Start Date:</span>
+                      <span className="stat-val">{formatDisplayDate(formData.start_date)}</span>
+                    </div>
+                    <div className="preview-stat">
+                      <span className="stat-label">End Date:</span>
+                      <span className="stat-val">{formatDisplayDate(formData.end_date)}</span>
                     </div>
                     {formStatusPreview.status === "Active" && (
-                      <div className="preview-stat-item">
-                        <span className="preview-lbl">Progress</span>
-                        <span className="preview-val font-semibold">{formStatusPreview.progressPct}% complete</span>
+                      <div className="preview-stat">
+                        <span className="stat-label">Elapsed / Left:</span>
+                        <span className="stat-val">
+                          {formStatusPreview.daysElapsed}d passed • {formStatusPreview.daysRemaining}d left
+                        </span>
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Optional Row 3: Academic Year & Stream */}
-              <div className="form-row-two-cols">
+              {/* Row 3: Optional Stream, Academic Year, Notes */}
+              <div className="form-grid-3col">
                 <div className="form-group">
-                  <label className="form-field-label">Academic Year</label>
+                  <label htmlFor="course_stream" className="input-label">
+                    Course / Stream
+                  </label>
+                  <input
+                    id="course_stream"
+                    type="text"
+                    placeholder="e.g. B.Tech / MBA / SAP-FICO"
+                    value={formData.course_stream}
+                    onChange={(e) => setFormData({ ...formData, course_stream: e.target.value })}
+                    className="form-text-input"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="academic_year" className="input-label">
+                    Academic Year
+                  </label>
                   <select
-                    className="timeline-form-input"
+                    id="academic_year"
                     value={formData.academic_year}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, academic_year: e.target.value }))
-                    }
+                    onChange={(e) => setFormData({ ...formData, academic_year: e.target.value })}
+                    className="form-text-input select-input"
                   >
                     <option value="1st Year">1st Year</option>
                     <option value="2nd Year">2nd Year</option>
                     <option value="3rd Year">3rd Year</option>
                     <option value="4th Year">4th Year</option>
+                    <option value="All Years">All Years</option>
                   </select>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-field-label">Course / Stream (Optional)</label>
+                  <label htmlFor="student_count" className="input-label">
+                    Student Count
+                  </label>
                   <input
-                    type="text"
-                    placeholder="e.g. B.Tech / CSE / IT"
-                    className="timeline-form-input"
-                    value={formData.course_stream}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, course_stream: e.target.value }))
-                    }
+                    id="student_count"
+                    type="number"
+                    placeholder="e.g. 150"
+                    value={formData.student_count}
+                    onChange={(e) => setFormData({ ...formData, student_count: e.target.value })}
+                    className="form-text-input font-mono"
                   />
                 </div>
               </div>
 
-              {/* Submit Buttons */}
+              <div className="form-group">
+                <label htmlFor="notes" className="input-label">
+                  Additional Notes
+                </label>
+                <textarea
+                  id="notes"
+                  rows={2}
+                  placeholder="Optional notes or details..."
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="form-text-input textarea-input"
+                />
+              </div>
+
+              {/* Action Buttons */}
               <div className="form-actions-row">
-                <button type="submit" className="save-timeline-submit-btn">
+                <button
+                  type="submit"
+                  className="submit-timeline-btn"
+                >
                   <Check size={16} />
-                  <span>{isEditingExisting ? "Update Timeline Schedule" : "Save Timeline to Sheet1 & Register"}</span>
+                  <span>{isEditingExisting ? "Update Timeline Schedule" : "Save Timeline Schedule"}</span>
                 </button>
 
                 <button
                   type="button"
-                  className="reset-form-btn"
-                  onClick={() => {
-                    setFormData({
-                      id: "",
-                      project_code: "",
-                      college_name: "",
-                      start_date: "",
-                      end_date: "",
-                      academic_year: "4th Year",
-                      student_count: "",
-                      course_stream: "",
-                      notes: "",
-                    });
-                    setFormErrorMsg(null);
-                    setFormSuccessMsg(null);
-                  }}
+                  className="view-timeline-btn"
+                  onClick={() => setActiveTab("view")}
                 >
-                  Reset
+                  <BarChart3 size={16} />
+                  <span>View Timeline Graph</span>
                 </button>
               </div>
             </form>
@@ -1277,49 +1490,3 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     </div>
   );
 };
-
-// Fallback Helper Icons
-function CalendarClockIcon(props: { size?: number }) {
-  return (
-    <svg
-      width={props.size || 24}
-      height={props.size || 24}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5" />
-      <path d="M16 2v4" />
-      <path d="M8 2v4" />
-      <path d="M3 10h18" />
-      <circle cx="16" cy="16" r="6" />
-      <path d="M16 14v2l1 1" />
-    </svg>
-  );
-}
-
-function CalendarPlusIcon(props: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={props.size || 24}
-      height={props.size || 24}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={props.className}
-    >
-      <path d="M8 2v4" />
-      <path d="M16 2v4" />
-      <rect width="18" height="18" x="3" y="4" rx="2" />
-      <path d="M3 10h18" />
-      <path d="M10 16h4" />
-      <path d="M12 14v4" />
-    </svg>
-  );
-}

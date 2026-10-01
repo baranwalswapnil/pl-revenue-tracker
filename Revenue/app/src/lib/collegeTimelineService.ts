@@ -445,3 +445,254 @@ export function removeSavedTimeline(idOrCode: string): void {
   );
   saveTimelinesToStorage(filtered);
 }
+
+/* =========================================================================
+   DAY-BY-DAY SPREADSHEET TIMELINE GRID (MATCHING REFERENCE IMAGE)
+   ========================================================================= */
+
+export interface TimelineDayColumn {
+  dateStr: string;        // '2026-09-07'
+  dayNum: string;         // '07'
+  dayNumber: number;      // 7
+  monthKey: string;       // '2026-09'
+  monthLabel: string;     // 'September 2026'
+  monthShort: string;     // 'Sep'
+  year: number;           // 2026
+  dayOfWeek: number;      // 0 (Sun) to 6 (Sat)
+  dayOfWeekName: string;  // 'Sun', 'Mon', 'Tue'...
+  isSunday: boolean;
+  isSaturday: boolean;
+  isWeekend: boolean;
+  isToday: boolean;
+  colIndex: number;       // 0-indexed column in timeline grid
+  colLetter: string;      // 'A', 'B', 'AA', etc.
+}
+
+export interface TimelineMonthGroup {
+  monthKey: string;       // '2026-09'
+  monthLabel: string;     // 'September 2026'
+  year: number;
+  monthIndex: number;     // 8 (0-indexed)
+  startColIndex: number;  // Starting column index in grid
+  daysCount: number;      // Number of days in this month
+}
+
+export interface TimelineBarTheme {
+  bg: string;
+  gradient: string;
+  borderColor: string;
+  textColor: string;
+  subTextColor: string;
+  shadow: string;
+  colorName: string;
+}
+
+export const TIMELINE_COLOR_PALETTES: TimelineBarTheme[] = [
+  {
+    bg: "#8a2be2", // Purple (like Indira University)
+    gradient: "linear-gradient(135deg, #7c3aed 0%, #9333ea 100%)",
+    borderColor: "#6b21a8",
+    textColor: "#ffffff",
+    subTextColor: "#e9d5ff",
+    shadow: "0 2px 8px rgba(124, 58, 237, 0.35)",
+    colorName: "purple",
+  },
+  {
+    bg: "#2e7d32", // Green (like Indira College of Commerce / SAGE)
+    gradient: "linear-gradient(135deg, #16a34a 0%, #22c55e 100%)",
+    borderColor: "#15803d",
+    textColor: "#ffffff",
+    subTextColor: "#bbf7d0",
+    shadow: "0 2px 8px rgba(22, 163, 74, 0.35)",
+    colorName: "green",
+  },
+  {
+    bg: "#d32f2f", // Red / Coral (like Indira College of Engg)
+    gradient: "linear-gradient(135deg, #dc2626 0%, #ef4444 100%)",
+    borderColor: "#b91c1c",
+    textColor: "#ffffff",
+    subTextColor: "#fecaca",
+    shadow: "0 2px 8px rgba(220, 38, 38, 0.35)",
+    colorName: "red",
+  },
+  {
+    bg: "#00838f", // Teal / Cyan (like Maharaja Institute of Tech)
+    gradient: "linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)",
+    borderColor: "#0e7490",
+    textColor: "#ffffff",
+    subTextColor: "#cffafe",
+    shadow: "0 2px 8px rgba(8, 145, 178, 0.35)",
+    colorName: "teal",
+  },
+  {
+    bg: "#e65100", // Orange (like Mauli College of Engg)
+    gradient: "linear-gradient(135deg, #ea580c 0%, #f97316 100%)",
+    borderColor: "#c2410c",
+    textColor: "#ffffff",
+    subTextColor: "#ffedd5",
+    shadow: "0 2px 8px rgba(234, 88, 12, 0.35)",
+    colorName: "orange",
+  },
+  {
+    bg: "#1565c0", // Blue (like Bapuji Salunkhe Institute)
+    gradient: "linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)",
+    borderColor: "#1d4ed8",
+    textColor: "#ffffff",
+    subTextColor: "#dbeafe",
+    shadow: "0 2px 8px rgba(37, 99, 235, 0.35)",
+    colorName: "blue",
+  },
+  {
+    bg: "#6b21a8", // Deep Violet (like School of Information Tech)
+    gradient: "linear-gradient(135deg, #6b21a8 0%, #7e22ce 100%)",
+    borderColor: "#581c87",
+    textColor: "#ffffff",
+    subTextColor: "#f3e8ff",
+    shadow: "0 2px 8px rgba(107, 33, 168, 0.35)",
+    colorName: "violet",
+  },
+  {
+    bg: "#4d7c0f", // Lime Green
+    gradient: "linear-gradient(135deg, #65a30d 0%, #84cc16 100%)",
+    borderColor: "#4d7c0f",
+    textColor: "#ffffff",
+    subTextColor: "#ecfccb",
+    shadow: "0 2px 8px rgba(101, 163, 13, 0.35)",
+    colorName: "lime",
+  },
+];
+
+/**
+ * Deterministically retrieves a vibrant theme based on college name / project code
+ */
+export function getTimelineBarTheme(identifier: string = ""): TimelineBarTheme {
+  let hash = 0;
+  const str = identifier || "college";
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % TIMELINE_COLOR_PALETTES.length;
+  return TIMELINE_COLOR_PALETTES[index];
+}
+
+/**
+ * Returns Excel style column letter (A, B, C... Z, AA, AB...)
+ */
+export function getColumnLetter(colIndex: number): string {
+  let letter = "";
+  let temp = colIndex;
+  while (temp >= 0) {
+    letter = String.fromCharCode((temp % 26) + 65) + letter;
+    temp = Math.floor(temp / 26) - 1;
+  }
+  return letter;
+}
+
+/**
+ * Formats date for the popover note (e.g., "07-Sep-2026")
+ */
+export function formatTimelinePopupDate(dateStr?: string): string {
+  if (!dateStr) return "N/A";
+  const norm = normalizeDateStr(dateStr);
+  if (!norm) return dateStr;
+  const parts = norm.split("-");
+  if (parts.length !== 3) return dateStr;
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return dateStr;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dayStr = String(d).padStart(2, "0");
+  const monthStr = months[m - 1] || "Jan";
+  return `${dayStr}-${monthStr}-${y}`;
+}
+
+/**
+ * Generates the complete day-by-day spreadsheet grid columns and month groups
+ */
+export function generateDayGridData(
+  startYear: number,
+  startMonthIdx: number, // 0-indexed
+  endYear: number,
+  endMonthIdx: number   // 0-indexed
+): {
+  days: TimelineDayColumn[];
+  months: TimelineMonthGroup[];
+  todayColIndex: number | null;
+} {
+  const days: TimelineDayColumn[] = [];
+  const months: TimelineMonthGroup[] = [];
+  const todayStr = normalizeDateStr(new Date().toISOString().slice(0, 10));
+  let todayColIndex: number | null = null;
+  let currentColIndex = 0;
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const monthShorts = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  let curYear = startYear;
+  let curMonth = startMonthIdx;
+
+  while (curYear < endYear || (curYear === endYear && curMonth <= endMonthIdx)) {
+    const monthStartCol = currentColIndex;
+    const daysInMonth = new Date(curYear, curMonth + 1, 0).getDate();
+    const monthLabel = `${monthNames[curMonth]} ${curYear}`;
+    const monthShort = monthShorts[curMonth];
+    const monthKey = `${curYear}-${String(curMonth + 1).padStart(2, "0")}`;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayDate = new Date(curYear, curMonth, d);
+      const dayOfWeek = dayDate.getDay();
+      const dayStr = String(d).padStart(2, "0");
+      const dateStr = `${curYear}-${String(curMonth + 1).padStart(2, "0")}-${dayStr}`;
+      const isSunday = dayOfWeek === 0;
+      const isSaturday = dayOfWeek === 6;
+      const isToday = dateStr === todayStr;
+
+      if (isToday) {
+        todayColIndex = currentColIndex;
+      }
+
+      days.push({
+        dateStr,
+        dayNum: dayStr,
+        dayNumber: d,
+        monthKey,
+        monthLabel,
+        monthShort,
+        year: curYear,
+        dayOfWeek,
+        dayOfWeekName: dayNames[dayOfWeek],
+        isSunday,
+        isSaturday,
+        isWeekend: isSunday || isSaturday,
+        isToday,
+        colIndex: currentColIndex,
+        colLetter: getColumnLetter(currentColIndex),
+      });
+
+      currentColIndex++;
+    }
+
+    months.push({
+      monthKey,
+      monthLabel,
+      year: curYear,
+      monthIndex: curMonth,
+      startColIndex: monthStartCol,
+      daysCount: daysInMonth,
+    });
+
+    curMonth++;
+    if (curMonth > 11) {
+      curMonth = 0;
+      curYear++;
+    }
+  }
+
+  return { days, months, todayColIndex };
+}

@@ -7035,3 +7035,528 @@ a {
   border-color: #fca5a5;
   color: #dc2626;
 }
+
+/* ==========================================================================
+   SPREADSHEET DAY-BY-DAY PROJECT TIMELINE GRID (MATCHING REFERENCE IMAGE)
+   ========================================================================== */
+
+.spreadsheet-timeline-wrapper {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  position: relative;
+  margin-top: 14px;
+}
+
+.spreadsheet-scroll-box {
+  overflow-x: auto;
+  overflow-y: visible;
+  max-width: 100%;
+  border-radius: 11px;
+}
+
+.spreadsheet-grid-canvas {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  user-select: none;
+}
+
+/* 1. Top Title Banner: "Project Timeline" */
+.spreadsheet-title-banner {
+  background: #1e3a8a; /* Dark Navy Blue */
+  padding: 10px 16px;
+  text-align: center;
+  border-bottom: 1.5px solid #172554;
+}
+
+.spreadsheet-title-banner h2 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: none;
+}
+
+/* 2. Column Letters Row (A, B, C ... Z, AA, AB ...) */
+.spreadsheet-col-letters-row {
+  display: flex;
+  background: #f8fafc;
+  border-bottom: 1px solid #cbd5e1;
+  height: 22px;
+}
+
+.row-number-header-cell {
+  width: 48px;
+  min-width: 48px;
+  background: #f1f5f9;
+  border-right: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.col-letter-cell {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid #e2e8f0;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #64748b;
+  background: #f8fafc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* 3. Month Spanning Headers Row (August 2026, September 2026...) */
+.spreadsheet-months-row {
+  display: flex;
+  background: #2b5797; /* Microsoft Excel Blue Header */
+  border-bottom: 1px solid #1e3a8a;
+  height: 28px;
+}
+
+.row-number-header-cell.month-stub {
+  background: #f1f5f9;
+}
+
+.month-group-cell {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  border-right: 2px solid #ffffff;
+  background: #2b5797;
+  text-align: center;
+}
+
+/* 4. Day Numbers Row (17, 18, 19 ... 23 (Red), 24 ...) */
+.spreadsheet-days-row {
+  display: flex;
+  background: #2b5797;
+  border-bottom: 2px solid #1e293b;
+  height: 26px;
+}
+
+.row-number-header-cell.day-stub {
+  background: #f1f5f9;
+}
+
+.day-number-cell {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #2b5797;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Red Day Header for Sundays (Matching Reference Image) */
+.day-number-cell.sunday-cell {
+  background: #c53030 !important; /* Vibrant Red */
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.day-number-cell.today-cell {
+  position: relative;
+  background: #1e40af;
+  box-shadow: inset 0 0 0 2px #fbbf24;
+}
+
+/* 5. Matrix Body Rows */
+.spreadsheet-body-matrix {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  position: relative;
+}
+
+.spreadsheet-row {
+  display: flex;
+  height: 58px;
+  border-bottom: 1px solid #e2e8f0;
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.spreadsheet-row:hover {
+  background: #f8fafc;
+}
+
+.spreadsheet-row.row-pinned {
+  background: #f0fdfa;
+}
+
+.row-index-cell {
+  width: 48px;
+  min-width: 48px;
+  background: #f8fafc;
+  border-right: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.row-cells-track {
+  display: flex;
+  position: relative;
+  align-items: center;
+  height: 100%;
+}
+
+.matrix-grid-cell {
+  flex-shrink: 0;
+  height: 100%;
+  border-right: 1px solid #e2e8f0;
+}
+
+.matrix-grid-cell.sunday-matrix-cell {
+  background: rgba(220, 38, 38, 0.03); /* Subtle red tint for Sunday columns */
+  border-right: 1px solid #fca5a5;
+}
+
+/* Today vertical marker line */
+.matrix-today-vertical-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2.5px;
+  background: #0f172a; /* Dark marker line */
+  z-index: 8;
+  pointer-events: none;
+}
+
+/* 6. Solid Colorful College Timeline Bars (Matching Reference Image) */
+.timeline-block-bar {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  border-radius: 4px;
+  border-width: 1.5px;
+  border-style: solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  cursor: pointer;
+  z-index: 10;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  overflow: hidden;
+}
+
+.timeline-block-bar:hover {
+  transform: translateY(-2px);
+  z-index: 15;
+}
+
+.timeline-block-bar.bar-pinned {
+  outline: 2.5px solid #0f172a;
+  outline-offset: 2px;
+  z-index: 20;
+}
+
+.bar-inner-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.bar-college-name {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.bar-project-code {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  opacity: 0.95;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* 7. Floating Excel-Style Popover Note Card */
+.spreadsheet-floating-popover-card {
+  position: fixed;
+  top: 140px;
+  right: 32px;
+  width: 340px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+  z-index: 100;
+  animation: popoverFadeIn 0.15s ease-out;
+  overflow: hidden;
+}
+
+@keyframes popoverFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.popover-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1e3a8a;
+  color: #ffffff;
+  padding: 8px 14px;
+}
+
+.popover-header-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.popover-close-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.popover-close-btn:hover {
+  opacity: 1;
+}
+
+.popover-card-body {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  background: #ffffff;
+}
+
+.popover-field-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.popover-label {
+  font-weight: 800;
+  color: #475569;
+  font-size: 11px;
+  min-width: 110px;
+  text-transform: uppercase;
+}
+
+.popover-value {
+  color: #0f172a;
+  font-size: 12px;
+  flex: 1;
+  word-break: break-word;
+}
+
+.popover-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.popover-status-badge.status-active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.popover-status-badge.status-upcoming {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.popover-status-badge.status-completed {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.popover-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.popover-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #0d9488;
+  color: #ffffff;
+  border: none;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.popover-edit-btn:hover {
+  background: #0f766e;
+}
+
+.popover-delete-btn {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  padding: 6px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.popover-delete-btn:hover {
+  background: #fecaca;
+}
+
+/* 8. Controls Bar Additional Elements */
+.timeline-month-selector-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.filter-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  margin-right: 2px;
+}
+
+.month-tab-pill {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.month-tab-pill:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.month-tab-pill.active {
+  background: #1e3a8a;
+  border-color: #1e3a8a;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.jump-today-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.jump-today-btn:hover {
+  background: #dbeafe;
+}
+
+.zoom-controls-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #f1f5f9;
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.zoom-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.zoom-btn.active {
+  background: #ffffff;
+  color: #0d9488;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.empty-grid-placeholder {
+  padding: 42px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #64748b;
+  text-align: center;
+}
