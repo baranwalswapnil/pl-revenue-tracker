@@ -1,6 +1,7 @@
 import React from "react";
 import { ArrowLeft, Building2, FileSpreadsheet } from "lucide-react";
 import tvaLogo from "../assets/tva_timeline_logo.jpg";
+import tvaHorizontalLogo from "../assets/tva_horizontal_logo.jpg";
 
 interface HeaderProps {
   currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv" | "college-timeline";
@@ -45,27 +46,44 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Time Variance Authority TVA Medallion button to go to Active College Timeline & Schedule */}
+          {/* Time Variance Authority TVA Header Group (Medallion + Horizontal Logo beside it) */}
           {onOpenCollegeTimeline && (
-            <button
-              type="button"
-              className={`topbar-timeline-circle-btn ${currentView === "college-timeline" ? "active" : ""}`}
-              onClick={onOpenCollegeTimeline}
-              title="Active College Timeline & Schedule (Time Variance Authority)"
-              aria-label="Active College Timeline & Schedule"
-            >
-              <span className="timeline-pulse-ring" />
-              <img
-                src={tvaLogo}
-                alt="Active College Timeline & Schedule"
-                className="topbar-timeline-logo-img"
-              />
-              {activeTimelineCount > 0 && (
-                <span className="timeline-circle-badge" title={`${activeTimelineCount} Active Colleges`}>
-                  {activeTimelineCount}
-                </span>
-              )}
-            </button>
+            <div className="topbar-timeline-nav-group">
+              <button
+                type="button"
+                className={`topbar-timeline-circle-btn ${currentView === "college-timeline" ? "active" : ""}`}
+                onClick={onOpenCollegeTimeline}
+                title="Active College Timeline & Schedule (Time Variance Authority)"
+                aria-label="Active College Timeline & Schedule"
+              >
+                <span className="timeline-pulse-ring" />
+                <img
+                  src={tvaLogo}
+                  alt="Active College Timeline & Schedule"
+                  className="topbar-timeline-logo-img"
+                />
+                {activeTimelineCount > 0 && (
+                  <span className="timeline-circle-badge" title={`${activeTimelineCount} Active Colleges`}>
+                    {activeTimelineCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Beside it: TVA Horizontal Logo */}
+              <button
+                type="button"
+                className={`topbar-tva-horizontal-btn ${currentView === "college-timeline" ? "active" : ""}`}
+                onClick={onOpenCollegeTimeline}
+                title="Active College Timeline & Schedule (Time Variance Authority)"
+                aria-label="TVA Time Variance Authority"
+              >
+                <img
+                  src={tvaHorizontalLogo}
+                  alt="TVA Time Variance Authority"
+                  className="topbar-tva-horizontal-img"
+                />
+              </button>
+            </div>
           )}
 
           {currentView !== "dashboard" && (
