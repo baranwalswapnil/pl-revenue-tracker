@@ -286,12 +286,12 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     const endDate = formData.end_date.trim();
 
     if (!projCode && !collegeName) {
-      setFormErrorMsg("Please provide at least a Project Code (Col B) or College Name (Col C).");
+      setFormErrorMsg("Please provide at least a Project Code or College Name.");
       return;
     }
 
     if (!startDate) {
-      setFormErrorMsg("Please select a Start Date (Column L in Sheet1).");
+      setFormErrorMsg("Please select a Start Date.");
       return;
     }
 
@@ -459,13 +459,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           </div>
           <div className="timeline-hero-text">
             <h1 className="timeline-main-title">Active College Timeline & Schedule</h1>
-            <p className="timeline-subtitle">
-              Interactive timeline & schedule linked with Sheet1 (
-              <span className="col-ref-chip">Col B: Project Code</span> •{" "}
-              <span className="col-ref-chip">Col C: College Name</span> •{" "}
-              <span className="col-ref-chip">Col L: Start Date</span> •{" "}
-              <span className="col-ref-chip">Col M: End Date</span>)
-            </p>
           </div>
 
           <div className="timeline-hero-actions">
@@ -906,9 +899,9 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                   <thead>
                     <tr>
                       <th style={{ width: "45px" }}>#</th>
-                      <th>College Name (Col C) & Project Code (Col B)</th>
-                      <th>Start Date (Col L)</th>
-                      <th>End Date (Col M)</th>
+                      <th>College Name & Project Code</th>
+                      <th>Start Date</th>
+                      <th>End Date</th>
                       <th className="text-center">Duration</th>
                       <th className="text-center">Status</th>
                       <th className="text-center">Progress</th>
@@ -1004,7 +997,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     {isEditingExisting ? "Edit College Timeline Schedule" : "Add Active College Timeline"}
                   </h2>
                   <p className="form-desc">
-                    Specify Project Code (Col B), College Name (Col C), Start Date (Col L), and End Date (Col M).
+                    Enter project code, college name, and training start and end dates.
                   </p>
                 </div>
               </div>
