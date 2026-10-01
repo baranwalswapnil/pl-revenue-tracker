@@ -48,6 +48,14 @@ import {
   type TimelineMonthGroup,
 } from "../lib/collegeTimelineService";
 
+export type PeriodCategory = "starting" | "ending" | "ongoing" | "other";
+
+export interface CategorizedTimelineItem extends EnrichedTimelineItem {
+  periodCategory: PeriodCategory;
+  categoryLabel: string;
+  categoryOrder: number; // 1: Starting, 2: Ending, 3: Ongoing, 4: Other / Incomplete
+}
+
 interface Step8CollegeTimelinePageProps {
   projects: Project[];
   googleSheetColleges: GoogleSheetCollegeItem[];
@@ -76,18 +84,19 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   const [statusFilter, setStatusFilter] = useState<"all" | TimelineStatus>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
-  // Spreadsheet Grid Display Settings (2-Tier Year -> Month Filter)
+  // Spreadsheet Grid Display Settings (2-Tier Year -> Month Filter + Specific Date Filter)
   const [selectedYear, setSelectedYear] = useState<number | "all">(2026);
   const [selectedMonth, setSelectedMonth] = useState<number | "all">("all");
+  const [selectedSpecificDate, setSelectedSpecificDate] = useState<string | null>(null);
   const [dayCellWidth, setDayCellWidth] = useState<number>(34); // px per day column (26 compact, 34 standard, 46 wide)
 
   // Floating Popover Card on Bar Hover / Click
   const [hoveredItem, setHoveredItem] = useState<{
-    item: EnrichedTimelineItem;
+    item: CategorizedTimelineItem;
     x: number;
     y: number;
   } | null>(null);
-  const [pinnedItem, setPinnedItem] = useState<EnrichedTimelineItem | null>(null);
+  const [pinnedItem, setPinnedItem] = useState<CategorizedTimelineItem | null>(null);
 
   // Add / Edit Form State (Core Fields: Project Code, College Name, Start Date, End Date)
   const [formData, setFormData] = useState({
@@ -229,11 +238,185 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return counts;
   }, [allTimelines, selectedYear, availableYears]);
 
-  // Filtered timeline items based on search, status, and 2-tier Year -> Month selection
-  const filteredTimelines = useMemo(() => {
+  // Calculate current active focus period window
+  const currentPeriodInfo = useMemo(() => {
+    // 1. Single Specific Date selected (e.g. user clicked day column)
+    if (selectedSpecificDate) {
+      return {
+        type: "day" as const,
+        pStart: selectedSpecificDate,
+        pEnd: selectedSpecificDate,
+        label: formatTimelinePopupDate(selectedSpecificDate),
+        shortLabel: formatTimelinePopupDate(selectedSpecificDate),
+        monthNum: null as number | null,
+      };
+    }
+
+    // 2. Specific Year + Specific Month (e.g. 2026 + December)
+    if (selectedYear !== "all" && selectedMonth !== "all") {
+      const mStr = String(selectedMonth).padStart(2, "0");
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const mName = MONTHS_LIST.find((m) => m.num === selectedMonth)?.fullName || `Month ${selectedMonth}`;
+      const mShort = MONTHS_LIST.find((m) => m.num === selectedMonth)?.shortName || `${selectedMonth}`;
+      return {
+        type: "month" as const,
+        pStart: `${selectedYear}-${mStr}-01`,
+        pEnd: `${selectedYear}-${mStr}-${String(lastDay).padStart(2, "0")}`,
+        label: `${mName} ${selectedYear}`,
+        shortLabel: `${mShort} ${selectedYear}`,
+        monthNum: selectedMonth,
+      };
+    }
+
+    // 3. Specific Year + Full Year (e.g. Year 2026)
+    if (selectedYear !== "all" && selectedMonth === "all") {
+      return {
+        type: "year" as const,
+        pStart: `${selectedYear}-01-01`,
+        pEnd: `${selectedYear}-12-31`,
+        label: `Year ${selectedYear}`,
+        shortLabel: `${selectedYear}`,
+        monthNum: null as number | null,
+      };
+    }
+
+    // 4. All Years + Specific Month (e.g. All Decembers)
+    if (selectedYear === "all" && selectedMonth !== "all") {
+      const mName = MONTHS_LIST.find((m) => m.num === selectedMonth)?.fullName || `Month ${selectedMonth}`;
+      const mShort = MONTHS_LIST.find((m) => m.num === selectedMonth)?.shortName || `${selectedMonth}`;
+      return {
+        type: "all_years_month" as const,
+        pStart: "",
+        pEnd: "",
+        label: `All ${mName}s`,
+        shortLabel: `${mShort}`,
+        monthNum: selectedMonth,
+      };
+    }
+
+    // 5. All Years + All Months
+    return {
+      type: "all" as const,
+      pStart: "",
+      pEnd: "",
+      label: "All Schedules",
+      shortLabel: "All",
+      monthNum: null as number | null,
+    };
+  }, [selectedSpecificDate, selectedYear, selectedMonth, MONTHS_LIST]);
+
+  // Categorize a college schedule relative to the active focus period:
+  // Group 1 (Top): Started in/on this Period
+  // Group 2 (Middle): Ended in/on this Period (Started earlier)
+  // Group 3 (Bottom): Ongoing across this Period (Started before and ending after)
+  const categorizeTimelineItem = (
+    item: EnrichedTimelineItem,
+    period: typeof currentPeriodInfo
+  ): CategorizedTimelineItem => {
+    const s = normalizeDateStr(item.start_date);
+    const e = normalizeDateStr(item.end_date);
+
+    if (!s || !e || item.status === "Incomplete Data") {
+      return {
+        ...item,
+        periodCategory: "other",
+        categoryLabel: "Incomplete / Missing Dates",
+        categoryOrder: 4,
+      };
+    }
+
+    // If period has explicit pStart and pEnd
+    if (period.pStart && period.pEnd) {
+      const { pStart, pEnd, label } = period;
+
+      // Group 1: Started on / in this Period (Top of Graph)
+      if (s >= pStart && s <= pEnd) {
+        return {
+          ...item,
+          periodCategory: "starting",
+          categoryLabel: `Starting in ${label}`,
+          categoryOrder: 1,
+        };
+      }
+
+      // Group 2: Ended on / in this Period (Middle of Graph)
+      // (Started before this period, and concludes on/within this period)
+      if (s < pStart && e >= pStart && e <= pEnd) {
+        return {
+          ...item,
+          periodCategory: "ending",
+          categoryLabel: `Ending in ${label}`,
+          categoryOrder: 2,
+        };
+      }
+
+      // Group 3: Ongoing Across this Period (Bottom of Graph)
+      // (Started before this period, and extends after this period)
+      if (s < pStart && e > pEnd) {
+        return {
+          ...item,
+          periodCategory: "ongoing",
+          categoryLabel: `Ongoing Across ${label} (Started Before & Ending After)`,
+          categoryOrder: 3,
+        };
+      }
+
+      return {
+        ...item,
+        periodCategory: "other",
+        categoryLabel: "Other Period",
+        categoryOrder: 4,
+      };
+    }
+
+    // If viewing All Years + Specific Month (e.g. Month 12)
+    if (period.type === "all_years_month" && period.monthNum) {
+      const targetMonth = period.monthNum;
+      const sMonth = parseInt(s.slice(5, 7), 10);
+      const eMonth = parseInt(e.slice(5, 7), 10);
+
+      if (sMonth === targetMonth) {
+        return {
+          ...item,
+          periodCategory: "starting",
+          categoryLabel: `Starting in ${period.label}`,
+          categoryOrder: 1,
+        };
+      } else if (eMonth === targetMonth) {
+        return {
+          ...item,
+          periodCategory: "ending",
+          categoryLabel: `Ending in ${period.label}`,
+          categoryOrder: 2,
+        };
+      } else {
+        return {
+          ...item,
+          periodCategory: "ongoing",
+          categoryLabel: `Ongoing in ${period.label}`,
+          categoryOrder: 3,
+        };
+      }
+    }
+
+    // Default: by Status
+    return {
+      ...item,
+      periodCategory: "other",
+      categoryLabel: item.status,
+      categoryOrder: item.status === "Active" ? 1 : item.status === "Upcoming" ? 2 : 3,
+    };
+  };
+
+  // Filtered timeline items based on search, status, and 2-tier Year -> Month selection,
+  // STRICTLY SORTED AS REQUESTED:
+  // 1. Top: Started in this Period (Date/Month/Year)
+  // 2. Middle: Ended in this Period
+  // 3. Bottom: Started before and ending after (Ongoing through period)
+  const filteredTimelines: CategorizedTimelineItem[] = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
 
-    return allTimelines.filter((item) => {
+    const matched = allTimelines.filter((item) => {
       // 1. Search term match (College name, Project code, Course stream)
       if (term) {
         const matchName = item.college_name.toLowerCase().includes(term);
@@ -252,8 +435,14 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         }
       }
 
-      // 3. Year & Month Period Filter (Applied when not performing an explicit text search)
+      // 3. Year / Month / Day Period Filter (Applied when not performing an explicit text search)
       if (!term) {
+        if (selectedSpecificDate) {
+          const s = normalizeDateStr(item.start_date);
+          const e = normalizeDateStr(item.end_date);
+          if (!s || !e) return false;
+          return !(e < selectedSpecificDate || s > selectedSpecificDate);
+        }
         if (!isItemInPeriod(item, selectedYear, selectedMonth)) {
           return false;
         }
@@ -261,7 +450,62 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
       return true;
     });
-  }, [allTimelines, searchTerm, statusFilter, selectedYear, selectedMonth, availableYears]);
+
+    const categorized = matched.map((item) => categorizeTimelineItem(item, currentPeriodInfo));
+
+    return categorized.sort((a, b) => {
+      // 1. Primary Sort: Category Order (1: Starting -> 2: Ending -> 3: Ongoing -> 4: Other)
+      if (a.categoryOrder !== b.categoryOrder) {
+        return a.categoryOrder - b.categoryOrder;
+      }
+
+      // 2. Category 1 (Starting in Period): by Start Date ascending, then End Date
+      if (a.categoryOrder === 1) {
+        const sComp = (a.start_date || "").localeCompare(b.start_date || "");
+        if (sComp !== 0) return sComp;
+        return (a.end_date || "").localeCompare(b.end_date || "");
+      }
+
+      // 3. Category 2 (Ending in Period): by End Date ascending, then Start Date
+      if (a.categoryOrder === 2) {
+        const eComp = (a.end_date || "").localeCompare(b.end_date || "");
+        if (eComp !== 0) return eComp;
+        return (a.start_date || "").localeCompare(b.start_date || "");
+      }
+
+      // 4. Category 3 (Ongoing Across Period): by Start Date ascending, then End Date
+      if (a.categoryOrder === 3) {
+        const sComp = (a.start_date || "").localeCompare(b.start_date || "");
+        if (sComp !== 0) return sComp;
+        return (a.end_date || "").localeCompare(b.end_date || "");
+      }
+
+      return a.college_name.localeCompare(b.college_name);
+    });
+  }, [
+    allTimelines,
+    searchTerm,
+    statusFilter,
+    selectedYear,
+    selectedMonth,
+    selectedSpecificDate,
+    currentPeriodInfo,
+    availableYears,
+  ]);
+
+  // Precomputed breakdown counts for the 3 categories
+  const categoryCounts = useMemo(() => {
+    const counts: Record<PeriodCategory, number> = {
+      starting: 0,
+      ending: 0,
+      ongoing: 0,
+      other: 0,
+    };
+    filteredTimelines.forEach((t) => {
+      counts[t.periodCategory] = (counts[t.periodCategory] || 0) + 1;
+    });
+    return counts;
+  }, [filteredTimelines]);
 
   // Overall KPI statistics
   const stats = useMemo(() => {
@@ -1025,19 +1269,27 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           </div>
 
           {/* Active Filter Bar */}
-          {(searchTerm || statusFilter !== "all" || selectedYear !== 2026 || selectedMonth !== "all") && (
+          {(searchTerm || statusFilter !== "all" || selectedYear !== 2026 || selectedMonth !== "all" || selectedSpecificDate) && (
             <div className="active-filters-bar">
               <div className="active-filters-text-group">
                 <span>
                   Showing <strong>{filteredTimelines.length}</strong> of {allTimelines.length} college schedules
                 </span>
-                {selectedYear !== "all" && (
-                  <span className="active-filter-badge">Year: {selectedYear}</span>
-                )}
-                {selectedMonth !== "all" && (
-                  <span className="active-filter-badge">
-                    Month: {MONTHS_LIST.find((m) => m.num === selectedMonth)?.fullName || selectedMonth}
+                {selectedSpecificDate ? (
+                  <span className="active-filter-badge active-day-filter-badge">
+                    🎯 Focus Date: {formatTimelinePopupDate(selectedSpecificDate)}
                   </span>
+                ) : (
+                  <>
+                    {selectedYear !== "all" && (
+                      <span className="active-filter-badge">Year: {selectedYear}</span>
+                    )}
+                    {selectedMonth !== "all" && (
+                      <span className="active-filter-badge">
+                        Month: {MONTHS_LIST.find((m) => m.num === selectedMonth)?.fullName || selectedMonth}
+                      </span>
+                    )}
+                  </>
                 )}
                 {statusFilter !== "all" && (
                   <span className="active-filter-badge">Status: {statusFilter}</span>
@@ -1051,12 +1303,78 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                   setStatusFilter("all");
                   setSelectedYear(2026);
                   setSelectedMonth("all");
+                  setSelectedSpecificDate(null);
                 }}
               >
                 Reset Filters
               </button>
             </div>
           )}
+
+          {/* 3-TIER FOCUS PERIOD SUMMARY BAR */}
+          <div className="period-grouped-summary-bar">
+            <div className="summary-bar-main">
+              <div className="summary-period-title">
+                <span className="period-icon">🎯</span>
+                <span className="period-title-text">
+                  Focus: <strong>{currentPeriodInfo.label}</strong>
+                </span>
+                {selectedSpecificDate && (
+                  <button
+                    type="button"
+                    className="clear-specific-date-btn"
+                    onClick={() => setSelectedSpecificDate(null)}
+                    title="Clear single-day filter and return to month/year view"
+                  >
+                    <X size={12} />
+                    <span>Clear Day Filter</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="summary-category-chips">
+                <div
+                  className="category-chip chip-starting"
+                  title={`Colleges that started during ${currentPeriodInfo.label}`}
+                >
+                  <span className="chip-badge-num">1</span>
+                  <span className="chip-label">Starting:</span>
+                  <span className="chip-count">{categoryCounts.starting}</span>
+                </div>
+
+                <div
+                  className="category-chip chip-ending"
+                  title={`Colleges that ended during ${currentPeriodInfo.label} (started earlier)`}
+                >
+                  <span className="chip-badge-num">2</span>
+                  <span className="chip-label">Ending:</span>
+                  <span className="chip-count">{categoryCounts.ending}</span>
+                </div>
+
+                <div
+                  className="category-chip chip-ongoing"
+                  title={`Colleges ongoing across ${currentPeriodInfo.label} (started before and ending after)`}
+                >
+                  <span className="chip-badge-num">3</span>
+                  <span className="chip-label">Ongoing Across:</span>
+                  <span className="chip-count">{categoryCounts.ongoing}</span>
+                </div>
+
+                {categoryCounts.other > 0 && (
+                  <div
+                    className="category-chip chip-other"
+                    title="Incomplete / missing dates in Sheet1"
+                  >
+                    <span className="chip-label">Incomplete:</span>
+                    <span className="chip-count">{categoryCounts.other}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="summary-bar-hint">
+              <span>💡 Ordered as requested: <strong>1. Starting</strong> (Top) → <strong>2. Ending</strong> (Middle) → <strong>3. Ongoing</strong> (Bottom). Click any day number to filter by date.</span>
+            </div>
+          </div>
 
           {/* SPREADSHEET PROJECT TIMELINE GRID (MATCHING REFERENCE IMAGE) */}
           {viewMode === "grid" && (
@@ -1158,8 +1476,12 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         style={{
                           width: `${m.daysCount * dayCellWidth}px`,
                         }}
-                        onClick={() => handleJumpToMonth(m.monthIndex + 1)}
-                        title={`Click to jump to ${m.monthLabel}`}
+                        onClick={() => {
+                          setSelectedMonth(m.monthIndex + 1);
+                          setSelectedSpecificDate(null);
+                          handleJumpToMonth(m.monthIndex + 1);
+                        }}
+                        title={`Click to filter & jump to ${m.monthLabel}`}
                       >
                         {m.monthLabel}
                       </div>
@@ -1169,16 +1491,24 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                   {/* 4. DAY NUMBERS ROW (17, 18, 19 ... 23 (Red for Sunday), 24 ...) */}
                   <div className="spreadsheet-days-row">
                     <div className="row-number-header-cell day-stub" />
-                    {gridData.days.map((day) => (
-                      <div
-                        key={day.dateStr}
-                        className={`day-number-cell ${day.isSunday ? "sunday-cell" : ""} ${day.isToday ? "today-cell" : ""}`}
-                        style={{ width: `${dayCellWidth}px` }}
-                        title={`${day.dayOfWeekName}, ${day.dayNum} ${day.monthLabel}`}
-                      >
-                        {day.dayNum}
-                      </div>
-                    ))}
+                    {gridData.days.map((day) => {
+                      const isSelected = selectedSpecificDate === day.dateStr;
+                      return (
+                        <div
+                          key={day.dateStr}
+                          className={`day-number-cell ${day.isSunday ? "sunday-cell" : ""} ${day.isToday ? "today-cell" : ""} ${isSelected ? "selected-day-cell" : ""}`}
+                          style={{ width: `${dayCellWidth}px` }}
+                          onClick={() =>
+                            setSelectedSpecificDate(
+                              selectedSpecificDate === day.dateStr ? null : day.dateStr
+                            )
+                          }
+                          title={`${day.dayOfWeekName}, ${day.dayNum} ${day.monthLabel} · Click to focus & group timeline on this day`}
+                        >
+                          {day.dayNum}
+                        </div>
+                      );
+                    })}
                   </div>
 
                   {/* 5. GRID BODY ROWS WITH TIMELINE BARS */}
@@ -1202,123 +1532,155 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         const isPinned = pinnedItem?.id === item.id;
                         const isHovered = hoveredItem?.item.id === item.id;
                         const isIncomplete = item.status === "Incomplete Data" || !item.start_date || !item.end_date;
+                        const showCategoryBanner =
+                          rowIdx === 0 ||
+                          filteredTimelines[rowIdx - 1].categoryOrder !== item.categoryOrder;
 
                         return (
-                          <div
-                            key={item.id || rowIdx}
-                            className={`spreadsheet-row ${isPinned ? "row-pinned" : ""} ${isIncomplete ? "row-incomplete" : ""}`}
-                          >
-                            {/* Left Row Number (1, 2, 3...) */}
-                            <div className="row-index-cell">{rowIdx + 1}</div>
-
-                            {/* Background Day Cells */}
-                            <div className="row-cells-track">
-                              {gridData.days.map((day) => (
-                                <div
-                                  key={day.dateStr}
-                                  className={`matrix-grid-cell ${day.isSunday ? "sunday-matrix-cell" : ""}`}
-                                  style={{ width: `${dayCellWidth}px` }}
-                                />
-                              ))}
-
-                              {/* Today Vertical Line Marker */}
-                              {gridData.todayColIndex !== null && (
-                                <div
-                                  className="matrix-today-vertical-line"
-                                  style={{
-                                    left: `${gridData.todayColIndex * dayCellWidth + dayCellWidth / 2}px`,
-                                  }}
-                                  title={`Today: ${new Date().toLocaleDateString("en-IN")}`}
-                                />
-                              )}
-
-                              {/* The Colored College Schedule Bar */}
-                              {dayRange ? (
-                                <div
-                                  className={`timeline-block-bar ${isPinned ? "bar-pinned" : ""}`}
-                                  style={{
-                                    left: `${dayRange.startCol * dayCellWidth + 2}px`,
-                                    width: `${dayRange.span * dayCellWidth - 4}px`,
-                                    background: theme.bg,
-                                    borderColor: theme.borderColor,
-                                    boxShadow: isHovered || isPinned ? "0 4px 14px rgba(0,0,0,0.3)" : theme.shadow,
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    setHoveredItem({
-                                      item,
-                                      x: rect.left + rect.width / 2,
-                                      y: rect.bottom + 8,
-                                    });
-                                  }}
-                                  onMouseLeave={() => {
-                                    if (!pinnedItem) setHoveredItem(null);
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPinnedItem(pinnedItem?.id === item.id ? null : item);
-                                  }}
-                                >
-                                  <div className="bar-inner-text">
-                                    <div className="bar-title-row">
-                                      {dayRange.startsBeforeGrid && (
-                                        <span className="bar-continuation-arrow left-arrow" title={`Started before view on ${formatTimelinePopupDate(item.start_date)}`}>
-                                          ◀
-                                        </span>
-                                      )}
-                                      <span className="bar-college-name" title={item.college_name}>
-                                        {item.college_name || "College Name"}
-                                      </span>
-                                      {dayRange.endsAfterGrid && (
-                                        <span className="bar-continuation-arrow right-arrow" title={`Continues after view until ${formatTimelinePopupDate(item.end_date)}`}>
-                                          ▶
-                                        </span>
-                                      )}
-                                    </div>
-                                    <div className="bar-sub-row">
-                                      {item.project_code && (
-                                        <span className="bar-project-code" title={item.project_code}>
-                                          {item.project_code}
-                                        </span>
-                                      )}
-                                      <span className="bar-dates-tag">
-                                        {formatTimelinePopupDate(item.start_date)} → {formatTimelinePopupDate(item.end_date)}
-                                      </span>
-                                    </div>
-                                  </div>
+                          <React.Fragment key={item.id || rowIdx}>
+                            {/* CATEGORY SECTION DIVIDER BANNER */}
+                            {showCategoryBanner && (
+                              <div
+                                className={`spreadsheet-category-section-banner banner-${item.periodCategory}`}
+                                style={{
+                                  minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
+                                }}
+                              >
+                                <div className="category-banner-sticky-title">
+                                  <span className="banner-order-badge">
+                                    {item.categoryOrder === 1 && "1"}
+                                    {item.categoryOrder === 2 && "2"}
+                                    {item.categoryOrder === 3 && "3"}
+                                    {item.categoryOrder === 4 && "•"}
+                                  </span>
+                                  <span className="banner-title-text">
+                                    {item.categoryOrder === 1 && `COLLEGES STARTING IN ${currentPeriodInfo.label.toUpperCase()}`}
+                                    {item.categoryOrder === 2 && `COLLEGES ENDING IN ${currentPeriodInfo.label.toUpperCase()} (STARTED EARLIER)`}
+                                    {item.categoryOrder === 3 && `COLLEGES ONGOING ACROSS ${currentPeriodInfo.label.toUpperCase()} (STARTED BEFORE & ENDING AFTER)`}
+                                    {item.categoryOrder === 4 && "INCOMPLETE / MISSING SCHEDULES"}
+                                  </span>
+                                  <span className="banner-count-badge">
+                                    {categoryCounts[item.periodCategory]} {categoryCounts[item.periodCategory] === 1 ? "College" : "Colleges"}
+                                  </span>
                                 </div>
-                              ) : isIncomplete ? (
-                                <div
-                                  className="incomplete-row-placeholder"
-                                  onClick={() => setPinnedItem(pinnedItem?.id === item.id ? null : item)}
-                                >
-                                  <span className="incomplete-badge-tag">
-                                    ⚠️ Incomplete Data
-                                  </span>
-                                  <span className="incomplete-college-title">
-                                    {item.college_name || item.project_code}
-                                  </span>
-                                  <span className="incomplete-missing-desc">
-                                    {!item.start_date && !item.end_date
-                                      ? "(Dates not set in Sheet1)"
-                                      : !item.start_date
-                                      ? "(Start Date missing in Sheet1)"
-                                      : "(End Date missing in Sheet1)"}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="incomplete-set-dates-btn"
+                              </div>
+                            )}
+
+                            <div
+                              className={`spreadsheet-row ${isPinned ? "row-pinned" : ""} ${isIncomplete ? "row-incomplete" : ""}`}
+                            >
+                              {/* Left Row Number (1, 2, 3...) */}
+                              <div className="row-index-cell">{rowIdx + 1}</div>
+
+                              {/* Background Day Cells */}
+                              <div className="row-cells-track">
+                                {gridData.days.map((day) => (
+                                  <div
+                                    key={day.dateStr}
+                                    className={`matrix-grid-cell ${day.isSunday ? "sunday-matrix-cell" : ""} ${selectedSpecificDate === day.dateStr ? "selected-col-matrix-cell" : ""}`}
+                                    style={{ width: `${dayCellWidth}px` }}
+                                  />
+                                ))}
+
+                                {/* Today Vertical Line Marker */}
+                                {gridData.todayColIndex !== null && (
+                                  <div
+                                    className="matrix-today-vertical-line"
+                                    style={{
+                                      left: `${gridData.todayColIndex * dayCellWidth + dayCellWidth / 2}px`,
+                                    }}
+                                    title={`Today: ${new Date().toLocaleDateString("en-IN")}`}
+                                  />
+                                )}
+
+                                {/* The Colored College Schedule Bar */}
+                                {dayRange ? (
+                                  <div
+                                    className={`timeline-block-bar ${isPinned ? "bar-pinned" : ""}`}
+                                    style={{
+                                      left: `${dayRange.startCol * dayCellWidth + 2}px`,
+                                      width: `${dayRange.span * dayCellWidth - 4}px`,
+                                      background: theme.bg,
+                                      borderColor: theme.borderColor,
+                                      boxShadow: isHovered || isPinned ? "0 4px 14px rgba(0,0,0,0.3)" : theme.shadow,
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      const rect = e.currentTarget.getBoundingClientRect();
+                                      setHoveredItem({
+                                        item,
+                                        x: rect.left + rect.width / 2,
+                                        y: rect.bottom + 8,
+                                      });
+                                    }}
+                                    onMouseLeave={() => {
+                                      if (!pinnedItem) setHoveredItem(null);
+                                    }}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleEditItem(item);
+                                      setPinnedItem(pinnedItem?.id === item.id ? null : item);
                                     }}
                                   >
-                                    + Set Dates
-                                  </button>
-                                </div>
-                              ) : null}
+                                    <div className="bar-inner-text">
+                                      <div className="bar-title-row">
+                                        {dayRange.startsBeforeGrid && (
+                                          <span className="bar-continuation-arrow left-arrow" title={`Started before view on ${formatTimelinePopupDate(item.start_date)}`}>
+                                            ◀
+                                          </span>
+                                        )}
+                                        <span className="bar-college-name" title={item.college_name}>
+                                          {item.college_name || "College Name"}
+                                        </span>
+                                        {dayRange.endsAfterGrid && (
+                                          <span className="bar-continuation-arrow right-arrow" title={`Continues after view until ${formatTimelinePopupDate(item.end_date)}`}>
+                                            ▶
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="bar-sub-row">
+                                        {item.project_code && (
+                                          <span className="bar-project-code" title={item.project_code}>
+                                            {item.project_code}
+                                          </span>
+                                        )}
+                                        <span className="bar-dates-tag">
+                                          {formatTimelinePopupDate(item.start_date)} → {formatTimelinePopupDate(item.end_date)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : isIncomplete ? (
+                                  <div
+                                    className="incomplete-row-placeholder"
+                                    onClick={() => setPinnedItem(pinnedItem?.id === item.id ? null : item)}
+                                  >
+                                    <span className="incomplete-badge-tag">
+                                      ⚠️ Incomplete Data
+                                    </span>
+                                    <span className="incomplete-college-title">
+                                      {item.college_name || item.project_code}
+                                    </span>
+                                    <span className="incomplete-missing-desc">
+                                      {!item.start_date && !item.end_date
+                                        ? "(Dates not set in Sheet1)"
+                                        : !item.start_date
+                                        ? "(Start Date missing in Sheet1)"
+                                        : "(End Date missing in Sheet1)"}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="incomplete-set-dates-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditItem(item);
+                                      }}
+                                    >
+                                      + Set Dates
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
+                          </React.Fragment>
                         );
                       })
                     )}
@@ -1388,6 +1750,13 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         </div>
 
                         <div className="popover-field-row">
+                          <span className="popover-label">CATEGORY:</span>
+                          <span className={`popover-category-badge badge-${currentPopupItem.periodCategory}`}>
+                            {currentPopupItem.categoryLabel}
+                          </span>
+                        </div>
+
+                        <div className="popover-field-row">
                           <span className="popover-label">STATUS:</span>
                           <span className={`popover-status-badge status-${currentPopupItem.status.toLowerCase().replace(/\s+/g, "-")}`}>
                             {currentPopupItem.status === "Incomplete Data"
@@ -1431,6 +1800,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     <tr>
                       <th style={{ width: "45px" }}>#</th>
                       <th>College Name & Project Code</th>
+                      <th>Category (Tier)</th>
                       <th>Start Date</th>
                       <th>End Date</th>
                       <th className="text-center">Duration</th>
@@ -1440,76 +1810,110 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredTimelines.map((item, idx) => (
-                      <tr key={item.id || idx} className="timeline-row">
-                        <td className="text-muted font-mono">{idx + 1}</td>
-                        <td>
-                          <div className="table-college-cell">
-                            <span className="table-college-name">{item.college_name || "Unnamed"}</span>
-                            <span className="table-project-code font-mono">{item.project_code}</span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="date-badge start-badge">
-                            {formatDisplayDate(item.start_date)}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="date-badge end-badge">
-                            {formatDisplayDate(item.end_date)}
-                          </span>
-                        </td>
-                        <td className="text-center font-mono">
-                          {item.durationDays > 0 ? `${item.durationDays} Days` : "-"}
-                        </td>
-                        <td className="text-center">
-                          <span
-                            className={`status-chip status-${item.status.toLowerCase().replace(/\s+/g, "-")}`}
-                          >
-                            {item.status === "Active" && "🟢 "}
-                            {item.status === "Upcoming" && "🔵 "}
-                            {item.status === "Completed" && "⚪ "}
-                            {item.status === "Incomplete Data" && "⚠️ "}
-                            {item.status}
-                          </span>
-                        </td>
-                        <td className="text-center">
-                          {item.status === "Active" ? (
-                            <div className="progress-bar-wrap">
-                              <div
-                                className="progress-bar-fill"
-                                style={{ width: `${item.progressPct}%` }}
-                              />
-                              <span className="progress-text">{item.progressPct}%</span>
-                            </div>
-                          ) : (
-                            <span className="text-muted text-xs">
-                              {item.status === "Completed" ? "100%" : "0%"}
-                            </span>
+                    {filteredTimelines.map((item, idx) => {
+                      const showTableDivider =
+                        idx === 0 ||
+                        filteredTimelines[idx - 1].categoryOrder !== item.categoryOrder;
+
+                      return (
+                        <React.Fragment key={item.id || idx}>
+                          {showTableDivider && (
+                            <tr className="table-category-divider-row">
+                              <td colSpan={9}>
+                                <div className={`table-divider-content divider-${item.periodCategory}`}>
+                                  <span className="divider-badge-num">{item.categoryOrder}</span>
+                                  <span className="divider-text">
+                                    {item.categoryOrder === 1 && `Group 1: Colleges Starting in ${currentPeriodInfo.label}`}
+                                    {item.categoryOrder === 2 && `Group 2: Colleges Ending in ${currentPeriodInfo.label} (Started Earlier)`}
+                                    {item.categoryOrder === 3 && `Group 3: Colleges Ongoing Across ${currentPeriodInfo.label}`}
+                                    {item.categoryOrder === 4 && "Incomplete / Missing Dates"}
+                                  </span>
+                                  <span className="divider-count">
+                                    ({categoryCounts[item.periodCategory]} Colleges)
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                        <td className="text-right">
-                          <div className="table-actions-cell">
-                            <button
-                              type="button"
-                              className="action-btn edit-action-btn"
-                              onClick={() => handleEditItem(item)}
-                              title="Edit Schedule"
-                            >
-                              <Edit3 size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="action-btn delete-action-btn"
-                              onClick={() => handleDeleteItem(item.id, item.college_name)}
-                              title="Delete Record"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          <tr className="timeline-row">
+                            <td className="text-muted font-mono">{idx + 1}</td>
+                            <td>
+                              <div className="table-college-cell">
+                                <span className="table-college-name">{item.college_name || "Unnamed"}</span>
+                                <span className="table-project-code font-mono">{item.project_code}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`table-category-pill pill-${item.periodCategory}`}>
+                                {item.periodCategory === "starting" && "1. Starting"}
+                                {item.periodCategory === "ending" && "2. Ending"}
+                                {item.periodCategory === "ongoing" && "3. Ongoing"}
+                                {item.periodCategory === "other" && "Incomplete"}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="date-badge start-badge">
+                                {formatDisplayDate(item.start_date)}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="date-badge end-badge">
+                                {formatDisplayDate(item.end_date)}
+                              </span>
+                            </td>
+                            <td className="text-center font-mono">
+                              {item.durationDays > 0 ? `${item.durationDays} Days` : "-"}
+                            </td>
+                            <td className="text-center">
+                              <span
+                                className={`status-chip status-${item.status.toLowerCase().replace(/\s+/g, "-")}`}
+                              >
+                                {item.status === "Active" && "🟢 "}
+                                {item.status === "Upcoming" && "🔵 "}
+                                {item.status === "Completed" && "⚪ "}
+                                {item.status === "Incomplete Data" && "⚠️ "}
+                                {item.status}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              {item.status === "Active" ? (
+                                <div className="progress-bar-wrap">
+                                  <div
+                                    className="progress-bar-fill"
+                                    style={{ width: `${item.progressPct}%` }}
+                                  />
+                                  <span className="progress-text">{item.progressPct}%</span>
+                                </div>
+                              ) : (
+                                <span className="text-muted text-xs">
+                                  {item.status === "Completed" ? "100%" : "0%"}
+                                </span>
+                              )}
+                            </td>
+                            <td className="text-right">
+                              <div className="table-actions-cell">
+                                <button
+                                  type="button"
+                                  className="action-btn edit-action-btn"
+                                  onClick={() => handleEditItem(item)}
+                                  title="Edit Schedule"
+                                >
+                                  <Edit3 size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="action-btn delete-action-btn"
+                                  onClick={() => handleDeleteItem(item.id, item.college_name)}
+                                  title="Delete Record"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

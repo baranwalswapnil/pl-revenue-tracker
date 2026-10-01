@@ -8074,3 +8074,383 @@ a {
 .incomplete-set-dates-btn:hover {
   background: #0f766e;
 }
+
+/* ==========================================================================
+   3-TIER FOCUS PERIOD GROUPING & SUMMARY BAR (STARTING -> ENDING -> ONGOING)
+   ========================================================================== */
+
+.period-grouped-summary-bar {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #ffffff;
+  border-radius: 12px;
+  padding: 12px 18px;
+  margin-top: 14px;
+  margin-bottom: 6px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid #334155;
+}
+
+.summary-bar-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.summary-period-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #f1f5f9;
+}
+
+.summary-period-title strong {
+  color: #38bdf8;
+  font-weight: 800;
+}
+
+.clear-specific-date-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clear-specific-date-btn:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.summary-category-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1.5px solid transparent;
+}
+
+.category-chip .chip-badge-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.category-chip.chip-starting {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: #10b981;
+  color: #6ee7b7;
+}
+.category-chip.chip-starting .chip-badge-num {
+  background: #10b981;
+  color: #064e3b;
+}
+
+.category-chip.chip-ending {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: #3b82f6;
+  color: #93c5fd;
+}
+.category-chip.chip-ending .chip-badge-num {
+  background: #3b82f6;
+  color: #172554;
+}
+
+.category-chip.chip-ongoing {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: #a855f7;
+  color: #d8b4fe;
+}
+.category-chip.chip-ongoing .chip-badge-num {
+  background: #a855f7;
+  color: #3b0764;
+}
+
+.category-chip.chip-other {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  color: #fde68a;
+}
+
+.category-chip .chip-count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 900;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.summary-bar-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 6px;
+}
+
+.summary-bar-hint strong {
+  color: #e2e8f0;
+}
+
+/* Category Section Banners in Grid Matrix */
+.spreadsheet-category-section-banner {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  border-top: 1.5px solid #cbd5e1;
+  border-bottom: 1.5px solid #cbd5e1;
+  background: #f8fafc;
+  position: relative;
+  z-index: 15;
+}
+
+.category-banner-sticky-title {
+  position: sticky;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+  border-radius: 0 16px 16px 0;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  z-index: 20;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+}
+
+.banner-order-badge {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+.banner-count-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+/* Category 1: Starting in Period */
+.spreadsheet-category-section-banner.banner-starting {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+.spreadsheet-category-section-banner.banner-starting .category-banner-sticky-title {
+  background: #059669;
+  color: #ffffff;
+}
+.spreadsheet-category-section-banner.banner-starting .banner-order-badge {
+  background: #064e3b;
+}
+
+/* Category 2: Ending in Period */
+.spreadsheet-category-section-banner.banner-ending {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.spreadsheet-category-section-banner.banner-ending .category-banner-sticky-title {
+  background: #2563eb;
+  color: #ffffff;
+}
+.spreadsheet-category-section-banner.banner-ending .banner-order-badge {
+  background: #172554;
+}
+
+/* Category 3: Ongoing Across Period */
+.spreadsheet-category-section-banner.banner-ongoing {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+.spreadsheet-category-section-banner.banner-ongoing .category-banner-sticky-title {
+  background: #7c3aed;
+  color: #ffffff;
+}
+.spreadsheet-category-section-banner.banner-ongoing .banner-order-badge {
+  background: #3b0764;
+}
+
+/* Category 4: Other / Incomplete */
+.spreadsheet-category-section-banner.banner-other {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.spreadsheet-category-section-banner.banner-other .category-banner-sticky-title {
+  background: #d97706;
+  color: #ffffff;
+}
+.spreadsheet-category-section-banner.banner-other .banner-order-badge {
+  background: #78350f;
+}
+
+/* Selected Day Cell Highlight in Header & Grid */
+.day-number-cell.selected-day-cell {
+  background: #f59e0b !important;
+  color: #0f172a !important;
+  font-weight: 900 !important;
+  box-shadow: inset 0 0 0 2px #ffffff, 0 0 10px rgba(245, 158, 11, 0.8) !important;
+  cursor: pointer;
+  transform: scale(1.05);
+  z-index: 5;
+}
+
+.day-number-cell:hover {
+  cursor: pointer;
+  filter: brightness(1.25);
+}
+
+.matrix-grid-cell.selected-col-matrix-cell {
+  background: rgba(245, 158, 11, 0.08);
+  border-right: 1.5px solid #f59e0b;
+}
+
+/* Category badges for popover card */
+.popover-category-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.popover-category-badge.badge-starting {
+  background: #d1fae5;
+  color: #065f46;
+}
+.popover-category-badge.badge-ending {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.popover-category-badge.badge-ongoing {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+.popover-category-badge.badge-other {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Table View Categorization styles */
+.table-category-divider-row td {
+  padding: 0 !important;
+  background: #f1f5f9;
+  border-top: 2px solid #cbd5e1;
+  border-bottom: 1.5px solid #cbd5e1;
+}
+
+.table-divider-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.table-divider-content .divider-badge-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.table-divider-content.divider-starting {
+  background: #ecfdf5;
+  color: #065f46;
+}
+.table-divider-content.divider-starting .divider-badge-num {
+  background: #059669;
+}
+
+.table-divider-content.divider-ending {
+  background: #eff6ff;
+  color: #1e40af;
+}
+.table-divider-content.divider-ending .divider-badge-num {
+  background: #2563eb;
+}
+
+.table-divider-content.divider-ongoing {
+  background: #f5f3ff;
+  color: #5b21b6;
+}
+.table-divider-content.divider-ongoing .divider-badge-num {
+  background: #7c3aed;
+}
+
+.table-divider-content.divider-other {
+  background: #fffbeb;
+  color: #92400e;
+}
+.table-divider-content.divider-other .divider-badge-num {
+  background: #d97706;
+}
+
+.table-category-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.table-category-pill.pill-starting {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.table-category-pill.pill-ending {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.table-category-pill.pill-ongoing {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.table-category-pill.pill-other {
+  background: #fef3c7;
+  color: #92400e;
+}
