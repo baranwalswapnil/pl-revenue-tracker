@@ -7143,24 +7143,24 @@ a {
   margin-top: 14px;
 }
 
-/* Floating Left and Right Slide Buttons - Always present throughout at all times */
+/* Floating Left and Right Slide Buttons - Scoped strictly to Timeline Graph */
 .timeline-side-slide-btn {
-  position: fixed !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
-  z-index: 99999 !important;
-  width: 48px;
-  height: 108px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 45;
+  width: 44px;
+  height: 96px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
   color: #ffffff;
   border: 2.5px solid #ffffff;
-  border-radius: 26px;
-  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.5), 0 0 16px rgba(37, 99, 235, 0.5);
+  border-radius: 22px;
+  box-shadow: 0 8px 24px rgba(30, 58, 138, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
@@ -7168,28 +7168,28 @@ a {
 }
 
 .timeline-side-slide-btn.slide-left-btn {
-  left: 14px !important;
+  left: -20px;
 }
 
 .timeline-side-slide-btn.slide-right-btn {
-  right: 14px !important;
+  right: -20px;
 }
 
 .timeline-side-slide-btn:hover {
   background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
-  transform: translateY(-50%) scale(1.14) !important;
-  box-shadow: 0 12px 36px rgba(37, 99, 235, 0.8), 0 0 0 2px #ffffff;
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.7), 0 0 0 2px #ffffff;
 }
 
 .timeline-side-slide-btn:active {
-  transform: translateY(-50%) scale(0.95) !important;
+  transform: translateY(-50%) scale(0.95);
   box-shadow: 0 4px 14px rgba(30, 58, 138, 0.5);
 }
 
 .timeline-side-slide-btn .slide-btn-label {
   font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.6px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
   color: #e0f2fe;
 }

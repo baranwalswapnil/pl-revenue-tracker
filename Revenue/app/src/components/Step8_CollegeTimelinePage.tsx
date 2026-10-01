@@ -1378,8 +1378,8 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
           {/* SPREADSHEET PROJECT TIMELINE GRID (MATCHING REFERENCE IMAGE) */}
           {viewMode === "grid" && (
-            <>
-              {/* Permanent Floating Left Slide Button (Fixed on Viewport Left at all times) */}
+            <div className="spreadsheet-timeline-wrapper">
+              {/* Floating Left Slide Button (Attached directly to graph) */}
               <button
                 type="button"
                 className="timeline-side-slide-btn slide-left-btn"
@@ -1392,11 +1392,11 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 title="Slide Towards Left (Click or Hold to Glide Earlier)"
                 aria-label="Slide Left"
               >
-                <ChevronLeft size={26} strokeWidth={2.5} />
+                <ChevronLeft size={24} strokeWidth={2.5} />
                 <span className="slide-btn-label">LEFT</span>
               </button>
 
-              {/* Permanent Floating Right Slide Button (Fixed on Viewport Right at all times) */}
+              {/* Floating Right Slide Button (Attached directly to graph) */}
               <button
                 type="button"
                 className="timeline-side-slide-btn slide-right-btn"
@@ -1409,12 +1409,11 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 title="Slide Towards Right (Click or Hold to Glide Later)"
                 aria-label="Slide Right"
               >
-                <ChevronRight size={26} strokeWidth={2.5} />
+                <ChevronRight size={24} strokeWidth={2.5} />
                 <span className="slide-btn-label">RIGHT</span>
               </button>
 
-              <div className="spreadsheet-timeline-wrapper">
-                <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
+              <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
                   <div
                     className="spreadsheet-grid-canvas"
                     style={{
@@ -1792,8 +1791,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 })()
               )}
             </div>
-          </>
-        )}
+          )}
 
           {/* TABLE VIEW OPTION */}
           {viewMode === "table" && (
