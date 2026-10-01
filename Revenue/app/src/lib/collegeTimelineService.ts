@@ -253,13 +253,31 @@ export function getAllEnrichedTimelines(
     const collegeName = (sheetItem.college_name || "").trim();
     if (!projCode && !collegeName) return;
 
+    let s = normalizeDateStr(sheetItem.training_start_date);
+    let e = normalizeDateStr(sheetItem.training_end_date);
+
+    // If only start date is provided, default end date to start date + 30 days (same timeframe)
+    if (s && !e) {
+      const [yr, mo, dy] = s.split("-").map(Number);
+      if (!isNaN(yr) && !isNaN(mo) && !isNaN(dy)) {
+        const endD = new Date(yr, mo - 1, dy + 30);
+        e = normalizeDateStr(endD.toISOString().slice(0, 10));
+      }
+    } else if (!s && e) {
+      const [yr, mo, dy] = e.split("-").map(Number);
+      if (!isNaN(yr) && !isNaN(mo) && !isNaN(dy)) {
+        const startD = new Date(yr, mo - 1, dy - 30);
+        s = normalizeDateStr(startD.toISOString().slice(0, 10));
+      }
+    }
+
     const key = (projCode || collegeName).toLowerCase();
     map.set(key, {
       id: sheetItem.id || `sheet-${projCode || collegeName}`,
       project_code: projCode,
       college_name: collegeName,
-      start_date: sheetItem.training_start_date || "",
-      end_date: sheetItem.training_end_date || "",
+      start_date: s,
+      end_date: e,
       academic_year: sheetItem.academic_year || "",
       student_count: sheetItem.student_count || 0,
       course_stream: sheetItem.course_stream || "",
@@ -281,20 +299,23 @@ export function getAllEnrichedTimelines(
     const firstPhase = proj.phases && proj.phases.length > 0 ? proj.phases[0] : null;
     const lastPhase = proj.phases && proj.phases.length > 0 ? proj.phases[proj.phases.length - 1] : null;
 
-    const phaseStart = firstPhase?.startDate || "";
-    const phaseEnd = lastPhase?.endDate || firstPhase?.endDate || "";
+    const phaseStart = normalizeDateStr(firstPhase?.startDate || "");
+    const phaseEnd = normalizeDateStr(lastPhase?.endDate || firstPhase?.endDate || "");
 
     if (existing) {
+      // Preserve real Sheet1 dates if already present
+      const s = existing.start_date || phaseStart;
+      const e = existing.end_date || phaseEnd;
       map.set(key, {
         ...existing,
         id: proj.id || existing.id,
         project_code: projCode || existing.project_code,
         college_name: collegeName || existing.college_name,
-        start_date: existing.start_date || phaseStart,
-        end_date: existing.end_date || phaseEnd,
-        academic_year: proj.academic_year || existing.academic_year,
-        student_count: proj.student_count || existing.student_count,
-        source: "project",
+        start_date: s,
+        end_date: e,
+        academic_year: existing.academic_year || proj.academic_year,
+        student_count: existing.student_count || proj.student_count,
+        source: existing.source || "project",
       });
     } else {
       map.set(key, {

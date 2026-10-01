@@ -173,9 +173,28 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     year: number | "all",
     month: number | "all"
   ) => {
-    const s = normalizeDateStr(item.start_date) || normalizeDateStr(item.end_date);
-    const e = normalizeDateStr(item.end_date) || s;
-    if (!s || !e) return false;
+    let s = normalizeDateStr(item.start_date);
+    let e = normalizeDateStr(item.end_date);
+
+    if (!s && !e) return false;
+
+    if (s && !e) {
+      const [yr, mo, dy] = s.split("-").map(Number);
+      if (!isNaN(yr) && !isNaN(mo) && !isNaN(dy)) {
+        const endD = new Date(yr, mo - 1, dy + 30);
+        e = normalizeDateStr(endD.toISOString().slice(0, 10));
+      } else {
+        e = s;
+      }
+    } else if (!s && e) {
+      const [yr, mo, dy] = e.split("-").map(Number);
+      if (!isNaN(yr) && !isNaN(mo) && !isNaN(dy)) {
+        const startD = new Date(yr, mo - 1, dy - 30);
+        s = normalizeDateStr(startD.toISOString().slice(0, 10));
+      } else {
+        s = e;
+      }
+    }
 
     if (year === "all" && month === "all") return true;
 
@@ -342,10 +361,28 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     if (!startDateStr && !endDateStr) return null;
     if (gridData.days.length === 0) return null;
 
-    const normStart = normalizeDateStr(startDateStr) || normalizeDateStr(endDateStr);
-    const normEnd = normalizeDateStr(endDateStr) || normStart;
+    let normStart = normalizeDateStr(startDateStr);
+    let normEnd = normalizeDateStr(endDateStr);
 
-    if (!normStart) return null;
+    if (!normStart && !normEnd) return null;
+
+    if (normStart && !normEnd) {
+      const [y, m, d] = normStart.split("-").map(Number);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        const endD = new Date(y, m - 1, d + 30);
+        normEnd = normalizeDateStr(endD.toISOString().slice(0, 10));
+      } else {
+        normEnd = normStart;
+      }
+    } else if (!normStart && normEnd) {
+      const [y, m, d] = normEnd.split("-").map(Number);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        const startD = new Date(y, m - 1, d - 30);
+        normStart = normalizeDateStr(startD.toISOString().slice(0, 10));
+      } else {
+        normStart = normEnd;
+      }
+    }
 
     const firstGridDate = gridData.days[0].dateStr;
     const lastGridDate = gridData.days[gridData.days.length - 1].dateStr;
@@ -355,25 +392,42 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       return null;
     }
 
-    let startCol = 0;
-    let endCol = gridData.days.length - 1;
+    const startsBeforeGrid = normStart < firstGridDate;
+    const endsAfterGrid = normEnd > lastGridDate;
 
-    for (let i = 0; i < gridData.days.length; i++) {
-      if (gridData.days[i].dateStr <= normStart) {
-        startCol = i;
-      }
-      if (gridData.days[i].dateStr <= normEnd) {
-        endCol = i;
+    // Find column index of start date (or clamp to 0 if started before current view)
+    let startCol = 0;
+    if (!startsBeforeGrid) {
+      const exactIdx = gridData.days.findIndex((d) => d.dateStr === normStart);
+      if (exactIdx !== -1) {
+        startCol = exactIdx;
+      } else {
+        const nextIdx = gridData.days.findIndex((d) => d.dateStr >= normStart);
+        startCol = nextIdx !== -1 ? nextIdx : 0;
       }
     }
 
-    if (normStart < firstGridDate) startCol = 0;
-    if (normEnd > lastGridDate) endCol = gridData.days.length - 1;
+    // Find column index of end date (or clamp to last column if continues past current view)
+    let endCol = gridData.days.length - 1;
+    if (!endsAfterGrid) {
+      let idx = -1;
+      for (let i = gridData.days.length - 1; i >= 0; i--) {
+        if (gridData.days[i].dateStr <= normEnd) {
+          idx = i;
+          break;
+        }
+      }
+      endCol = idx !== -1 ? idx : gridData.days.length - 1;
+    }
 
     return {
       startCol,
       endCol,
       span: Math.max(1, endCol - startCol + 1),
+      startsBeforeGrid,
+      endsAfterGrid,
+      actualStartDate: normStart,
+      actualEndDate: normEnd,
     };
   };
 
@@ -1087,14 +1141,31 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                                   }}
                                 >
                                   <div className="bar-inner-text">
-                                    <span className="bar-college-name" title={item.college_name}>
-                                      {item.college_name || "College Name"}
-                                    </span>
-                                    {item.project_code && (
-                                      <span className="bar-project-code" title={item.project_code}>
-                                        {item.project_code}
+                                    <div className="bar-title-row">
+                                      {dayRange.startsBeforeGrid && (
+                                        <span className="bar-continuation-arrow left-arrow" title={`Started before view on ${formatTimelinePopupDate(item.start_date)}`}>
+                                          ◀
+                                        </span>
+                                      )}
+                                      <span className="bar-college-name" title={item.college_name}>
+                                        {item.college_name || "College Name"}
                                       </span>
-                                    )}
+                                      {dayRange.endsAfterGrid && (
+                                        <span className="bar-continuation-arrow right-arrow" title={`Continues after view until ${formatTimelinePopupDate(item.end_date)}`}>
+                                          ▶
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="bar-sub-row">
+                                      {item.project_code && (
+                                        <span className="bar-project-code" title={item.project_code}>
+                                          {item.project_code}
+                                        </span>
+                                      )}
+                                      <span className="bar-dates-tag">
+                                        {formatTimelinePopupDate(item.start_date)} → {formatTimelinePopupDate(item.end_date)}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               )}

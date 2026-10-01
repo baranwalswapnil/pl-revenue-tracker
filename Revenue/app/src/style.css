@@ -7329,6 +7329,27 @@ a {
   width: 100%;
   line-height: 1.25;
   pointer-events: none;
+  gap: 2px;
+}
+
+.bar-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  max-width: 100%;
+}
+
+.bar-continuation-arrow {
+  font-size: 9px;
+  opacity: 0.9;
+  color: #fef08a; /* Soft Yellow arrow */
+  animation: pulseArrow 1.5s infinite ease-in-out;
+}
+
+@keyframes pulseArrow {
+  0%, 100% { opacity: 0.7; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 
 .bar-college-name {
@@ -7342,6 +7363,14 @@ a {
   max-width: 100%;
 }
 
+.bar-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
 .bar-project-code {
   font-size: 10px;
   font-weight: 700;
@@ -7351,7 +7380,29 @@ a {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+}
+
+.bar-dates-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.timeline-block-bar.bar-starts-before {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left-style: dashed;
+}
+
+.timeline-block-bar.bar-ends-after {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right-style: dashed;
 }
 
 /* 7. Floating Excel-Style Popover Note Card */
