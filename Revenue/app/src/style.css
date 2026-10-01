@@ -7094,6 +7094,57 @@ a {
   margin-top: 14px;
 }
 
+/* Floating Left and Right Slide Buttons (Yellow Highlight Area) */
+.timeline-side-slide-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 45;
+  width: 44px;
+  height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  color: #ffffff;
+  border: 2.5px solid #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgba(30, 58, 138, 0.5), 0 3px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.timeline-side-slide-btn.slide-left-btn {
+  left: -22px;
+}
+
+.timeline-side-slide-btn.slide-right-btn {
+  right: -22px;
+}
+
+.timeline-side-slide-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
+  transform: translateY(-50%) scale(1.12);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.7), 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+.timeline-side-slide-btn:active {
+  transform: translateY(-50%) scale(0.95);
+  box-shadow: 0 4px 12px rgba(30, 58, 138, 0.4);
+}
+
+.timeline-side-slide-btn .slide-btn-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #e0f2fe;
+}
+
 .spreadsheet-scroll-box {
   overflow-x: auto;
   overflow-y: visible;

@@ -391,6 +391,33 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     });
   };
 
+  // Continuous hold-to-scroll support for side slide buttons
+  const scrollIntervalRef = useRef<number | null>(null);
+
+  const startContinuousScroll = (direction: "left" | "right") => {
+    handleScrollHorizontal(direction === "left" ? -24 * dayCellWidth : 24 * dayCellWidth);
+
+    if (scrollIntervalRef.current) {
+      clearInterval(scrollIntervalRef.current);
+    }
+
+    scrollIntervalRef.current = window.setInterval(() => {
+      if (gridScrollRef.current) {
+        gridScrollRef.current.scrollBy({
+          left: direction === "left" ? -100 : 100,
+          behavior: "auto",
+        });
+      }
+    }, 40);
+  };
+
+  const stopContinuousScroll = () => {
+    if (scrollIntervalRef.current) {
+      clearInterval(scrollIntervalRef.current);
+      scrollIntervalRef.current = null;
+    }
+  };
+
   // Jump scroll directly to any month in the current grid
   const handleJumpToMonth = (monthNum: number) => {
     if (!gridScrollRef.current || gridData.days.length === 0) return;
@@ -1034,6 +1061,38 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           {/* SPREADSHEET PROJECT TIMELINE GRID (MATCHING REFERENCE IMAGE) */}
           {viewMode === "grid" && (
             <div className="spreadsheet-timeline-wrapper">
+              {/* Floating Slide Towards Left Button (Yellow Highlighted Area) */}
+              <button
+                type="button"
+                className="timeline-side-slide-btn slide-left-btn"
+                onMouseDown={() => startContinuousScroll("left")}
+                onMouseUp={stopContinuousScroll}
+                onMouseLeave={stopContinuousScroll}
+                onTouchStart={() => startContinuousScroll("left")}
+                onTouchEnd={stopContinuousScroll}
+                onClick={() => handleScrollHorizontal(-24 * dayCellWidth)}
+                title="Slide Towards Left (View Earlier Dates & Months)"
+              >
+                <ChevronLeft size={24} />
+                <span className="slide-btn-label">LEFT</span>
+              </button>
+
+              {/* Floating Slide Towards Right Button */}
+              <button
+                type="button"
+                className="timeline-side-slide-btn slide-right-btn"
+                onMouseDown={() => startContinuousScroll("right")}
+                onMouseUp={stopContinuousScroll}
+                onMouseLeave={stopContinuousScroll}
+                onTouchStart={() => startContinuousScroll("right")}
+                onTouchEnd={stopContinuousScroll}
+                onClick={() => handleScrollHorizontal(24 * dayCellWidth)}
+                title="Slide Towards Right (View Later Dates & Months)"
+              >
+                <ChevronRight size={24} />
+                <span className="slide-btn-label">RIGHT</span>
+              </button>
+
               <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
                 <div
                   className="spreadsheet-grid-canvas"
@@ -1041,7 +1100,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
                   }}
                 >
-                  {/* 1. TOP HEADER BANNER: "Project Timeline" with Navigation Controls */}
+                  {/* 1. TOP HEADER BANNER: "Project Timeline" */}
                   <div className="spreadsheet-title-banner">
                     <div className="title-banner-left">
                       <button
@@ -1058,7 +1117,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     <div className="title-banner-center">
                       <h2>Project Timeline</h2>
                       <span className="scroll-hint-text">
-                        ↔ Scroll horizontally to view all dates & exact starting points
+                        ↔ Use the Left / Right Slide buttons to glide across all months
                       </span>
                     </div>
 
