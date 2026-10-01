@@ -1378,8 +1378,8 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
           {/* SPREADSHEET PROJECT TIMELINE GRID (MATCHING REFERENCE IMAGE) */}
           {viewMode === "grid" && (
-            <div className="spreadsheet-timeline-wrapper">
-              {/* Floating Slide Towards Left Button (Yellow Highlighted Area) */}
+            <>
+              {/* Permanent Floating Left Slide Button (Fixed on Viewport Left at all times) */}
               <button
                 type="button"
                 className="timeline-side-slide-btn slide-left-btn"
@@ -1389,13 +1389,14 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 onTouchStart={() => startContinuousScroll("left")}
                 onTouchEnd={stopContinuousScroll}
                 onClick={() => handleScrollHorizontal(-24 * dayCellWidth)}
-                title="Slide Towards Left (View Earlier Dates & Months)"
+                title="Slide Towards Left (Click or Hold to Glide Earlier)"
+                aria-label="Slide Left"
               >
-                <ChevronLeft size={24} />
+                <ChevronLeft size={26} strokeWidth={2.5} />
                 <span className="slide-btn-label">LEFT</span>
               </button>
 
-              {/* Floating Slide Towards Right Button */}
+              {/* Permanent Floating Right Slide Button (Fixed on Viewport Right at all times) */}
               <button
                 type="button"
                 className="timeline-side-slide-btn slide-right-btn"
@@ -1405,19 +1406,77 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 onTouchStart={() => startContinuousScroll("right")}
                 onTouchEnd={stopContinuousScroll}
                 onClick={() => handleScrollHorizontal(24 * dayCellWidth)}
-                title="Slide Towards Right (View Later Dates & Months)"
+                title="Slide Towards Right (Click or Hold to Glide Later)"
+                aria-label="Slide Right"
               >
-                <ChevronRight size={24} />
+                <ChevronRight size={26} strokeWidth={2.5} />
                 <span className="slide-btn-label">RIGHT</span>
               </button>
 
-              <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
-                <div
-                  className="spreadsheet-grid-canvas"
-                  style={{
-                    minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
-                  }}
+              {/* Floating Bottom Quick Glide Dock (Fixed at Bottom of Screen as you scroll down) */}
+              <div className="timeline-floating-bottom-dock">
+                <button
+                  type="button"
+                  className="dock-scroll-btn dock-left-btn"
+                  onMouseDown={() => startContinuousScroll("left")}
+                  onMouseUp={stopContinuousScroll}
+                  onMouseLeave={stopContinuousScroll}
+                  onTouchStart={() => startContinuousScroll("left")}
+                  onTouchEnd={stopContinuousScroll}
+                  onClick={() => handleScrollHorizontal(-24 * dayCellWidth)}
+                  title="Hold or click to slide Left"
                 >
+                  <ChevronLeft size={18} />
+                  <span>SLIDE LEFT</span>
+                </button>
+
+                <div className="dock-month-jump-pills">
+                  {MONTHS_LIST.map((m) => {
+                    const count = monthCounts[m.num] || 0;
+                    const isSelected = selectedMonth === m.num;
+                    return (
+                      <button
+                        key={m.num}
+                        type="button"
+                        className={`dock-month-pill ${isSelected ? "active" : ""} ${count > 0 ? "has-data" : ""}`}
+                        onClick={() => {
+                          setSelectedMonth(m.num);
+                          setSelectedSpecificDate(null);
+                          handleJumpToMonth(m.num);
+                        }}
+                        title={`Jump directly to ${m.fullName} (${count} colleges)`}
+                      >
+                        {m.shortName}
+                        {count > 0 && <span className="dock-pill-count">{count}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  className="dock-scroll-btn dock-right-btn"
+                  onMouseDown={() => startContinuousScroll("right")}
+                  onMouseUp={stopContinuousScroll}
+                  onMouseLeave={stopContinuousScroll}
+                  onTouchStart={() => startContinuousScroll("right")}
+                  onTouchEnd={stopContinuousScroll}
+                  onClick={() => handleScrollHorizontal(24 * dayCellWidth)}
+                  title="Hold or click to slide Right"
+                >
+                  <span>SLIDE RIGHT</span>
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+
+              <div className="spreadsheet-timeline-wrapper">
+                <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
+                  <div
+                    className="spreadsheet-grid-canvas"
+                    style={{
+                      minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
+                    }}
+                  >
                   {/* 1. TOP HEADER BANNER: "Project Timeline" */}
                   <div className="spreadsheet-title-banner">
                     <div className="title-banner-left">
@@ -1789,7 +1848,8 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 })()
               )}
             </div>
-          )}
+          </>
+        )}
 
           {/* TABLE VIEW OPTION */}
           {viewMode === "table" && (

@@ -7145,22 +7145,22 @@ a {
 
 /* Floating Left and Right Slide Buttons - Always present throughout at all times */
 .timeline-side-slide-btn {
-  position: fixed;
-  top: 55%;
-  transform: translateY(-50%);
-  z-index: 9999;
-  width: 46px;
-  height: 104px;
+  position: fixed !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 99999 !important;
+  width: 48px;
+  height: 108px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
   color: #ffffff;
   border: 2.5px solid #ffffff;
-  border-radius: 24px;
-  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.45), 0 0 0 1px rgba(37, 99, 235, 0.4);
+  border-radius: 26px;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.5), 0 0 16px rgba(37, 99, 235, 0.5);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   user-select: none;
@@ -7168,30 +7168,146 @@ a {
 }
 
 .timeline-side-slide-btn.slide-left-btn {
-  left: 16px;
+  left: 14px !important;
 }
 
 .timeline-side-slide-btn.slide-right-btn {
-  right: 16px;
+  right: 14px !important;
 }
 
 .timeline-side-slide-btn:hover {
   background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 100%);
-  transform: translateY(-50%) scale(1.12);
-  box-shadow: 0 12px 36px rgba(37, 99, 235, 0.75), 0 0 0 2px #ffffff;
+  transform: translateY(-50%) scale(1.14) !important;
+  box-shadow: 0 12px 36px rgba(37, 99, 235, 0.8), 0 0 0 2px #ffffff;
 }
 
 .timeline-side-slide-btn:active {
-  transform: translateY(-50%) scale(0.95);
+  transform: translateY(-50%) scale(0.95) !important;
   box-shadow: 0 4px 14px rgba(30, 58, 138, 0.5);
 }
 
 .timeline-side-slide-btn .slide-btn-label {
-  font-size: 9.5px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 900;
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: #e0f2fe;
+}
+
+/* Floating Bottom Quick Glide Dock - Fixed on screen at all times */
+.timeline-floating-bottom-dock {
+  position: fixed !important;
+  bottom: 20px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 99998 !important;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1.5px solid #3b82f6;
+  border-radius: 40px;
+  padding: 6px 14px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 20px rgba(59, 130, 246, 0.4);
+  animation: dockSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 95vw;
+}
+
+@keyframes dockSlideUp {
+  from {
+    transform: translate(-50%, 30px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+}
+
+.dock-scroll-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%);
+  color: #ffffff;
+  border: 1.5px solid #ffffff;
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  transition: all 0.15s ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.dock-scroll-btn:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  transform: scale(1.05);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.6);
+}
+
+.dock-scroll-btn:active {
+  transform: scale(0.96);
+}
+
+.dock-month-jump-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  max-width: 580px;
+  padding: 2px 4px;
+  scrollbar-width: none;
+}
+
+.dock-month-jump-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.dock-month-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.dock-month-pill:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border-color: #93c5fd;
+}
+
+.dock-month-pill.active {
+  background: #3b82f6;
+  color: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
+}
+
+.dock-month-pill.has-data {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.dock-pill-count {
+  font-size: 9px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0 4px;
+  border-radius: 6px;
+  color: #93c5fd;
 }
 
 .spreadsheet-scroll-box {
