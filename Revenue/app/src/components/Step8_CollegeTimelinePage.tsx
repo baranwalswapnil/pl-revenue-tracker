@@ -2200,13 +2200,13 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
               {/* Live Preview Card: Duration & Status */}
               {formStatusPreview && (
-                <div className={`live-preview-box status-${formStatusPreview.status.toLowerCase()}`}>
+                <div className={`live-preview-box status-${formStatusPreview.status.toLowerCase().replace(/\s+/g, "-")}`}>
                   <div className="preview-header">
                     <div className="preview-status-pill">
                       {formStatusPreview.status === "Active" && "🟢 Active in Training Today"}
                       {formStatusPreview.status === "Upcoming" && "🔵 Upcoming Schedule"}
                       {formStatusPreview.status === "Completed" && "⚪ Concluded Training"}
-                      {formStatusPreview.status === "No Dates" && "⚠️ Dates Needed"}
+                      {formStatusPreview.status === "Incomplete Data" && "⚠️ Dates Needed"}
                     </div>
                     <span className="preview-duration-badge font-mono font-bold">
                       {formStatusPreview.durationDays} Days Duration
