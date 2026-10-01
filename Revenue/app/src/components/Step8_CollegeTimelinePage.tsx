@@ -685,11 +685,60 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     }
   };
 
-  // Auto-scroll grid to selected month whenever selectedMonth or selectedYear changes
+  // Helper to find the earliest Training Start Date for a given year & month
+  const getEarliestTrainingStartDate = (
+    year: number | "all",
+    month: number | "all"
+  ): string | null => {
+    const relevant = allTimelines.filter((item) => {
+      const s = normalizeDateStr(item.start_date);
+      const e = normalizeDateStr(item.end_date);
+      if (!s || !e) return false;
+      return isItemInPeriod(item, year, month);
+    });
+
+    if (relevant.length === 0) return null;
+
+    const startDates: string[] = [];
+    relevant.forEach((item) => {
+      const s = normalizeDateStr(item.start_date);
+      if (s) {
+        if (year !== "all") {
+          const yrStr = String(year);
+          if (s.startsWith(yrStr)) {
+            startDates.push(s);
+          } else if (s < `${yrStr}-01-01`) {
+            startDates.push(`${yrStr}-01-01`);
+          }
+        } else {
+          startDates.push(s);
+        }
+      }
+    });
+
+    if (startDates.length === 0) return null;
+    startDates.sort();
+    return startDates[0];
+  };
+
+  // Auto-scroll grid to earliest training start date or selected month whenever selectedMonth or selectedYear changes
   useEffect(() => {
     if (!gridScrollRef.current || gridData.days.length === 0) return;
 
     if (selectedMonth === "all") {
+      const earliestStartDate = getEarliestTrainingStartDate(selectedYear, "all");
+
+      if (earliestStartDate) {
+        const targetIdx = gridData.days.findIndex((d) => d.dateStr === earliestStartDate);
+        if (targetIdx !== -1) {
+          // Scroll with a 70px offset so the starting date is clearly visible
+          const scrollPos = Math.max(0, targetIdx * dayCellWidth - 70);
+          gridScrollRef.current.scrollTo({ left: scrollPos, behavior: "smooth" });
+          return;
+        }
+      }
+
+      // Fallback: If no start date found, but today is in view, scroll to today, else 0
       if (gridData.todayColIndex !== null) {
         const scrollPos = Math.max(0, gridData.todayColIndex * dayCellWidth - 220);
         gridScrollRef.current.scrollTo({ left: scrollPos, behavior: "smooth" });
@@ -713,7 +762,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         gridScrollRef.current.scrollTo({ left: scrollPos, behavior: "smooth" });
       }
     }
-  }, [selectedMonth, selectedYear, dayCellWidth, gridData]);
+  }, [selectedMonth, selectedYear, dayCellWidth, gridData, allTimelines]);
 
   // Scroll to Today Column in Grid
   const handleJumpToToday = () => {
@@ -1205,7 +1254,11 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       key={yr}
                       type="button"
                       className={`year-filter-pill ${isSelected ? "active" : ""}`}
-                      onClick={() => setSelectedYear(yr)}
+                      onClick={() => {
+                        setSelectedYear(yr);
+                        setSelectedMonth("all");
+                        setSelectedSpecificDate(null);
+                      }}
                     >
                       <span className="pill-year-text">{yr}</span>
                       {count > 0 && <span className="pill-badge-count">{count}</span>}
@@ -1215,7 +1268,11 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 <button
                   type="button"
                   className={`year-filter-pill ${selectedYear === "all" ? "active" : ""}`}
-                  onClick={() => setSelectedYear("all")}
+                  onClick={() => {
+                    setSelectedYear("all");
+                    setSelectedMonth("all");
+                    setSelectedSpecificDate(null);
+                  }}
                 >
                   <span className="pill-year-text">All Years</span>
                   <span className="pill-badge-count">{allTimelines.length}</span>
