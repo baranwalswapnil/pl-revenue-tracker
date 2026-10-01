@@ -201,6 +201,18 @@ function normalizeDate(raw: any): string {
     return str;
   }
 
+  // Excel serial number (e.g. 40000 - 60000)
+  if (/^\d{5}$/.test(str)) {
+    const serial = parseInt(str, 10);
+    const utc_days = Math.floor(serial - 25569);
+    const utc_value = utc_days * 86400;
+    const date_info = new Date(utc_value * 1000);
+    const year = date_info.getFullYear();
+    const month = String(date_info.getMonth() + 1).padStart(2, "0");
+    const day = String(date_info.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
   // DD/MM/YYYY or DD-MM-YYYY
   const dmyMatch = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{4})$/);
   if (dmyMatch) {
@@ -208,11 +220,30 @@ function normalizeDate(raw: any): string {
     return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
   }
 
+  // DD-Mon-YYYY (e.g. 11-Nov-2025 or 15 Apr 2026)
+  const dMonY = str.match(/^(\d{1,2})[\s\.-]([A-Za-z]{3,9})[\s\.-](\d{4})/);
+  if (dMonY) {
+    const day = dMonY[1].padStart(2, "0");
+    const monStr = dMonY[2].toLowerCase().slice(0, 3);
+    const monthsMap: Record<string, string> = {
+      jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+      jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12"
+    };
+    const month = monthsMap[monStr];
+    const year = dMonY[3];
+    if (month) {
+      return `${year}-${month}-${day}`;
+    }
+  }
+
   // Try Date.parse
   try {
     const parsed = new Date(str);
     if (!isNaN(parsed.getTime())) {
-      return parsed.toISOString().slice(0, 10);
+      const year = parsed.getFullYear();
+      const month = String(parsed.getMonth() + 1).padStart(2, "0");
+      const day = String(parsed.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
     }
   } catch {
     // Ignore error

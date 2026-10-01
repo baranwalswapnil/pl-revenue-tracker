@@ -37,15 +37,27 @@ const STORAGE_TIMELINES_KEY = "college_timeline_records_v1";
  * Normalizes date to standard YYYY-MM-DD format
  */
 export function normalizeDateStr(dateStr?: string): string {
-  if (!dateStr || !dateStr.trim()) return "";
-  const str = dateStr.trim();
+  if (!dateStr || !String(dateStr).trim()) return "";
+  const str = String(dateStr).trim();
 
   // YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
     return str;
   }
 
-  // DD/MM/YYYY or DD-MM-YYYY
+  // Excel serial number (e.g. 40000 - 60000)
+  if (/^\d{5}$/.test(str)) {
+    const serial = parseInt(str, 10);
+    const utc_days = Math.floor(serial - 25569);
+    const utc_value = utc_days * 86400;
+    const date_info = new Date(utc_value * 1000);
+    const year = date_info.getFullYear();
+    const month = String(date_info.getMonth() + 1).padStart(2, "0");
+    const day = String(date_info.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
   const dmy = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{4})/);
   if (dmy) {
     const day = dmy[1].padStart(2, "0");
@@ -54,7 +66,23 @@ export function normalizeDateStr(dateStr?: string): string {
     return `${year}-${month}-${day}`;
   }
 
-  // MM/DD/YYYY fallback
+  // DD-Mon-YYYY (e.g. 11-Nov-2025 or 15 Apr 2026)
+  const dMonY = str.match(/^(\d{1,2})[\s\.-]([A-Za-z]{3,9})[\s\.-](\d{4})/);
+  if (dMonY) {
+    const day = dMonY[1].padStart(2, "0");
+    const monStr = dMonY[2].toLowerCase().slice(0, 3);
+    const monthsMap: Record<string, string> = {
+      jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+      jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12"
+    };
+    const month = monthsMap[monStr];
+    const year = dMonY[3];
+    if (month) {
+      return `${year}-${month}-${day}`;
+    }
+  }
+
+  // Date parse fallback
   try {
     const d = new Date(str);
     if (!isNaN(d.getTime())) {
@@ -257,10 +285,10 @@ function addDaysToDate(dateStr: string, days: number): string {
 }
 
 /**
- * Resolves distinct, realistic, accurate training start & end dates for each college.
- * Fixes duplicate template placeholders (such as 1-year contract ranges e.g. 11/11/2025 -> 30/11/2026),
- * single-day start==end dates, missing end dates, and identical batch dates (e.g. 16/09/2026).
- * Distributes training schedules across the calendar with realistic 2 to 6 week training blocks.
+ * Resolves exact training start & end dates for each college.
+ * Strictly preserves the exact Sheet 1 Start Date (Column L) or MOU Signed Date (Column K).
+ * Never mutates, shifts, or randomizes start dates.
+ * If Column L and Column K are missing, returns empty start_date/end_date to mark as 'Incomplete Data'.
  */
 export function resolveDistinctCollegeDates(record: {
   project_code: string;
@@ -276,75 +304,44 @@ export function resolveDistinctCollegeDates(record: {
   hours_planned?: number;
   source?: string;
 }): { start_date: string; end_date: string } {
-  // If user explicitly entered / edited manual dates, preserve them
-  if (record.source === "manual" && record.start_date && record.end_date) {
-    return {
-      start_date: normalizeDateStr(record.start_date),
-      end_date: normalizeDateStr(record.end_date),
-    };
-  }
-
-  const s = normalizeDateStr(record.start_date);
-  const e = normalizeDateStr(record.end_date);
-  const mou = normalizeDateStr(record.mou_signed_date);
-  const hash = hashString(`${record.project_code}-${record.college_name}`);
-
-  // Check if dates are already genuine distinct dates (duration between 5 and 90 days, and not template placeholder)
-  let isPlaceholder = false;
-  if (s && e) {
-    const sTime = new Date(s).getTime();
-    const eTime = new Date(e).getTime();
-    const diff = Math.round((eTime - sTime) / (1000 * 60 * 60 * 24));
-    // If start == end, or duration is > 100 days (1-year contract placeholder), or negative
-    if (diff <= 1 || diff > 100) {
-      isPlaceholder = true;
-    }
-  } else {
-    isPlaceholder = true;
-  }
-
-  if (!isPlaceholder && s && e) {
+  // If user explicitly entered / edited manual dates, preserve them directly
+  if (record.source === "manual" && record.start_date) {
+    const s = normalizeDateStr(record.start_date);
+    const e = normalizeDateStr(record.end_date) || addDaysToDate(s, 21);
     return { start_date: s, end_date: e };
   }
 
-  // Generate realistic, distinct, staggered schedule across the academic calendar
-  let baseStart = "";
-  if (s && s.startsWith("2026")) {
-    baseStart = s;
-  } else if (mou && mou.startsWith("2026")) {
-    const offset = 5 + (hash % 12);
-    baseStart = addDaysToDate(mou, offset);
-  } else {
-    // Distribute across 2026 months based on academic year and module
-    const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-    const assignedMonth = months[hash % months.length];
-    const assignedDay = 1 + (hash % 24);
-    baseStart = `2026-${String(assignedMonth).padStart(2, "0")}-${String(assignedDay).padStart(2, "0")}`;
+  // 1. EXACT Start Date: Prioritize Column L (training_start_date), then Column K (mou_signed_date)
+  const rawStart = normalizeDateStr(record.start_date);
+  const rawMou = normalizeDateStr(record.mou_signed_date);
+  const startDate = rawStart || rawMou || "";
+
+  if (!startDate) {
+    return { start_date: "", end_date: "" };
   }
 
-  // If sub-modules exist for the same college (e.g. SAP-SD, SAP-FICO, SAP-HR, SAP-OPS, etc.), stagger them
-  const domainText = ((record.domain_of_training || "") + (record.type_of_project || "") + (record.project_code || "")).toUpperCase();
-  if (domainText.includes("SAP") || domainText.includes("FICO") || domainText.includes("HR") || domainText.includes("OPS") || domainText.includes("SD")) {
-    const subIndex = hash % 6;
-    baseStart = addDaysToDate(baseStart, subIndex * 6);
+  // 2. End Date:
+  // If Column M has a valid end date that is after startDate, use it directly.
+  // If missing or <= startDate (single-day placeholder like 16/09/2026 to 16/09/2026),
+  // compute realistic duration from planned hours (21 to 42 days).
+  let rawEnd = normalizeDateStr(record.end_date);
+  let endDate = rawEnd;
+
+  if (!endDate) {
+    const hrs = record.hours_planned || 40;
+    const days = hrs >= 80 ? 42 : hrs >= 60 ? 28 : 21;
+    endDate = addDaysToDate(startDate, days);
   } else {
-    const jitter = (hash % 7) - 3;
-    baseStart = addDaysToDate(baseStart, jitter);
+    const sTime = new Date(startDate).getTime();
+    const eTime = new Date(endDate).getTime();
+    if (eTime <= sTime) {
+      const hrs = record.hours_planned || 40;
+      const days = hrs >= 80 ? 42 : hrs >= 60 ? 28 : 21;
+      endDate = addDaysToDate(startDate, days);
+    }
   }
 
-  // Calculate training duration based on hours and student count (e.g. 18 to 45 days)
-  let duration = 21;
-  const hrs = record.hours_planned || 40;
-  const students = record.student_count || 0;
-  if (hrs >= 80) duration = 35 + (hash % 10);
-  else if (hrs >= 60) duration = 28 + (hash % 7);
-  else if (students > 400) duration = 30 + (hash % 10);
-  else duration = 16 + (hash % 12);
-
-  const finalStart = baseStart;
-  const finalEnd = addDaysToDate(baseStart, duration);
-
-  return { start_date: finalStart, end_date: finalEnd };
+  return { start_date: startDate, end_date: endDate };
 }
 
 /**
