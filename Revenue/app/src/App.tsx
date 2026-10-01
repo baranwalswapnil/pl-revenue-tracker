@@ -533,9 +533,9 @@ export function App() {
 
   // Timeline count & handlers
   const activeTimelineCount = useMemo(() => {
-    const list = getAllEnrichedTimelines(projects, googleSheetColleges);
+    const list = getAllEnrichedTimelines(projects, googleSheetColleges, mouItems);
     return list.filter((item) => item.status === "Active").length;
-  }, [projects, googleSheetColleges]);
+  }, [projects, googleSheetColleges, mouItems]);
 
   const handleOpenCollegeTimeline = () => {
     setCurrentView("college-timeline");

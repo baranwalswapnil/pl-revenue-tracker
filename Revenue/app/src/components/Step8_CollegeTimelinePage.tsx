@@ -31,7 +31,15 @@ import {
   Grid,
 } from "lucide-react";
 import type { Project } from "../lib/models";
-import type { GoogleSheetCollegeItem, GoogleSheetMOUItem } from "../lib/googleSheetsService";
+import {
+  loadCachedSheetItems,
+  loadCachedMOUItems,
+  loadSavedSheetConfig,
+  fetchGoogleSheetData,
+  fetchMOUData,
+  type GoogleSheetCollegeItem,
+  type GoogleSheetMOUItem,
+} from "../lib/googleSheetsService";
 import {
   getAllEnrichedTimelines,
   saveCollegeTimelineRecord,
@@ -80,6 +88,55 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 }) => {
   // Navigation Tabs: 'add' (Add / Register Form) | 'view' (Timeline Graph)
   const [activeTab, setActiveTab] = useState<"add" | "view">("add");
+
+  // Local state fallbacks to guarantee immediate rendering of College Training & MOUs 26-27 records
+  const [localSheetColleges, setLocalSheetColleges] = useState<GoogleSheetCollegeItem[]>(() => {
+    if (googleSheetColleges && googleSheetColleges.length > 0) return googleSheetColleges;
+    return loadCachedSheetItems();
+  });
+
+  const [localMOUItems, setLocalMOUItems] = useState<GoogleSheetMOUItem[]>(() => {
+    if (mouItems && mouItems.length > 0) return mouItems;
+    return loadCachedMOUItems();
+  });
+
+  useEffect(() => {
+    if (googleSheetColleges && googleSheetColleges.length > 0) {
+      setLocalSheetColleges(googleSheetColleges);
+    }
+  }, [googleSheetColleges]);
+
+  useEffect(() => {
+    if (mouItems && mouItems.length > 0) {
+      setLocalMOUItems(mouItems);
+    }
+  }, [mouItems]);
+
+  // Auto-sync College Training & MOUs 26-27 on mount if local cache is empty
+  useEffect(() => {
+    const config = loadSavedSheetConfig();
+    if (!config.sheetUrl || !config.sheetUrl.trim()) return;
+
+    if (localSheetColleges.length === 0) {
+      fetchGoogleSheetData(config.sheetUrl, "College Training")
+        .then((items) => {
+          if (items && items.length > 0) {
+            setLocalSheetColleges(items);
+          }
+        })
+        .catch(() => {});
+    }
+
+    if (localMOUItems.length === 0) {
+      fetchMOUData(config.sheetUrl, "MOUs 26-27")
+        .then((mous) => {
+          if (mous && mous.length > 0) {
+            setLocalMOUItems(mous);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   // Filter and Search States
   const [searchTerm, setSearchTerm] = useState("");
@@ -145,10 +202,10 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Compute all enriched college timeline records (from College Trainee MOUs, Sheet1 & registered projects)
+  // Compute all enriched college timeline records (from College Training, MOUs 26-27 & registered projects)
   const allTimelines = useMemo(() => {
-    return getAllEnrichedTimelines(projects, googleSheetColleges, mouItems);
-  }, [projects, googleSheetColleges, mouItems, refreshKey]);
+    return getAllEnrichedTimelines(projects, localSheetColleges, localMOUItems);
+  }, [projects, localSheetColleges, localMOUItems, refreshKey]);
 
   // List of all 12 calendar months
   const MONTHS_LIST = useMemo(
@@ -999,7 +1056,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     }
   };
 
-  // List of unique Sheet1 colleges for auto-complete
+  // List of unique colleges for auto-complete
   const sheet1CollegeOptions = useMemo(() => {
     const list: {
       name: string;
@@ -1011,7 +1068,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     }[] = [];
     const seen = new Set<string>();
 
-    googleSheetColleges.forEach((g) => {
+    localSheetColleges.forEach((g) => {
       const code = g.project_code || "";
       const name = g.college_name || "";
       const key = `${code}-${name}`.toLowerCase();
@@ -1028,7 +1085,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       }
     });
 
-    mouItems.forEach((m) => {
+    localMOUItems.forEach((m) => {
       const code = m.projectCode || "";
       const name = m.collegeName || "";
       const key = `${code}-${name}`.toLowerCase();
@@ -1061,7 +1118,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     });
 
     return list;
-  }, [googleSheetColleges, mouItems, projects]);
+  }, [localSheetColleges, localMOUItems, projects]);
 
   const filteredAutocompleteColleges = useMemo(() => {
     if (!collegeSearchPicker.trim()) return sheet1CollegeOptions.slice(0, 10);

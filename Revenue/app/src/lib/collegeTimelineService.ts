@@ -3,8 +3,8 @@ import type { GoogleSheetCollegeItem, GoogleSheetMOUItem } from "./googleSheetsS
 
 export interface CollegeTimelineRecord {
   id: string;
-  project_code: string;       // Column B in Sheet1 or MOUs Project Code
-  college_name: string;       // Column C in Sheet1 or Total Engineering College
+  project_code: string;       // Column B in College Training or MOUs Project Code
+  college_name: string;       // Column C in College Training or Total Engineering College
   start_date: string;         // Training Start Date (YYYY-MM-DD)
   end_date: string;           // Training End Date (YYYY-MM-DD)
   academic_year?: string;
@@ -12,7 +12,7 @@ export interface CollegeTimelineRecord {
   course_stream?: string;
   domain_of_training?: string;
   notes?: string;
-  source?: "sheet1" | "manual" | "project" | "mou_trainee";
+  source?: "sheet1" | "manual" | "project" | "mou_trainee" | "college_training";
   updated_at?: string;
 }
 
@@ -356,7 +356,7 @@ export function getAllEnrichedTimelines(
   const savedTimelines = loadSavedTimelines();
   const map = new Map<string, CollegeTimelineRecord>();
 
-  // 1. Process Google Sheet 1 items
+  // 1. Process Google Sheet 'College Training' items
   googleSheetColleges.forEach((sheetItem) => {
     const projCode = (sheetItem.project_code || "").trim();
     const collegeName = (sheetItem.college_name || "").trim();
@@ -375,7 +375,7 @@ export function getAllEnrichedTimelines(
       academic_year: sheetItem.academic_year,
       student_count: sheetItem.student_count,
       hours_planned: sheetItem.hours_planned,
-      source: "sheet1",
+      source: "college_training",
     });
 
     const key = (projCode || collegeName).toLowerCase();
@@ -389,7 +389,7 @@ export function getAllEnrichedTimelines(
       student_count: sheetItem.student_count || 0,
       course_stream: sheetItem.course_stream || "",
       domain_of_training: sheetItem.domain_of_training || "",
-      source: "sheet1",
+      source: "college_training",
       updated_at: new Date().toISOString(),
     });
   });
@@ -480,8 +480,8 @@ export function getAllEnrichedTimelines(
         id: proj.id || existing.id,
         project_code: projCode || existing.project_code,
         college_name: collegeName || existing.college_name,
-        start_date: existing.source === "mou_trainee" && existing.start_date ? existing.start_date : resolvedDates.start_date,
-        end_date: existing.source === "mou_trainee" && existing.end_date ? existing.end_date : resolvedDates.end_date,
+        start_date: existing.start_date || resolvedDates.start_date,
+        end_date: existing.end_date || resolvedDates.end_date,
         academic_year: existing.academic_year || proj.academic_year,
         student_count: existing.student_count || proj.student_count,
         source: existing.source || "project",
