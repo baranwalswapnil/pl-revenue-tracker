@@ -380,8 +380,20 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
       }
     }
 
-    const startDate = normalizeDate(colStartDate !== -1 ? row[colStartDate] : row[11]);
-    const endDate = normalizeDate(colEndDate !== -1 ? row[colEndDate] : row[12]);
+    // Start Date: Col L (Training Start Date) or Col E (Year/Start Date if date present)
+    let rawStartDate = colStartDate !== -1 ? row[colStartDate] : row[11];
+    if ((!rawStartDate || !normalizeDate(rawStartDate)) && row[4] && (/\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}/.test(row[4]) || normalizeDate(row[4]))) {
+      rawStartDate = row[4];
+    }
+
+    // End Date: Col M (Training End Date) or Col F (Course/End Date if date present)
+    let rawEndDate = colEndDate !== -1 ? row[colEndDate] : row[12];
+    if ((!rawEndDate || !normalizeDate(rawEndDate)) && row[5] && (/\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}/.test(row[5]) || normalizeDate(row[5]))) {
+      rawEndDate = row[5];
+    }
+
+    const startDate = normalizeDate(rawStartDate);
+    const endDate = normalizeDate(rawEndDate);
     const hoursPlanned = parseCleanNumber(colHoursPlanned !== -1 ? row[colHoursPlanned] : row[18], 40);
 
     const rawPayType = colPaymentType !== -1 ? row[colPaymentType] : row[19];
