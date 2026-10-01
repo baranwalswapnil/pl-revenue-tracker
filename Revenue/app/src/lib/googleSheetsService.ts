@@ -253,6 +253,7 @@ function normalizeDate(raw: any): string {
 }
 
 export const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw/edit?usp=sharing";
+export const DEFAULT_SHEET_NAME = "College Training";
 
 /**
  * Normalizes payment types (FNF, ATP, ATTP, EMI) from sheet notations like AT, AP, ATT, ATTT, EMI-8
@@ -447,17 +448,31 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
 
 /**
  * Fetches Google Sheet CSV directly via browser fetch()
+ * Prioritizes 'College Training' tab and falls back to 'Sheet1' or default tab
  */
 export async function fetchGoogleSheetData(sheetUrlOrId: string, sheetName = ""): Promise<GoogleSheetCollegeItem[]> {
-  const csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, sheetName);
+  const targetSheetName = (sheetName && sheetName.trim()) || DEFAULT_SHEET_NAME;
+  let csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, targetSheetName);
   
-  const response = await fetch(csvUrl, {
+  let response = await fetch(csvUrl, {
     method: "GET",
     headers: {
       "Accept": "text/csv,text/plain,*/*",
     },
     signal: AbortSignal.timeout(8000),
   });
+
+  // Fallback if College Training is not found or fails
+  if (!response.ok && targetSheetName === "College Training") {
+    csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, "Sheet1");
+    response = await fetch(csvUrl, {
+      method: "GET",
+      headers: {
+        "Accept": "text/csv,text/plain,*/*",
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to fetch spreadsheet. Status: ${response.status} (${response.statusText}). Make sure the Google Sheet sharing is set to "Anyone with the link can view".`);
@@ -1786,7 +1801,7 @@ export async function syncProjectToGoogleSheet(
  */
 export function loadSavedSheetConfig(): GoogleSheetConfig {
   const envUrl = (import.meta as any).env?.VITE_DEFAULT_GOOGLE_SHEET_URL || DEFAULT_SHEET_URL;
-  const envSheetName = (import.meta as any).env?.VITE_DEFAULT_GOOGLE_SHEET_NAME || "";
+  const envSheetName = (import.meta as any).env?.VITE_DEFAULT_GOOGLE_SHEET_NAME || DEFAULT_SHEET_NAME;
   const envScriptUrl = (import.meta as any).env?.VITE_GOOGLE_APPS_SCRIPT_URL || "";
 
   try {

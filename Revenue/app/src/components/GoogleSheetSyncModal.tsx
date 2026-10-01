@@ -316,13 +316,13 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
             <div className="form-field-group">
               <label className="field-label-text" htmlFor="gsheetTabInput">
                 <FileSpreadsheet size={15} className="label-icon" />
-                <span>Sheet Tab Name (Optional, e.g. Sheet1)</span>
+                <span>Sheet Tab Name (Optional, e.g. College Training or Sheet1)</span>
               </label>
               <input
                 id="gsheetTabInput"
                 type="text"
                 className="styled-input-control"
-                placeholder="Sheet1"
+                placeholder="College Training"
                 value={sheetName}
                 onChange={(e) => setSheetName(e.target.value)}
               />
