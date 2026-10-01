@@ -113,12 +113,17 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   const [collegeSearchPicker, setCollegeSearchPicker] = useState("");
   const [isCollegePickerOpen, setIsCollegePickerOpen] = useState(false);
   const collegePickerRef = useRef<HTMLDivElement>(null);
+
+  // Search Autocomplete Dropdown State & Ref
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
+
   const gridScrollRef = useRef<HTMLDivElement>(null);
 
   // Local state trigger to refresh lists after adds/deletes
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Close college picker dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -126,6 +131,12 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         !collegePickerRef.current.contains(event.target as Node)
       ) {
         setIsCollegePickerOpen(false);
+      }
+      if (
+        searchBoxRef.current &&
+        !searchBoxRef.current.contains(event.target as Node)
+      ) {
+        setIsSearchDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -519,6 +530,24 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return { total, active, upcoming, completed, incomplete, withDates };
   }, [allTimelines]);
 
+  // Autocomplete suggestions for Search Box dropdown
+  const searchSuggestions = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    if (!term) {
+      // Return top 8 colleges when search input is focused but empty
+      return allTimelines.slice(0, 8);
+    }
+    return allTimelines
+      .filter((item) => {
+        const name = (item.college_name || "").toLowerCase();
+        const code = (item.project_code || "").toLowerCase();
+        const stream = (item.course_stream || "").toLowerCase();
+        const notes = (item.notes || "").toLowerCase();
+        return name.includes(term) || code.includes(term) || stream.includes(term) || notes.includes(term);
+      })
+      .slice(0, 15);
+  }, [searchTerm, allTimelines]);
+
   // Determine active date bounds from all timelines to build day-by-day grid
   const dateBounds = useMemo(() => {
     let minYear = 2024;
@@ -788,6 +817,62 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         });
       }
     }, 120);
+  };
+
+  // Jump and show college on graph from its training start day
+  const handleSelectSearchCollege = (item: EnrichedTimelineItem) => {
+    setSearchTerm(item.college_name || item.project_code);
+    setIsSearchDropdownOpen(false);
+
+    if (viewMode !== "grid") {
+      setViewMode("grid");
+    }
+
+    setSelectedSpecificDate(null);
+
+    const categorized = categorizeTimelineItem(item, currentPeriodInfo);
+    setPinnedItem(categorized);
+
+    const s = normalizeDateStr(item.start_date);
+    if (s) {
+      const yr = parseInt(s.slice(0, 4), 10);
+      const mo = parseInt(s.slice(5, 7), 10);
+
+      // Align Year filter if different
+      if (!isNaN(yr) && selectedYear !== "all" && selectedYear !== yr) {
+        setSelectedYear(yr);
+      }
+      // Set month to "all" (or the month) so the continuous ribbon includes the date
+      if (selectedMonth !== "all" && selectedMonth !== mo) {
+        setSelectedMonth("all");
+      }
+
+      const scrollToStartColumn = () => {
+        if (!gridScrollRef.current) return;
+        const targetIdx = gridData.days.findIndex((d) => d.dateStr === s);
+        if (targetIdx !== -1) {
+          // Position the start date column right at the beginning of the viewport with 60px breathing space
+          const scrollPos = Math.max(0, targetIdx * dayCellWidth - 60);
+          gridScrollRef.current.scrollTo({
+            left: scrollPos,
+            behavior: "smooth",
+          });
+        }
+      };
+
+      // Perform scroll with progressive delays to account for React re-render
+      setTimeout(scrollToStartColumn, 50);
+      setTimeout(scrollToStartColumn, 180);
+      setTimeout(scrollToStartColumn, 350);
+
+      // Smooth scroll the college's row into vertical view
+      setTimeout(() => {
+        const rowElem = document.getElementById(`timeline-row-${item.id}`);
+        if (rowElem) {
+          rowElem.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 220);
+    }
   };
 
   // Live calculation of duration and status in Add Form
@@ -1116,25 +1201,98 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           <div className="timeline-modern-control-card">
             {/* Top Row: Search + Status Filter Pills + View/Zoom Quick Actions */}
             <div className="control-card-top-row">
-              {/* Search Box */}
-              <div className="modern-search-box">
+              {/* Search Box with Interactive Dropdown Recommendations */}
+              <div className="modern-search-box" ref={searchBoxRef}>
                 <Search size={15} className="modern-search-icon" />
                 <input
                   type="text"
                   placeholder="Search college name or code..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setIsSearchDropdownOpen(true);
+                  }}
+                  onFocus={() => setIsSearchDropdownOpen(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setIsSearchDropdownOpen(false);
+                    } else if (e.key === "Enter" && searchSuggestions.length > 0) {
+                      handleSelectSearchCollege(searchSuggestions[0]);
+                    }
+                  }}
                   className="modern-search-input"
                 />
                 {searchTerm && (
                   <button
                     type="button"
                     className="modern-clear-btn"
-                    onClick={() => setSearchTerm("")}
+                    onClick={() => {
+                      setSearchTerm("");
+                      setIsSearchDropdownOpen(false);
+                      setPinnedItem(null);
+                    }}
                     title="Clear search"
                   >
                     &times;
                   </button>
+                )}
+
+                {/* Dropdown Recommendations */}
+                {isSearchDropdownOpen && searchSuggestions.length > 0 && (
+                  <div className="modern-search-dropdown">
+                    <div className="search-dropdown-header">
+                      <span>RECOMMENDED COLLEGES ({searchSuggestions.length})</span>
+                      <span className="search-dropdown-hint">Click to show on graph from start date 🎯</span>
+                    </div>
+                    <div className="search-dropdown-list">
+                      {searchSuggestions.map((item) => {
+                        const hasDates = Boolean(item.start_date && item.end_date);
+                        const statusClass =
+                          item.status === "Active"
+                            ? "status-active"
+                            : item.status === "Upcoming"
+                            ? "status-upcoming"
+                            : item.status === "Completed"
+                            ? "status-completed"
+                            : "status-incomplete";
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="search-dropdown-item"
+                            onClick={() => handleSelectSearchCollege(item)}
+                          >
+                            <div className="item-title-row">
+                              <span className="item-college-name">{item.college_name || "Unknown College"}</span>
+                              {item.project_code && (
+                                <span className="item-code-badge">{item.project_code}</span>
+                              )}
+                            </div>
+                            <div className="item-details-row">
+                              {hasDates ? (
+                                <span className="item-date-badge">
+                                  <Calendar size={11} />
+                                  <span>{formatDisplayDate(item.start_date)} → {formatDisplayDate(item.end_date)}</span>
+                                </span>
+                              ) : (
+                                <span className="item-no-dates-badge">
+                                  ⚠️ Missing start/end dates
+                                </span>
+                              )}
+                              <div className="item-meta-right">
+                                <span className={`item-status-pill ${statusClass}`}>
+                                  {item.status}
+                                </span>
+                                <span className="item-jump-hint">
+                                  Jump to Start Day ↗
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -1558,6 +1716,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         return (
                           <div
                             key={item.id || rowIdx}
+                            id={`timeline-row-${item.id || rowIdx}`}
                             className={`spreadsheet-row ${isPinned ? "row-pinned" : ""} ${isIncomplete ? "row-incomplete" : ""}`}
                           >
                               {/* Left Row Number (1, 2, 3...) */}
