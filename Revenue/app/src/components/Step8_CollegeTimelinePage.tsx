@@ -76,8 +76,9 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   const [statusFilter, setStatusFilter] = useState<"all" | TimelineStatus>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
-  // Spreadsheet Grid Display Settings
-  const [selectedMonthView, setSelectedMonthView] = useState<string>("active"); // 'active' | 'all' | '2026-08' | '2026-09' etc.
+  // Spreadsheet Grid Display Settings (2-Tier Year -> Month Filter)
+  const [selectedYear, setSelectedYear] = useState<number | "all">(2026);
+  const [selectedMonth, setSelectedMonth] = useState<number | "all">("all");
   const [dayCellWidth, setDayCellWidth] = useState<number>(34); // px per day column (26 compact, 34 standard, 46 wide)
 
   // Floating Popover Card on Bar Hover / Click
@@ -127,7 +128,103 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return getAllEnrichedTimelines(projects, googleSheetColleges);
   }, [projects, googleSheetColleges, refreshKey]);
 
-  // Filtered timeline items based on search, status, etc.
+  // List of all 12 calendar months
+  const MONTHS_LIST = useMemo(
+    () => [
+      { num: 1, shortName: "Jan", fullName: "January" },
+      { num: 2, shortName: "Feb", fullName: "February" },
+      { num: 3, shortName: "Mar", fullName: "March" },
+      { num: 4, shortName: "Apr", fullName: "April" },
+      { num: 5, shortName: "May", fullName: "May" },
+      { num: 6, shortName: "Jun", fullName: "June" },
+      { num: 7, shortName: "Jul", fullName: "July" },
+      { num: 8, shortName: "Aug", fullName: "August" },
+      { num: 9, shortName: "Sep", fullName: "September" },
+      { num: 10, shortName: "Oct", fullName: "October" },
+      { num: 11, shortName: "Nov", fullName: "November" },
+      { num: 12, shortName: "Dec", fullName: "December" },
+    ],
+    []
+  );
+
+  // Compute unique years present across all college schedules
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<number>();
+    allTimelines.forEach((t) => {
+      if (t.start_date) {
+        const y = parseInt(t.start_date.slice(0, 4), 10);
+        if (!isNaN(y) && y >= 2020 && y <= 2035) yearsSet.add(y);
+      }
+      if (t.end_date) {
+        const y = parseInt(t.end_date.slice(0, 4), 10);
+        if (!isNaN(y) && y >= 2020 && y <= 2035) yearsSet.add(y);
+      }
+    });
+
+    const curYr = new Date().getFullYear();
+    yearsSet.add(curYr);
+
+    return Array.from(yearsSet).sort((a, b) => a - b);
+  }, [allTimelines]);
+
+  // Helper to test if a timeline item overlaps a given year and month
+  const isItemInPeriod = (
+    item: EnrichedTimelineItem,
+    year: number | "all",
+    month: number | "all"
+  ) => {
+    const s = normalizeDateStr(item.start_date) || normalizeDateStr(item.end_date);
+    const e = normalizeDateStr(item.end_date) || s;
+    if (!s || !e) return false;
+
+    if (year === "all" && month === "all") return true;
+
+    if (year !== "all" && month === "all") {
+      const yearStart = `${year}-01-01`;
+      const yearEnd = `${year}-12-31`;
+      return !(e < yearStart || s > yearEnd);
+    }
+
+    if (year !== "all" && month !== "all") {
+      const mStr = String(month).padStart(2, "0");
+      const lastDay = new Date(year, month, 0).getDate();
+      const monthStart = `${year}-${mStr}-01`;
+      const monthEnd = `${year}-${mStr}-${String(lastDay).padStart(2, "0")}`;
+      return !(e < monthStart || s > monthEnd);
+    }
+
+    if (year === "all" && month !== "all") {
+      const mStr = String(month).padStart(2, "0");
+      return availableYears.some((yr) => {
+        const lastDay = new Date(yr, month, 0).getDate();
+        const monthStart = `${yr}-${mStr}-01`;
+        const monthEnd = `${yr}-${mStr}-${String(lastDay).padStart(2, "0")}`;
+        return !(e < monthStart || s > monthEnd);
+      });
+    }
+
+    return true;
+  };
+
+  // Precomputed counts of college schedules per year
+  const yearCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: allTimelines.length };
+    availableYears.forEach((yr) => {
+      counts[yr] = allTimelines.filter((t) => isItemInPeriod(t, yr, "all")).length;
+    });
+    return counts;
+  }, [allTimelines, availableYears]);
+
+  // Precomputed counts of college schedules per month for current selectedYear
+  const monthCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (let m = 1; m <= 12; m++) {
+      counts[m] = allTimelines.filter((t) => isItemInPeriod(t, selectedYear, m)).length;
+    }
+    return counts;
+  }, [allTimelines, selectedYear, availableYears]);
+
+  // Filtered timeline items based on search, status, and 2-tier Year -> Month selection
   const filteredTimelines = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
 
@@ -150,9 +247,16 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         }
       }
 
+      // 3. Year & Month Period Filter (Applied when not performing an explicit text search)
+      if (!term) {
+        if (!isItemInPeriod(item, selectedYear, selectedMonth)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [allTimelines, searchTerm, statusFilter]);
+  }, [allTimelines, searchTerm, statusFilter, selectedYear, selectedMonth, availableYears]);
 
   // Overall KPI statistics
   const stats = useMemo(() => {
@@ -198,45 +302,40 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return { minYear, minMonth, maxYear, maxMonth };
   }, [allTimelines]);
 
-  // Generate Day-by-Day Grid Data (Days, Month groups, Today column index)
+  // Generate Day-by-Day Grid Data based on Selected Year & Month
   const gridData = useMemo(() => {
-    if (selectedMonthView === "all") {
-      return generateDayGridData(dateBounds.minYear, 0, dateBounds.maxYear, 11);
-    }
-
-    if (selectedMonthView !== "active" && selectedMonthView.includes("-")) {
-      const [yr, mo] = selectedMonthView.split("-").map(Number);
-      return generateDayGridData(yr, mo - 1, yr, mo - 1);
-    }
-
-    // Default 'active' range
-    return generateDayGridData(
-      dateBounds.minYear,
-      dateBounds.minMonth,
-      dateBounds.maxYear,
-      dateBounds.maxMonth
-    );
-  }, [selectedMonthView, dateBounds]);
-
-  // Quick list of distinct months present in the grid for quick filtering
-  const availableMonthTabs = useMemo(() => {
-    const list: { key: string; label: string; short: string; year: number }[] = [];
-    const seen = new Set<string>();
-
-    gridData.months.forEach((m) => {
-      if (!seen.has(m.monthKey)) {
-        seen.add(m.monthKey);
-        list.push({
-          key: m.monthKey,
-          label: m.monthLabel,
-          short: m.monthLabel.split(" ")[0],
-          year: m.year,
-        });
+    if (selectedYear === "all") {
+      if (selectedMonth === "all") {
+        return generateDayGridData(
+          dateBounds.minYear,
+          dateBounds.minMonth,
+          dateBounds.maxYear,
+          dateBounds.maxMonth
+        );
+      } else {
+        return generateDayGridData(
+          dateBounds.minYear,
+          selectedMonth - 1,
+          dateBounds.maxYear,
+          selectedMonth - 1
+        );
       }
-    });
+    }
 
-    return list;
-  }, [gridData.months]);
+    // Specific Year
+    if (selectedMonth === "all") {
+      // Full 12 months for this year
+      return generateDayGridData(selectedYear, 0, selectedYear, 11);
+    } else {
+      // Single month for this year
+      return generateDayGridData(
+        selectedYear,
+        selectedMonth - 1,
+        selectedYear,
+        selectedMonth - 1
+      );
+    }
+  }, [selectedYear, selectedMonth, dateBounds]);
 
   // Helper to find starting and ending day column index for a college item in current grid
   const getCollegeDayRange = (startDateStr: string, endDateStr: string) => {
@@ -280,16 +379,28 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
   // Scroll to Today Column in Grid
   const handleJumpToToday = () => {
-    if (!gridScrollRef.current) return;
-    if (gridData.todayColIndex !== null) {
-      const scrollPos = Math.max(0, gridData.todayColIndex * dayCellWidth - 250);
-      gridScrollRef.current.scrollTo({
-        left: scrollPos,
-        behavior: "smooth",
-      });
-    } else {
-      setSelectedMonthView("active");
+    const now = new Date();
+    const currentYr = now.getFullYear();
+    const currentMo = now.getMonth() + 1;
+
+    // Switch to current year & month if not already visible
+    if (selectedYear !== currentYr) {
+      setSelectedYear(currentYr);
     }
+    if (selectedMonth !== "all" && selectedMonth !== currentMo) {
+      setSelectedMonth(currentMo);
+    }
+
+    setTimeout(() => {
+      if (!gridScrollRef.current) return;
+      if (gridData.todayColIndex !== null) {
+        const scrollPos = Math.max(0, gridData.todayColIndex * dayCellWidth - 250);
+        gridScrollRef.current.scrollTo({
+          left: scrollPos,
+          behavior: "smooth",
+        });
+      }
+    }, 120);
   };
 
   // Live calculation of duration and status in Add Form
@@ -607,7 +718,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               </div>
             </div>
           </div>
-          {/* Controls Bar: Search, Status Filter, Month Tabs, Zoom */}
+          {/* Controls Bar: Search, Status Filter, Jump to Today, Zoom, View Mode */}
           <div className="timeline-controls-bar">
             {/* Search Input */}
             <div className="timeline-search-box">
@@ -659,37 +770,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 onClick={() => setStatusFilter("Completed")}
               >
                 ⚪ Completed ({stats.completed})
-              </button>
-            </div>
-
-            {/* Month Range Selector */}
-            <div className="timeline-month-selector-wrap">
-              <span className="filter-label">Month:</span>
-              <button
-                type="button"
-                className={`month-tab-pill ${selectedMonthView === "active" ? "active" : ""}`}
-                onClick={() => setSelectedMonthView("active")}
-                title="Auto-span all active college months"
-              >
-                Active Range
-              </button>
-              {availableMonthTabs.map((m) => (
-                <button
-                  key={m.key}
-                  type="button"
-                  className={`month-tab-pill ${selectedMonthView === m.key ? "active" : ""}`}
-                  onClick={() => setSelectedMonthView(m.key)}
-                >
-                  {m.short} {m.year}
-                </button>
-              ))}
-              <button
-                type="button"
-                className={`month-tab-pill ${selectedMonthView === "all" ? "active" : ""}`}
-                onClick={() => setSelectedMonthView("all")}
-                title="Full Year 12 Months"
-              >
-                Full Year
               </button>
             </div>
 
@@ -755,19 +835,113 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
             </div>
           </div>
 
+          {/* 2-TIER YEAR & MONTH SELECTOR PANEL */}
+          <div className="timeline-date-filter-panel">
+            {/* TIER 1: YEAR SELECTOR */}
+            <div className="filter-tier-row year-tier-row">
+              <div className="tier-label-box">
+                <Calendar size={14} className="tier-icon" />
+                <span className="tier-label">1. Select Year:</span>
+              </div>
+              <div className="tier-pills-list">
+                {availableYears.map((yr) => {
+                  const count = yearCounts[yr] || 0;
+                  const isSelected = selectedYear === yr;
+                  return (
+                    <button
+                      key={yr}
+                      type="button"
+                      className={`year-filter-pill ${isSelected ? "active" : ""}`}
+                      onClick={() => setSelectedYear(yr)}
+                    >
+                      <span className="pill-year-text">{yr}</span>
+                      {count > 0 && <span className="pill-badge-count">{count}</span>}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  className={`year-filter-pill ${selectedYear === "all" ? "active" : ""}`}
+                  onClick={() => setSelectedYear("all")}
+                >
+                  <span className="pill-year-text">All Years</span>
+                  <span className="pill-badge-count">{allTimelines.length}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* TIER 2: MONTH SELECTOR FOR SELECTED YEAR */}
+            <div className="filter-tier-row month-tier-row">
+              <div className="tier-label-box">
+                <Clock size={14} className="tier-icon" />
+                <span className="tier-label">
+                  2. Select Month ({selectedYear === "all" ? "All Years" : selectedYear}):
+                </span>
+              </div>
+              <div className="tier-pills-list month-pills-list">
+                {/* Full Year Option */}
+                <button
+                  type="button"
+                  className={`month-filter-pill full-year-pill ${selectedMonth === "all" ? "active" : ""}`}
+                  onClick={() => setSelectedMonth("all")}
+                  title={`View Full Year ${selectedYear === "all" ? "" : selectedYear} (12 Months)`}
+                >
+                  <span>📅 Full Year (12 Months)</span>
+                  <span className="month-badge-count">
+                    {selectedYear === "all" ? allTimelines.length : (yearCounts[selectedYear] || 0)}
+                  </span>
+                </button>
+
+                <div className="tier-divider-bar" />
+
+                {/* 12 Individual Month Pills */}
+                {MONTHS_LIST.map((m) => {
+                  const count = monthCounts[m.num] || 0;
+                  const isSelected = selectedMonth === m.num;
+                  return (
+                    <button
+                      key={m.num}
+                      type="button"
+                      className={`month-filter-pill ${isSelected ? "active" : ""} ${count > 0 ? "has-data" : "no-data"}`}
+                      onClick={() => setSelectedMonth(m.num)}
+                      title={`${m.fullName} ${selectedYear === "all" ? "" : selectedYear} · ${count} Colleges`}
+                    >
+                      <span className="month-short-label">{m.shortName}</span>
+                      {count > 0 && <span className="month-count-dot">{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           {/* Active Filter Bar */}
-          {(searchTerm || statusFilter !== "all" || selectedMonthView !== "active") && (
+          {(searchTerm || statusFilter !== "all" || selectedYear !== 2026 || selectedMonth !== "all") && (
             <div className="active-filters-bar">
-              <span>
-                Showing <strong>{filteredTimelines.length}</strong> of {allTimelines.length} college schedules
-              </span>
+              <div className="active-filters-text-group">
+                <span>
+                  Showing <strong>{filteredTimelines.length}</strong> of {allTimelines.length} college schedules
+                </span>
+                {selectedYear !== "all" && (
+                  <span className="active-filter-badge">Year: {selectedYear}</span>
+                )}
+                {selectedMonth !== "all" && (
+                  <span className="active-filter-badge">
+                    Month: {MONTHS_LIST.find((m) => m.num === selectedMonth)?.fullName || selectedMonth}
+                  </span>
+                )}
+                {statusFilter !== "all" && (
+                  <span className="active-filter-badge">Status: {statusFilter}</span>
+                )}
+              </div>
               <button
                 type="button"
                 className="reset-filters-chip"
                 onClick={() => {
                   setSearchTerm("");
                   setStatusFilter("all");
-                  setSelectedMonthView("active");
+                  setSelectedYear(2026);
+                  setSelectedMonth("all");
                 }}
               >
                 Reset Filters
