@@ -1413,62 +1413,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 <span className="slide-btn-label">RIGHT</span>
               </button>
 
-              {/* Floating Bottom Quick Glide Dock (Fixed at Bottom of Screen as you scroll down) */}
-              <div className="timeline-floating-bottom-dock">
-                <button
-                  type="button"
-                  className="dock-scroll-btn dock-left-btn"
-                  onMouseDown={() => startContinuousScroll("left")}
-                  onMouseUp={stopContinuousScroll}
-                  onMouseLeave={stopContinuousScroll}
-                  onTouchStart={() => startContinuousScroll("left")}
-                  onTouchEnd={stopContinuousScroll}
-                  onClick={() => handleScrollHorizontal(-24 * dayCellWidth)}
-                  title="Hold or click to slide Left"
-                >
-                  <ChevronLeft size={18} />
-                  <span>SLIDE LEFT</span>
-                </button>
-
-                <div className="dock-month-jump-pills">
-                  {MONTHS_LIST.map((m) => {
-                    const count = monthCounts[m.num] || 0;
-                    const isSelected = selectedMonth === m.num;
-                    return (
-                      <button
-                        key={m.num}
-                        type="button"
-                        className={`dock-month-pill ${isSelected ? "active" : ""} ${count > 0 ? "has-data" : ""}`}
-                        onClick={() => {
-                          setSelectedMonth(m.num);
-                          setSelectedSpecificDate(null);
-                          handleJumpToMonth(m.num);
-                        }}
-                        title={`Jump directly to ${m.fullName} (${count} colleges)`}
-                      >
-                        {m.shortName}
-                        {count > 0 && <span className="dock-pill-count">{count}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <button
-                  type="button"
-                  className="dock-scroll-btn dock-right-btn"
-                  onMouseDown={() => startContinuousScroll("right")}
-                  onMouseUp={stopContinuousScroll}
-                  onMouseLeave={stopContinuousScroll}
-                  onTouchStart={() => startContinuousScroll("right")}
-                  onTouchEnd={stopContinuousScroll}
-                  onClick={() => handleScrollHorizontal(24 * dayCellWidth)}
-                  title="Hold or click to slide Right"
-                >
-                  <span>SLIDE RIGHT</span>
-                  <ChevronRight size={18} />
-                </button>
-              </div>
-
               <div className="spreadsheet-timeline-wrapper">
                 <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
                   <div
