@@ -1112,324 +1112,276 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
             </div>
           </div>
           {/* Controls Bar: Search, Status Filter, Jump to Today, Zoom, View Mode */}
-          <div className="timeline-controls-bar">
-            {/* Search Input */}
-            <div className="timeline-search-box">
-              <Search size={15} className="text-muted" />
-              <input
-                type="text"
-                placeholder="Search college name or project code..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="timeline-search-input"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  className="clear-search-btn"
-                  onClick={() => setSearchTerm("")}
-                >
-                  &times;
-                </button>
-              )}
-            </div>
-
-            {/* Status Filter Tabs */}
-            <div className="status-filter-pills-wrap">
-              <button
-                type="button"
-                className={`status-pill ${statusFilter === "all" ? "active" : ""}`}
-                onClick={() => setStatusFilter("all")}
-              >
-                All ({allTimelines.length})
-              </button>
-              <button
-                type="button"
-                className={`status-pill active-pill ${statusFilter === "Active" ? "active" : ""}`}
-                onClick={() => setStatusFilter("Active")}
-              >
-                🟢 Active ({stats.active})
-              </button>
-              <button
-                type="button"
-                className={`status-pill upcoming-pill ${statusFilter === "Upcoming" ? "active" : ""}`}
-                onClick={() => setStatusFilter("Upcoming")}
-              >
-                🔵 Upcoming ({stats.upcoming})
-              </button>
-              <button
-                type="button"
-                className={`status-pill completed-pill ${statusFilter === "Completed" ? "active" : ""}`}
-                onClick={() => setStatusFilter("Completed")}
-              >
-                ⚪ Completed ({stats.completed})
-              </button>
-              {stats.incomplete > 0 && (
-                <button
-                  type="button"
-                  className={`status-pill incomplete-pill ${statusFilter === "Incomplete Data" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("Incomplete Data")}
-                >
-                  ⚠️ Incomplete ({stats.incomplete})
-                </button>
-              )}
-            </div>
-
-            {/* Jump to Today Button */}
-            <button
-              type="button"
-              className="jump-today-btn"
-              onClick={handleJumpToToday}
-              title="Jump directly to Today's date column"
-            >
-              <Crosshair size={14} />
-              <span>Jump to Today</span>
-            </button>
-
-            {/* Cell Zoom Controls */}
-            <div className="zoom-controls-wrap">
-              <button
-                type="button"
-                className={`zoom-btn ${dayCellWidth === 26 ? "active" : ""}`}
-                onClick={() => setDayCellWidth(26)}
-                title="Compact Day Width"
-              >
-                S
-              </button>
-              <button
-                type="button"
-                className={`zoom-btn ${dayCellWidth === 34 ? "active" : ""}`}
-                onClick={() => setDayCellWidth(34)}
-                title="Standard Day Width"
-              >
-                M
-              </button>
-              <button
-                type="button"
-                className={`zoom-btn ${dayCellWidth === 46 ? "active" : ""}`}
-                onClick={() => setDayCellWidth(46)}
-                title="Expanded Day Width"
-              >
-                L
-              </button>
-            </div>
-
-            {/* View Mode Toggle: Grid vs Table */}
-            <div className="view-mode-toggle-wrap">
-              <button
-                type="button"
-                className={`view-mode-btn ${viewMode === "grid" ? "active" : ""}`}
-                onClick={() => setViewMode("grid")}
-                title="Project Timeline Spreadsheet Grid (Reference Style)"
-              >
-                <Grid size={15} />
-                <span>Timeline Grid</span>
-              </button>
-              <button
-                type="button"
-                className={`view-mode-btn ${viewMode === "table" ? "active" : ""}`}
-                onClick={() => setViewMode("table")}
-                title="Spreadsheet Table View"
-              >
-                <Layers size={15} />
-                <span>Table</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 2-TIER YEAR & MONTH SELECTOR PANEL */}
-          <div className="timeline-date-filter-panel">
-            {/* TIER 1: YEAR SELECTOR */}
-            <div className="filter-tier-row year-tier-row">
-              <div className="tier-label-box">
-                <Calendar size={14} className="tier-icon" />
-                <span className="tier-label">1. Select Year:</span>
-              </div>
-              <div className="tier-pills-list">
-                {availableYears.map((yr) => {
-                  const count = yearCounts[yr] || 0;
-                  const isSelected = selectedYear === yr;
-                  return (
-                    <button
-                      key={yr}
-                      type="button"
-                      className={`year-filter-pill ${isSelected ? "active" : ""}`}
-                      onClick={() => {
-                        setSelectedYear(yr);
-                        setSelectedMonth("all");
-                        setSelectedSpecificDate(null);
-                      }}
-                    >
-                      <span className="pill-year-text">{yr}</span>
-                      {count > 0 && <span className="pill-badge-count">{count}</span>}
-                    </button>
-                  );
-                })}
-                <button
-                  type="button"
-                  className={`year-filter-pill ${selectedYear === "all" ? "active" : ""}`}
-                  onClick={() => {
-                    setSelectedYear("all");
-                    setSelectedMonth("all");
-                    setSelectedSpecificDate(null);
-                  }}
-                >
-                  <span className="pill-year-text">All Years</span>
-                  <span className="pill-badge-count">{allTimelines.length}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* TIER 2: MONTH SELECTOR FOR SELECTED YEAR */}
-            <div className="filter-tier-row month-tier-row">
-              <div className="tier-label-box">
-                <Clock size={14} className="tier-icon" />
-                <span className="tier-label">
-                  2. Select Month ({selectedYear === "all" ? "All Years" : selectedYear}):
-                </span>
-              </div>
-              <div className="tier-pills-list month-pills-list">
-                {/* Full Year Option */}
-                <button
-                  type="button"
-                  className={`month-filter-pill full-year-pill ${selectedMonth === "all" ? "active" : ""}`}
-                  onClick={() => setSelectedMonth("all")}
-                  title={`View Full Year ${selectedYear === "all" ? "" : selectedYear} (12 Months)`}
-                >
-                  <span>📅 Full Year (12 Months)</span>
-                  <span className="month-badge-count">
-                    {selectedYear === "all" ? allTimelines.length : (yearCounts[selectedYear] || 0)}
-                  </span>
-                </button>
-
-                <div className="tier-divider-bar" />
-
-                {/* 12 Individual Month Pills */}
-                {MONTHS_LIST.map((m) => {
-                  const count = monthCounts[m.num] || 0;
-                  const isSelected = selectedMonth === m.num;
-                  return (
-                    <button
-                      key={m.num}
-                      type="button"
-                      className={`month-filter-pill ${isSelected ? "active" : ""} ${count > 0 ? "has-data" : "no-data"}`}
-                      onClick={() => setSelectedMonth(m.num)}
-                      title={`${m.fullName} ${selectedYear === "all" ? "" : selectedYear} · ${count} Colleges`}
-                    >
-                      <span className="month-short-label">{m.shortName}</span>
-                      {count > 0 && <span className="month-count-dot">{count}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Active Filter Bar */}
-          {(searchTerm || statusFilter !== "all" || selectedYear !== 2026 || selectedMonth !== "all" || selectedSpecificDate) && (
-            <div className="active-filters-bar">
-              <div className="active-filters-text-group">
-                <span>
-                  Showing <strong>{filteredTimelines.length}</strong> of {allTimelines.length} college schedules
-                </span>
-                {selectedSpecificDate ? (
-                  <span className="active-filter-badge active-day-filter-badge">
-                    🎯 Focus Date: {formatTimelinePopupDate(selectedSpecificDate)}
-                  </span>
-                ) : (
-                  <>
-                    {selectedYear !== "all" && (
-                      <span className="active-filter-badge">Year: {selectedYear}</span>
-                    )}
-                    {selectedMonth !== "all" && (
-                      <span className="active-filter-badge">
-                        Month: {MONTHS_LIST.find((m) => m.num === selectedMonth)?.fullName || selectedMonth}
-                      </span>
-                    )}
-                  </>
-                )}
-                {statusFilter !== "all" && (
-                  <span className="active-filter-badge">Status: {statusFilter}</span>
-                )}
-              </div>
-              <button
-                type="button"
-                className="reset-filters-chip"
-                onClick={() => {
-                  setSearchTerm("");
-                  setStatusFilter("all");
-                  setSelectedYear(2026);
-                  setSelectedMonth("all");
-                  setSelectedSpecificDate(null);
-                }}
-              >
-                Reset Filters
-              </button>
-            </div>
-          )}
-
-          {/* 3-TIER FOCUS PERIOD SUMMARY BAR */}
-          <div className="period-grouped-summary-bar">
-            <div className="summary-bar-main">
-              <div className="summary-period-title">
-                <span className="period-icon">🎯</span>
-                <span className="period-title-text">
-                  Focus: <strong>{currentPeriodInfo.label}</strong>
-                </span>
-                {selectedSpecificDate && (
+          {/* UNIFIED MODERN CONTROL CENTER CARD */}
+          <div className="timeline-modern-control-card">
+            {/* Top Row: Search + Status Filter Pills + View/Zoom Quick Actions */}
+            <div className="control-card-top-row">
+              {/* Search Box */}
+              <div className="modern-search-box">
+                <Search size={15} className="modern-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search college name or code..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="modern-search-input"
+                />
+                {searchTerm && (
                   <button
                     type="button"
-                    className="clear-specific-date-btn"
-                    onClick={() => setSelectedSpecificDate(null)}
-                    title="Clear single-day filter and return to month/year view"
+                    className="modern-clear-btn"
+                    onClick={() => setSearchTerm("")}
+                    title="Clear search"
                   >
-                    <X size={12} />
-                    <span>Clear Day Filter</span>
+                    &times;
                   </button>
                 )}
               </div>
 
-              <div className="summary-category-chips">
-                <div
-                  className="category-chip chip-starting"
-                  title={`Colleges that started during ${currentPeriodInfo.label}`}
+              {/* Status Filter Pills */}
+              <div className="modern-status-pills">
+                <button
+                  type="button"
+                  className={`modern-status-pill ${statusFilter === "all" ? "active" : ""}`}
+                  onClick={() => setStatusFilter("all")}
                 >
-                  <span className="chip-badge-num">1</span>
-                  <span className="chip-label">Starting:</span>
-                  <span className="chip-count">{categoryCounts.starting}</span>
-                </div>
-
-                <div
-                  className="category-chip chip-ending"
-                  title={`Colleges that ended during ${currentPeriodInfo.label} (started earlier)`}
+                  All ({allTimelines.length})
+                </button>
+                <button
+                  type="button"
+                  className={`modern-status-pill active-pill ${statusFilter === "Active" ? "active" : ""}`}
+                  onClick={() => setStatusFilter("Active")}
                 >
-                  <span className="chip-badge-num">2</span>
-                  <span className="chip-label">Ending:</span>
-                  <span className="chip-count">{categoryCounts.ending}</span>
-                </div>
-
-                <div
-                  className="category-chip chip-ongoing"
-                  title={`Colleges ongoing across ${currentPeriodInfo.label} (started before and ending after)`}
+                  <span className="status-dot dot-active" /> Active ({stats.active})
+                </button>
+                <button
+                  type="button"
+                  className={`modern-status-pill upcoming-pill ${statusFilter === "Upcoming" ? "active" : ""}`}
+                  onClick={() => setStatusFilter("Upcoming")}
                 >
-                  <span className="chip-badge-num">3</span>
-                  <span className="chip-label">Ongoing Across:</span>
-                  <span className="chip-count">{categoryCounts.ongoing}</span>
-                </div>
-
-                {categoryCounts.other > 0 && (
-                  <div
-                    className="category-chip chip-other"
-                    title="Incomplete / missing dates in Sheet1"
+                  <span className="status-dot dot-upcoming" /> Upcoming ({stats.upcoming})
+                </button>
+                <button
+                  type="button"
+                  className={`modern-status-pill completed-pill ${statusFilter === "Completed" ? "active" : ""}`}
+                  onClick={() => setStatusFilter("Completed")}
+                >
+                  <span className="status-dot dot-completed" /> Completed ({stats.completed})
+                </button>
+                {stats.incomplete > 0 && (
+                  <button
+                    type="button"
+                    className={`modern-status-pill incomplete-pill ${statusFilter === "Incomplete Data" ? "active" : ""}`}
+                    onClick={() => setStatusFilter("Incomplete Data")}
                   >
-                    <span className="chip-label">Incomplete:</span>
-                    <span className="chip-count">{categoryCounts.other}</span>
+                    <span className="status-dot dot-incomplete" /> Incomplete ({stats.incomplete})
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Action Tools: Jump Today + Zoom + Grid/Table */}
+              <div className="control-quick-actions">
+                <button
+                  type="button"
+                  className="modern-action-btn jump-today-action"
+                  onClick={handleJumpToToday}
+                  title="Jump directly to Today's date column"
+                >
+                  <Crosshair size={13} />
+                  <span>Today</span>
+                </button>
+
+                <div className="modern-segmented-group zoom-segmented-group">
+                  <button
+                    type="button"
+                    className={`segmented-item ${dayCellWidth === 26 ? "active" : ""}`}
+                    onClick={() => setDayCellWidth(26)}
+                    title="Compact Width (S)"
+                  >
+                    S
+                  </button>
+                  <button
+                    type="button"
+                    className={`segmented-item ${dayCellWidth === 34 ? "active" : ""}`}
+                    onClick={() => setDayCellWidth(34)}
+                    title="Standard Width (M)"
+                  >
+                    M
+                  </button>
+                  <button
+                    type="button"
+                    className={`segmented-item ${dayCellWidth === 46 ? "active" : ""}`}
+                    onClick={() => setDayCellWidth(46)}
+                    title="Expanded Width (L)"
+                  >
+                    L
+                  </button>
+                </div>
+
+                <div className="modern-segmented-group view-segmented-group">
+                  <button
+                    type="button"
+                    className={`segmented-item ${viewMode === "grid" ? "active" : ""}`}
+                    onClick={() => setViewMode("grid")}
+                    title="Timeline Grid View"
+                  >
+                    <Grid size={13} />
+                    <span>Grid</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`segmented-item ${viewMode === "table" ? "active" : ""}`}
+                    onClick={() => setViewMode("table")}
+                    title="Table View"
+                  >
+                    <Layers size={13} />
+                    <span>Table</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Middle Row: Year & Month Time Ribbon */}
+            <div className="control-card-timeline-ribbon">
+              {/* Year Segmented Pills */}
+              <div className="ribbon-year-section">
+                <span className="ribbon-label">YEAR</span>
+                <div className="ribbon-year-pills">
+                  {availableYears.map((yr) => {
+                    const count = yearCounts[yr] || 0;
+                    const isSelected = selectedYear === yr;
+                    return (
+                      <button
+                        key={yr}
+                        type="button"
+                        className={`year-pill-btn ${isSelected ? "active" : ""}`}
+                        onClick={() => {
+                          setSelectedYear(yr);
+                          setSelectedMonth("all");
+                          setSelectedSpecificDate(null);
+                        }}
+                      >
+                        <span className="year-text">{yr}</span>
+                        {count > 0 && <span className="year-badge">{count}</span>}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className={`year-pill-btn ${selectedYear === "all" ? "active" : ""}`}
+                    onClick={() => {
+                      setSelectedYear("all");
+                      setSelectedMonth("all");
+                      setSelectedSpecificDate(null);
+                    }}
+                  >
+                    <span>All</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="ribbon-vertical-divider" />
+
+              {/* Month Pills Ribbon */}
+              <div className="ribbon-month-section">
+                <button
+                  type="button"
+                  className={`month-pill-btn full-year-btn ${selectedMonth === "all" ? "active" : ""}`}
+                  onClick={() => setSelectedMonth("all")}
+                  title={`View Full Year ${selectedYear === "all" ? "" : selectedYear} (12 Months)`}
+                >
+                  <Calendar size={12} />
+                  <span>Full Year</span>
+                </button>
+
+                <div className="month-pills-list">
+                  {MONTHS_LIST.map((m) => {
+                    const count = monthCounts[m.num] || 0;
+                    const isSelected = selectedMonth === m.num;
+                    return (
+                      <button
+                        key={m.num}
+                        type="button"
+                        className={`month-pill-btn ${isSelected ? "active" : ""} ${count > 0 ? "has-data" : "no-data"}`}
+                        onClick={() => setSelectedMonth(m.num)}
+                        title={`${m.fullName} ${selectedYear === "all" ? "" : selectedYear} · ${count} Colleges`}
+                      >
+                        <span>{m.shortName}</span>
+                        {count > 0 && <span className="month-count-dot">{count}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row: Focus Period & Category Stats Ribbon */}
+            <div className="control-card-bottom-ribbon">
+              <div className="bottom-ribbon-left">
+                <div className="focus-period-badge">
+                  <span className="focus-dot">🎯</span>
+                  <span className="focus-text">
+                    Focus: <strong>{currentPeriodInfo.label}</strong>
+                  </span>
+                  <span className="focus-total-badge">
+                    {filteredTimelines.length} {filteredTimelines.length === 1 ? "College" : "Colleges"}
+                  </span>
+                </div>
+
+                {selectedSpecificDate && (
+                  <button
+                    type="button"
+                    className="clear-specific-chip"
+                    onClick={() => setSelectedSpecificDate(null)}
+                    title="Clear single-day filter"
+                  >
+                    <X size={11} />
+                    <span>Clear Day</span>
+                  </button>
+                )}
+
+                {(searchTerm || statusFilter !== "all" || selectedYear !== 2026 || selectedMonth !== "all" || selectedSpecificDate) && (
+                  <button
+                    type="button"
+                    className="reset-filters-btn"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setStatusFilter("all");
+                      setSelectedYear(2026);
+                      setSelectedMonth("all");
+                      setSelectedSpecificDate(null);
+                    }}
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+
+              {/* Category Breakdown Badges */}
+              <div className="bottom-ribbon-categories">
+                <div className="category-stat-badge stat-starting" title="Colleges starting in this period">
+                  <span className="stat-idx">1</span>
+                  <span className="stat-name">Starting</span>
+                  <span className="stat-value">{categoryCounts.starting}</span>
+                </div>
+                <div className="category-stat-badge stat-ending" title="Colleges ending in this period">
+                  <span className="stat-idx">2</span>
+                  <span className="stat-name">Ending</span>
+                  <span className="stat-value">{categoryCounts.ending}</span>
+                </div>
+                <div className="category-stat-badge stat-ongoing" title="Colleges ongoing across this period">
+                  <span className="stat-idx">3</span>
+                  <span className="stat-name">Ongoing</span>
+                  <span className="stat-value">{categoryCounts.ongoing}</span>
+                </div>
+                {categoryCounts.other > 0 && (
+                  <div className="category-stat-badge stat-incomplete" title="Incomplete / missing dates">
+                    <span className="stat-idx">!</span>
+                    <span className="stat-name">Incomplete</span>
+                    <span className="stat-value">{categoryCounts.other}</span>
                   </div>
                 )}
               </div>
-            </div>
-            <div className="summary-bar-hint">
-              <span>💡 Ordered as requested: <strong>1. Starting</strong> (Top) → <strong>2. Ending</strong> (Middle) → <strong>3. Ongoing</strong> (Bottom). Click any day number to filter by date.</span>
             </div>
           </div>
 
@@ -1535,21 +1487,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       </div>
                     </div>
 
-                    {/* 2. EXCEL COLUMN LETTERS ROW (A, B, C ... Z, AA, AB ...) */}
-                    <div className="spreadsheet-col-letters-row">
-                      <div className="row-number-header-cell">#</div>
-                      {gridData.days.map((day) => (
-                        <div
-                          key={day.colIndex}
-                          className="col-letter-cell"
-                          style={{ width: `${dayCellWidth}px` }}
-                        >
-                          {day.colLetter}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* 3. MONTH SPANNING HEADERS ROW (Clickable to jump directly to month) */}
+                    {/* 2. MONTH SPANNING HEADERS ROW (Clickable to jump directly to month) */}
                     <div className="spreadsheet-months-row">
                       <div className="row-number-header-cell month-stub" />
                       {gridData.months.map((m) => (
