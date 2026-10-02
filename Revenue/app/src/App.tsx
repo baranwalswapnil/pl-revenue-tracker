@@ -50,6 +50,17 @@ type AppView =
   | "tcv"
   | "college-timeline";
 
+const VALID_APP_VIEWS: AppView[] = [
+  "dashboard",
+  "new-entry",
+  "training-phase",
+  "health-report",
+  "update-page",
+  "outstanding",
+  "tcv",
+  "college-timeline",
+];
+
 export function App() {
   // Load initial projects from localStorage (filtering out legacy sample mock items)
   const [projects, setProjects] = useState<Project[]>(() => {
@@ -215,8 +226,16 @@ export function App() {
     };
   }, []);
 
-  // Current active view in the sequential flow
-  const [currentView, setCurrentView] = useState<AppView>("dashboard");
+  // Current active view in the sequential flow (persisted across page refreshes via hash & localStorage)
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    try {
+      const hash = window.location.hash.replace("#", "") as AppView;
+      if (VALID_APP_VIEWS.includes(hash)) return hash;
+      const saved = localStorage.getItem("company_finance_active_view") as AppView;
+      if (saved && VALID_APP_VIEWS.includes(saved)) return saved;
+    } catch (e) {}
+    return "dashboard";
+  });
 
   // Selected project for viewing Health Report or Updating
   const [activeProject, setActiveProject] = useState<Project | null>(projects[0] || null);
@@ -240,9 +259,12 @@ export function App() {
     }, 3500);
   };
 
-  // Centralized Navigation with Browser History pushState / popstate support
+  // Centralized Navigation with Browser History pushState / popstate support & localStorage persistence
   const navigateTo = (view: AppView, project: Project | null = activeProject, replace = false) => {
     setCurrentView(view);
+    try {
+      localStorage.setItem("company_finance_active_view", view);
+    } catch (e) {}
     if (project) setActiveProject(project);
 
     const statePayload = { view, projectId: project?.id || null };
@@ -261,22 +283,38 @@ export function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Synchronize with Browser Back / Forward buttons
+  // Synchronize with Browser Back / Forward buttons and page refresh
   useEffect(() => {
-    const validViews: AppView[] = ["dashboard", "new-entry", "training-phase", "health-report", "update-page", "outstanding", "tcv"];
     const currentHash = window.location.hash.replace("#", "") as AppView;
 
-    if (validViews.includes(currentHash)) {
+    if (VALID_APP_VIEWS.includes(currentHash)) {
       setCurrentView(currentHash);
+      try {
+        localStorage.setItem("company_finance_active_view", currentHash);
+      } catch (e) {}
       window.history.replaceState({ view: currentHash }, "", window.location.pathname + window.location.hash);
     } else {
-      window.history.replaceState({ view: "dashboard" }, "", window.location.pathname);
+      try {
+        const savedView = localStorage.getItem("company_finance_active_view") as AppView;
+        if (savedView && VALID_APP_VIEWS.includes(savedView)) {
+          setCurrentView(savedView);
+          const hash = savedView === "dashboard" ? "" : `#${savedView}`;
+          window.history.replaceState({ view: savedView }, "", window.location.pathname + hash);
+        } else {
+          window.history.replaceState({ view: "dashboard" }, "", window.location.pathname);
+        }
+      } catch (e) {
+        window.history.replaceState({ view: "dashboard" }, "", window.location.pathname);
+      }
     }
 
     const handlePopState = (event: PopStateEvent) => {
       const targetView = event.state?.view || (window.location.hash.replace("#", "") as AppView) || "dashboard";
-      if (validViews.includes(targetView)) {
+      if (VALID_APP_VIEWS.includes(targetView)) {
         setCurrentView(targetView);
+        try {
+          localStorage.setItem("company_finance_active_view", targetView);
+        } catch (e) {}
         if (event.state?.projectId) {
           const found = projects.find((p) => p.id === event.state.projectId);
           if (found) setActiveProject(found);
@@ -555,7 +593,7 @@ export function App() {
   }, [collegeTrainingItems]);
 
   const handleOpenCollegeTimeline = () => {
-    setCurrentView("college-timeline");
+    navigateTo("college-timeline");
   };
 
   const handleSaveCollegeTimeline = (record: {
