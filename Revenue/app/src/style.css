@@ -8309,6 +8309,7 @@ a {
   height: 54px;
   border-bottom: 1px solid #f1f5f9;
   position: relative;
+  background: #ffffff;
   transition: background 0.15s ease;
 }
 
@@ -8317,7 +8318,7 @@ a {
 }
 
 .spreadsheet-row.row-pinned {
-  background: #f0fdfa;
+  background: #ffffff;
 }
 
 .row-index-cell {
@@ -8954,11 +8955,11 @@ a {
 }
 
 .spreadsheet-row.row-incomplete {
-  background: #fffdf5;
+  background: #ffffff;
 }
 
 .spreadsheet-row.row-incomplete:hover {
-  background: #fef9c3;
+  background: #f8fafc;
 }
 
 .incomplete-row-placeholder {
