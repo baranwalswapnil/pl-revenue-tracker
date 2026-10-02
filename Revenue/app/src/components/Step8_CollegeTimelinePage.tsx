@@ -728,22 +728,30 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   const dragStartX = useRef(0);
   const dragStartScrollLeft = useRef(0);
   const sliderTrackRef = useRef<HTMLDivElement>(null);
+  const sliderThumbRef = useRef<HTMLDivElement>(null);
+  const rafScrollId = useRef<number | null>(null);
+  const rafDragId = useRef<number | null>(null);
 
-  // Sync scrollProgress with gridScrollRef
+  // Sync scrollProgress with gridScrollRef (smoothly throttled with requestAnimationFrame)
   useEffect(() => {
     const el = gridScrollRef.current;
     if (!el) return;
 
     const handleScroll = () => {
-      const maxScroll = el.scrollWidth - el.clientWidth;
-      if (maxScroll > 0) {
-        setScrollProgress(Math.max(0, Math.min(1, el.scrollLeft / maxScroll)));
-        setThumbWidthPct(Math.max(6, Math.min(50, (el.clientWidth / el.scrollWidth) * 100)));
-      } else {
-        setScrollProgress(0);
-        setThumbWidthPct(100);
-      }
-      setSliderViewportWidth(Math.max(300, el.clientWidth - 48));
+      if (rafScrollId.current !== null) return;
+      rafScrollId.current = requestAnimationFrame(() => {
+        rafScrollId.current = null;
+        const maxScroll = el.scrollWidth - el.clientWidth;
+        if (maxScroll > 0) {
+          const progress = Math.max(0, Math.min(1, el.scrollLeft / maxScroll));
+          setScrollProgress(progress);
+          setThumbWidthPct(Math.max(6, Math.min(50, (el.clientWidth / el.scrollWidth) * 100)));
+        } else {
+          setScrollProgress(0);
+          setThumbWidthPct(100);
+        }
+        setSliderViewportWidth(Math.max(300, el.clientWidth - 48));
+      });
     };
 
     handleScroll();
@@ -751,6 +759,9 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     window.addEventListener("resize", handleScroll);
 
     return () => {
+      if (rafScrollId.current !== null) {
+        cancelAnimationFrame(rafScrollId.current);
+      }
       el.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleScroll);
     };
@@ -758,9 +769,18 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
   const handleSliderTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!sliderTrackRef.current || !gridScrollRef.current) return;
+    if ((e.target as HTMLElement).closest(".spreadsheet-slider-thumb")) return;
+
     const rect = sliderTrackRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
-    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+    const trackWidth = rect.width;
+    if (trackWidth <= 0) return;
+
+    const thumbWidthPx = (thumbWidthPct / 100) * trackWidth;
+    const availableTrack = Math.max(1, trackWidth - thumbWidthPx);
+    const targetThumbLeft = clickX - thumbWidthPx / 2;
+    const ratio = Math.max(0, Math.min(1, targetThumbLeft / availableTrack));
+
     const maxScroll = gridScrollRef.current.scrollWidth - gridScrollRef.current.clientWidth;
     gridScrollRef.current.scrollTo({
       left: ratio * maxScroll,
@@ -768,30 +788,80 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     });
   };
 
-  const handleThumbMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.stopPropagation();
+  const startSliderDrag = (clientX: number) => {
+    if (!gridScrollRef.current || !sliderTrackRef.current) return;
     isDraggingSlider.current = true;
-    dragStartX.current = e.clientX;
-    dragStartScrollLeft.current = gridScrollRef.current?.scrollLeft || 0;
+    dragStartX.current = clientX;
+    dragStartScrollLeft.current = gridScrollRef.current.scrollLeft;
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+
+    const onPointerMove = (moveClientX: number) => {
       if (!isDraggingSlider.current || !gridScrollRef.current || !sliderTrackRef.current) return;
       const trackWidth = sliderTrackRef.current.clientWidth;
       if (trackWidth <= 0) return;
-      const deltaX = moveEvent.clientX - dragStartX.current;
+
+      const deltaX = moveClientX - dragStartX.current;
       const maxScroll = gridScrollRef.current.scrollWidth - gridScrollRef.current.clientWidth;
-      const scrollDelta = (deltaX / trackWidth) * maxScroll;
-      gridScrollRef.current.scrollLeft = Math.max(0, Math.min(maxScroll, dragStartScrollLeft.current + scrollDelta));
+      if (maxScroll <= 0) return;
+
+      const thumbWidthPx = (thumbWidthPct / 100) * trackWidth;
+      const availableTrack = Math.max(1, trackWidth - thumbWidthPx);
+      const scrollDelta = (deltaX / availableTrack) * maxScroll;
+      const targetScrollLeft = Math.max(0, Math.min(maxScroll, dragStartScrollLeft.current + scrollDelta));
+
+      if (rafDragId.current !== null) {
+        cancelAnimationFrame(rafDragId.current);
+      }
+      rafDragId.current = requestAnimationFrame(() => {
+        if (gridScrollRef.current) {
+          gridScrollRef.current.scrollLeft = targetScrollLeft;
+        }
+      });
     };
 
-    const handleMouseUp = () => {
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      onPointerMove(moveEvent.clientX);
+    };
+
+    const handleTouchMove = (moveEvent: TouchEvent) => {
+      if (moveEvent.touches.length > 0) {
+        onPointerMove(moveEvent.touches[0].clientX);
+      }
+    };
+
+    const handleEnd = () => {
       isDraggingSlider.current = false;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      if (rafDragId.current !== null) {
+        cancelAnimationFrame(rafDragId.current);
+        rafDragId.current = null;
+      }
       window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleEnd);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mouseup", handleEnd);
+    window.addEventListener("touchmove", handleTouchMove, { passive: true });
+    window.addEventListener("touchend", handleEnd);
+  };
+
+  const handleThumbMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    startSliderDrag(e.clientX);
+  };
+
+  const handleThumbTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length > 0) {
+      e.stopPropagation();
+      startSliderDrag(e.touches[0].clientX);
+    }
   };
 
   // Jump scroll directly to any month in the current grid
@@ -1764,11 +1834,13 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         >
                           <div
                             className="spreadsheet-slider-thumb"
+                            ref={sliderThumbRef}
                             style={{
                               width: `${thumbWidthPct}%`,
                               left: `calc(${scrollProgress * (100 - thumbWidthPct)}%)`,
                             }}
                             onMouseDown={handleThumbMouseDown}
+                            onTouchStart={handleThumbTouchStart}
                           >
                             <span className="slider-thumb-grip">❙❙</span>
                           </div>
