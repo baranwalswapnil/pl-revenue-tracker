@@ -1249,52 +1249,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 </div>
               </div>
             </div>
-
-            {/* Card 3: Completed Schedules */}
-            <div className="timeline-kpi-card completed-kpi-card">
-              <div className="kpi-card-inner">
-                <div className="kpi-header-row">
-                  <span className="kpi-title">Completed Colleges</span>
-                  <span className="kpi-badge-icon completed-icon">
-                    <CheckCircle2 size={18} />
-                  </span>
-                </div>
-                <div className="kpi-value-row">
-                  <span className="kpi-amount">{stats.completed}</span>
-                  <span className="kpi-unit">Colleges</span>
-                </div>
-                <div className="kpi-footer-row">
-                  <span className="kpi-tag completed-tag">⚪ Training Concluded</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 4: Total Colleges Tracked */}
-            <div className="timeline-kpi-card total-kpi-card">
-              <div className="kpi-card-inner">
-                <div className="kpi-header-row">
-                  <span className="kpi-title">Total Active Schedules</span>
-                  <span className="kpi-badge-icon total-icon">
-                    <Building2 size={18} />
-                  </span>
-                </div>
-                <div className="kpi-value-row">
-                  <span className="kpi-amount">{stats.total}</span>
-                  <span className="kpi-unit">Records</span>
-                </div>
-                <div className="kpi-footer-row">
-                  {stats.incomplete > 0 ? (
-                    <span className="kpi-tag incomplete-tag">
-                      ⚠️ {stats.incomplete} Incomplete Data · {stats.withDates} Complete
-                    </span>
-                  ) : (
-                    <span className="kpi-tag sheet-tag">
-                      📊 {stats.withDates} with Start & End Dates
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
           {/* Controls Bar: Search, Status Filter, Jump to Today, Zoom, View Mode */}
           {/* UNIFIED MODERN CONTROL CENTER CARD */}
