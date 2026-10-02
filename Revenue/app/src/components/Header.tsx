@@ -1,6 +1,5 @@
 import React from "react";
 import { ArrowLeft, CalendarRange, Clock, FileSpreadsheet } from "lucide-react";
-import timeLogo from "../assets/time_logo.jpg";
 import gryphonLogo from "../assets/gryphon_logo.png";
 
 interface HeaderProps {
@@ -46,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Active College Timeline & Schedule Header Nav Button (Single Sleek Rectangle Button) */}
+          {/* Active College Timeline & Schedule Header Nav Button */}
           {onOpenCollegeTimeline && (
             <div className="topbar-timeline-nav-group">
               <button
@@ -56,9 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Active College Timeline & Schedule"
                 aria-label="Active College Timeline & Schedule"
               >
-                <div className="timeline-pill-logo-thumb">
-                  <img src={timeLogo} alt="Time Logo" className="timeline-pill-logo-img" />
-                </div>
+                <CalendarRange size={16} className="timeline-pill-icon" />
                 <span className="timeline-pill-text">College Timeline</span>
                 {activeTimelineCount > 0 && (
                   <span className="timeline-pill-count-badge" title={`${activeTimelineCount} Active Colleges`}>
