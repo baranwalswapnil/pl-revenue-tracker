@@ -720,33 +720,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     });
   };
 
-  // Continuous hold-to-scroll support for side slide buttons
-  const scrollIntervalRef = useRef<number | null>(null);
-
-  const startContinuousScroll = (direction: "left" | "right") => {
-    handleScrollHorizontal(direction === "left" ? -24 * dayCellWidth : 24 * dayCellWidth);
-
-    if (scrollIntervalRef.current) {
-      clearInterval(scrollIntervalRef.current);
-    }
-
-    scrollIntervalRef.current = window.setInterval(() => {
-      if (gridScrollRef.current) {
-        gridScrollRef.current.scrollBy({
-          left: direction === "left" ? -100 : 100,
-          behavior: "auto",
-        });
-      }
-    }, 40);
-  };
-
-  const stopContinuousScroll = () => {
-    if (scrollIntervalRef.current) {
-      clearInterval(scrollIntervalRef.current);
-      scrollIntervalRef.current = null;
-    }
-  };
-
   // Jump scroll directly to any month in the current grid
   const handleJumpToMonth = (monthNum: number) => {
     setSelectedMonth(monthNum);
@@ -1619,62 +1592,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           {/* SPREADSHEET PROJECT TIMELINE GRID (MATCHING REFERENCE IMAGE) */}
           {viewMode === "grid" && (
             <div className="spreadsheet-timeline-wrapper">
-              {/* Full-Height Left Slide Rail (Active along entire vertical height of graph) */}
-              <div
-                className="timeline-side-slide-rail slide-left-rail"
-                onMouseDown={() => startContinuousScroll("left")}
-                onMouseUp={stopContinuousScroll}
-                onMouseLeave={stopContinuousScroll}
-                onTouchStart={() => startContinuousScroll("left")}
-                onTouchEnd={stopContinuousScroll}
-                onClick={() => handleScrollHorizontal(-24 * dayCellWidth)}
-                title="Slide Towards Left (Click anywhere along this vertical bar or hold to glide earlier)"
-                aria-label="Slide Left"
-                role="button"
-                tabIndex={0}
-              >
-                <div className="timeline-slide-rail-track">
-                  <div className="timeline-slide-rail-top-arrow">
-                    <ChevronLeft size={16} />
-                  </div>
-                  <div className="timeline-slide-rail-handle">
-                    <ChevronLeft size={22} strokeWidth={2.8} />
-                    <span className="slide-rail-label">LEFT</span>
-                  </div>
-                  <div className="timeline-slide-rail-bottom-arrow">
-                    <ChevronLeft size={16} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Full-Height Right Slide Rail (Active along entire vertical height of graph) */}
-              <div
-                className="timeline-side-slide-rail slide-right-rail"
-                onMouseDown={() => startContinuousScroll("right")}
-                onMouseUp={stopContinuousScroll}
-                onMouseLeave={stopContinuousScroll}
-                onTouchStart={() => startContinuousScroll("right")}
-                onTouchEnd={stopContinuousScroll}
-                onClick={() => handleScrollHorizontal(24 * dayCellWidth)}
-                title="Slide Towards Right (Click anywhere along this vertical bar or hold to glide later)"
-                aria-label="Slide Right"
-                role="button"
-                tabIndex={0}
-              >
-                <div className="timeline-slide-rail-track">
-                  <div className="timeline-slide-rail-top-arrow">
-                    <ChevronRight size={16} />
-                  </div>
-                  <div className="timeline-slide-rail-handle">
-                    <ChevronRight size={22} strokeWidth={2.8} />
-                    <span className="slide-rail-label">RIGHT</span>
-                  </div>
-                  <div className="timeline-slide-rail-bottom-arrow">
-                    <ChevronRight size={16} />
-                  </div>
-                </div>
-              </div>
-
               <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
                   <div
                     className="spreadsheet-grid-canvas"
@@ -1701,7 +1618,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       <div className="title-banner-center">
                         <h2>Project Timeline</h2>
                         <span className="scroll-hint-text">
-                          ↔ Use the Left / Right Slide buttons to glide across all months
+                          ↔ Use Scroll Left / Right buttons or drag to navigate across all months
                         </span>
                       </div>
 
