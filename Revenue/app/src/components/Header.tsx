@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, CalendarRange, Clock, FileSpreadsheet } from "lucide-react";
+import { ArrowLeft, CalendarRange, FileSpreadsheet } from "lucide-react";
 import gryphonLogo from "../assets/gryphon_logo.png";
 
 interface HeaderProps {

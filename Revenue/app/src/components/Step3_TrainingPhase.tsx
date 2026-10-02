@@ -12,9 +12,6 @@ import {
   RotateCcw,
   Send,
   Info,
-  Check,
-  Layers,
-  Percent,
 } from "lucide-react";
 import type { ProjectDraft, PaymentType, PhaseType, TrainingPhase, ATTPPercentage } from "../lib/models";
 import { computeAttpDetails } from "../lib/mockData";

@@ -13,8 +13,6 @@ import {
   ChevronDown,
   Clock,
   TrendingUp,
-  Layers,
-  Sparkles,
 } from "lucide-react";
 import type { Project } from "../lib/models";
 import { formatINR, getProjectInvoiceStats } from "../lib/mockData";

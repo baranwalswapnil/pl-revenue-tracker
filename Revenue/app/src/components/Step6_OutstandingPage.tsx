@@ -12,15 +12,12 @@ import {
   Building2,
   TrendingUp,
   FileSpreadsheet,
-  ExternalLink,
   ChevronRight,
   ChevronDown,
-  Check,
   X,
   Eye,
   Edit3,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 import type { Project } from "../lib/models";
 import { formatINR } from "../lib/mockData";

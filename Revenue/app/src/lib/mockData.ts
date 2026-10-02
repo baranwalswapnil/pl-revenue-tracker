@@ -1,7 +1,5 @@
 import type { Project, ProjectDraft, PaymentType, InvoiceMilestone } from "./models";
 
-export const INITIAL_PROJECTS: Project[] = [];
-
 export const formatINR = (val: number | string | null | undefined): string => {
   const num = Math.max(0, Number(val) || 0);
   return new Intl.NumberFormat("en-IN", {

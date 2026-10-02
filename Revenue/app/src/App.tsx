@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import type { Project, ProjectDraft } from "./lib/models";
-import { INITIAL_PROJECTS, createEmptyDraft, computeAttpDetails } from "./lib/mockData";
+import { createEmptyDraft, computeAttpDetails } from "./lib/mockData";
 import {
   loadCachedSheetItems,
   loadCachedMOUItems,
@@ -16,7 +16,6 @@ import {
   convertSheetItemToProject,
   saveCachedSheetItems,
   saveCachedMOUItems,
-  saveSheetConfig,
   syncProjectToGoogleSheet,
   type GoogleSheetCollegeItem,
   type GoogleSheetInvoiceTrackerItem,

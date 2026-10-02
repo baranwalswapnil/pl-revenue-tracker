@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Sparkles,
   ChevronDown,
-  Check,
 } from "lucide-react";
 import { type GoogleSheetMOUItem, parseMOUDateMonth } from "../lib/googleSheetsService";
 import { formatINR } from "../lib/mockData";

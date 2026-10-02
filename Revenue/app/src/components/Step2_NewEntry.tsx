@@ -12,14 +12,14 @@ import {
   Edit2,
   RotateCcw,
   Save,
-  Check,
-  ArrowLeft,
   ArrowRight,
+  FileSpreadsheet,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import type { ProjectDraft, Project } from "../lib/models";
 import { formatINR } from "../lib/mockData";
 import { type GoogleSheetCollegeItem } from "../lib/googleSheetsService";
-import { FileSpreadsheet, Sparkles, RefreshCw } from "lucide-react";
 
 interface Step2NewEntryProps {
   draft: ProjectDraft;

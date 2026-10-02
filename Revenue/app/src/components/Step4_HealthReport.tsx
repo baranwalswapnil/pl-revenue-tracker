@@ -11,11 +11,8 @@ import {
   ArrowLeft,
   Activity,
   Receipt,
-  FileCheck2,
-  TrendingDown,
   TrendingUp,
   AlertTriangle,
-  Clock,
 } from "lucide-react";
 import type { Project } from "../lib/models";
 import { formatINR, formatNumber, getProjectInvoiceStats } from "../lib/mockData";
@@ -43,9 +40,7 @@ export const Step4_HealthReport: React.FC<Step4HealthReportProps> = ({
   const rawDiff = contractValue - trainingCost;
   // If (Contract Value - Total Training Cost) is negative, healthPercent is also negative!
   const healthPercent = contractValue > 0 ? (rawDiff / contractValue) * 100 : 0;
-  const isProfitable = rawDiff >= 0;
   const scoreDisplay = `${healthPercent.toFixed(1)}%`;
-  const formattedScoreWithSign = `${healthPercent > 0 ? "+" : ""}${healthPercent.toFixed(1)}%`;
 
   // Calculate Number of Invoices Raised stats
   const invoiceStats = getProjectInvoiceStats(project);
