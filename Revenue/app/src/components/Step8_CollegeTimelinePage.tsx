@@ -188,13 +188,14 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   // Search Autocomplete Dropdown State & Ref
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const gridScrollRef = useRef<HTMLDivElement>(null);
 
   // Local state trigger to refresh lists after adds/deletes
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Close dropdowns on outside click
+  // Close dropdowns on outside click & global search keyboard shortcut
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -210,8 +211,22 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         setIsSearchDropdownOpen(false);
       }
     };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ctrl+K or Cmd+K to focus search input
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        setIsSearchDropdownOpen(true);
+      }
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   // Compute all enriched college timeline records exclusively from the 'College Training' tab
@@ -1257,8 +1272,9 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
             <div className="control-card-search-row">
               {/* Search Box with Interactive Dropdown Recommendations */}
               <div className="modern-search-box" ref={searchBoxRef}>
-                <Search size={15} className="modern-search-icon" />
+                <Search size={16} className="modern-search-icon" />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   placeholder="Search college name, code, stream or trainer..."
                   value={searchTerm}
@@ -1270,13 +1286,20 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                   onKeyDown={(e) => {
                     if (e.key === "Escape") {
                       setIsSearchDropdownOpen(false);
+                      searchInputRef.current?.blur();
                     } else if (e.key === "Enter" && searchSuggestions.length > 0) {
                       handleSelectSearchCollege(searchSuggestions[0]);
                     }
                   }}
                   className="modern-search-input"
                 />
-                {searchTerm && (
+                {!searchTerm ? (
+                  <kbd className="modern-search-shortcut" title="Press Ctrl + K to focus search">
+                    <span className="kbd-key">Ctrl</span>
+                    <span className="kbd-plus">+</span>
+                    <span className="kbd-key">K</span>
+                  </kbd>
+                ) : (
                   <button
                     type="button"
                     className="modern-clear-btn"
@@ -1284,6 +1307,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       setSearchTerm("");
                       setIsSearchDropdownOpen(false);
                       setPinnedItem(null);
+                      searchInputRef.current?.focus();
                     }}
                     title="Clear search"
                   >
