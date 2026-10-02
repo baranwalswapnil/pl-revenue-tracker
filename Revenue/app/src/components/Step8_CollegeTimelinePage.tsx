@@ -27,6 +27,7 @@ import {
   Maximize2,
   Minimize2,
   ChevronLeft,
+  ChevronDown,
   Crosshair,
   Grid,
 } from "lucide-react";
@@ -1498,90 +1499,98 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               </div>
             </div>
 
-            {/* Middle Row: Year & Month Time Ribbon */}
+            {/* Middle Row: Year & Month Dropdowns Filter Ribbon */}
             <div className="control-card-timeline-ribbon">
-              {/* Year Segmented Pills */}
-              <div className="ribbon-year-section">
-                <span className="ribbon-label">YEAR</span>
-                <div className="ribbon-year-pills">
-                  {availableYears.map((yr) => {
-                    const count = yearCounts[yr] || 0;
-                    const isSelected = selectedYear === yr;
-                    return (
-                      <button
-                        key={yr}
-                        type="button"
-                        className={`year-pill-btn ${isSelected ? "active" : ""}`}
-                        onClick={() => {
-                          setSelectedYear(yr);
+              <div className="ribbon-dropdowns-container">
+                {/* 1. Year Dropdown Selector */}
+                <div className="timeline-select-group">
+                  <label htmlFor="timeline-year-select" className="timeline-select-label">
+                    <Calendar size={14} className="select-label-icon" />
+                    <span>Select Year:</span>
+                  </label>
+                  <div className="timeline-custom-select-wrap">
+                    <select
+                      id="timeline-year-select"
+                      className="timeline-select-input year-select"
+                      value={selectedYear}
+                      onChange={(e) => {
+                        const val = e.target.value === "all" ? "all" : Number(e.target.value);
+                        setSelectedYear(val);
+                        setSelectedMonth("all");
+                        setSelectedSpecificDate(null);
+                      }}
+                    >
+                      <option value="all">All Years ({yearCounts["all"] || allTimelines.length} Colleges)</option>
+                      {availableYears.map((yr) => (
+                        <option key={yr} value={yr}>
+                          Year {yr} ({yearCounts[yr] || 0} {yearCounts[yr] === 1 ? "College" : "Colleges"})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} className="select-chevron-icon" />
+                  </div>
+                </div>
+
+                {/* 2. Month Dropdown Selector */}
+                <div className="timeline-select-group">
+                  <label htmlFor="timeline-month-select" className="timeline-select-label">
+                    <Clock size={14} className="select-label-icon" />
+                    <span>Select Month:</span>
+                  </label>
+                  <div className="timeline-custom-select-wrap">
+                    <select
+                      id="timeline-month-select"
+                      className="timeline-select-input month-select"
+                      value={selectedMonth}
+                      onChange={(e) => {
+                        if (e.target.value === "all") {
                           setSelectedMonth("all");
                           setSelectedSpecificDate(null);
-                        }}
-                      >
-                        <span className="year-text">{yr}</span>
-                        {count > 0 && <span className="year-badge">{count}</span>}
-                      </button>
-                    );
-                  })}
+                        } else {
+                          handleJumpToMonth(Number(e.target.value));
+                        }
+                      }}
+                    >
+                      <option value="all">Full Year / All Months (12 Months)</option>
+                      {MONTHS_LIST.map((m) => {
+                        const count = monthCounts[m.num] || 0;
+                        return (
+                          <option key={m.num} value={m.num}>
+                            {m.fullName} {selectedYear !== "all" ? selectedYear : ""} ({count} {count === 1 ? "College" : "Colleges"} Active)
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <ChevronDown size={14} className="select-chevron-icon" />
+                  </div>
+                </div>
+
+                {/* Quick Jump Active Month Badges */}
+                <div className="ribbon-active-month-shortcuts">
+                  <span className="shortcuts-label">Quick Jump:</span>
                   <button
                     type="button"
-                    className={`year-pill-btn ${selectedYear === "all" ? "active" : ""}`}
+                    className={`active-month-chip ${selectedMonth === "all" ? "active" : ""}`}
                     onClick={() => {
-                      setSelectedYear("all");
                       setSelectedMonth("all");
                       setSelectedSpecificDate(null);
                     }}
+                    title="View Full Year"
                   >
-                    <span>All</span>
+                    <span>Full Year</span>
                   </button>
-                </div>
-              </div>
-
-              <div className="ribbon-vertical-divider" />
-
-              {/* Month Pills Ribbon */}
-              <div className="ribbon-month-section">
-                <button
-                  type="button"
-                  className={`month-pill-btn full-year-btn ${selectedMonth === "all" ? "active" : ""}`}
-                  onClick={() => {
-                    setSelectedMonth("all");
-                    setSelectedSpecificDate(null);
-                    const earliestStartDate = getEarliestTrainingStartDate(selectedYear, "all");
-                    if (earliestStartDate && gridScrollRef.current) {
-                      const targetIdx = gridData.days.findIndex((d) => d.dateStr === earliestStartDate);
-                      if (targetIdx !== -1) {
-                        gridScrollRef.current.scrollTo({
-                          left: Math.max(0, targetIdx * dayCellWidth - 70),
-                          behavior: "smooth",
-                        });
-                      }
-                    }
-                  }}
-                  title={`View Full Year ${selectedYear === "all" ? "" : selectedYear} (12 Months)`}
-                >
-                  <Calendar size={12} />
-                  <span>Full Year</span>
-                </button>
-
-                <div className="month-pills-list">
-                  {MONTHS_LIST.map((m) => {
-                    const count = monthCounts[m.num] || 0;
+                  {MONTHS_LIST.filter((m) => (monthCounts[m.num] || 0) > 0).map((m) => {
                     const isSelected = selectedMonth === m.num;
                     return (
                       <button
                         key={m.num}
                         type="button"
-                        className={`month-pill-btn ${isSelected ? "active" : ""} ${count > 0 ? "has-data" : "no-data"}`}
+                        className={`active-month-chip ${isSelected ? "active" : ""}`}
                         onClick={() => handleJumpToMonth(m.num)}
-                        title={`${m.fullName} ${selectedYear === "all" ? "" : selectedYear} · ${count} Colleges active`}
+                        title={`Jump directly to ${m.fullName}`}
                       >
                         <span>{m.shortName}</span>
-                        {count > 0 ? (
-                          <span className="month-count-dot">{count}</span>
-                        ) : (
-                          <span className="month-zero-dot">0</span>
-                        )}
+                        <span className="chip-badge">{monthCounts[m.num]}</span>
                       </button>
                     );
                   })}

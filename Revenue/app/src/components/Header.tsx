@@ -46,30 +46,9 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Active College Timeline & Schedule Header Nav Button with Modern Time Logo */}
+          {/* Active College Timeline & Schedule Header Nav Button (Single Sleek Rectangle Button) */}
           {onOpenCollegeTimeline && (
             <div className="topbar-timeline-nav-group">
-              <button
-                type="button"
-                className={`topbar-timeline-circle-btn ${currentView === "college-timeline" ? "active" : ""}`}
-                onClick={onOpenCollegeTimeline}
-                title="Active College Timeline & Schedule"
-                aria-label="Active College Timeline & Schedule"
-              >
-                <span className="timeline-pulse-ring" />
-                <img
-                  src={timeLogo}
-                  alt="Active College Timeline & Schedule"
-                  className="topbar-timeline-logo-img"
-                />
-                {activeTimelineCount > 0 && (
-                  <span className="timeline-circle-badge" title={`${activeTimelineCount} Active Colleges`}>
-                    {activeTimelineCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Modern Timeline Pill Action */}
               <button
                 type="button"
                 className={`topbar-timeline-pill-btn ${currentView === "college-timeline" ? "active" : ""}`}
@@ -77,8 +56,15 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Active College Timeline & Schedule"
                 aria-label="Active College Timeline & Schedule"
               >
-                <CalendarRange size={15} className="timeline-pill-icon" />
+                <div className="timeline-pill-logo-thumb">
+                  <img src={timeLogo} alt="Time Logo" className="timeline-pill-logo-img" />
+                </div>
                 <span className="timeline-pill-text">College Timeline</span>
+                {activeTimelineCount > 0 && (
+                  <span className="timeline-pill-count-badge" title={`${activeTimelineCount} Active Colleges`}>
+                    {activeTimelineCount}
+                  </span>
+                )}
                 <span className="timeline-pill-status-dot" />
               </button>
             </div>
