@@ -1168,11 +1168,38 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       {/* Top Header Card */}
       <div className="timeline-hero-banner">
         <div className="timeline-hero-title-row">
-          <div className="timeline-hero-icon-box">
-            <CalendarDays size={28} />
-          </div>
-          <div className="timeline-hero-text">
-            <h1 className="timeline-main-title">Active College Timeline & Schedule</h1>
+          <div className="timeline-hero-title-group">
+            <div className="timeline-hero-icon-box">
+              <CalendarDays size={26} />
+            </div>
+            <div className="timeline-hero-text">
+              <h1 className="timeline-main-title">Active College Timeline & Schedule</h1>
+            </div>
+
+            {/* 2 Main Tabs Switcher: Add, View (Placed Beside Title) */}
+            <div className="timeline-main-mode-switcher">
+              <button
+                type="button"
+                className={`mode-tab-btn ${activeTab === "add" ? "active" : ""}`}
+                onClick={() => setActiveTab("add")}
+              >
+                <PlusCircle size={16} />
+                <span>{isEditingExisting ? "Edit" : "Add"}</span>
+              </button>
+
+              <button
+                type="button"
+                className={`mode-tab-btn ${activeTab === "view" ? "active" : ""}`}
+                onClick={() => {
+                  setActiveTab("view");
+                  setIsEditingExisting(false);
+                }}
+              >
+                <BarChart3 size={16} />
+                <span>View</span>
+                <span className="tab-count-badge">{allTimelines.length}</span>
+              </button>
+            </div>
           </div>
 
           <div className="timeline-hero-actions">
@@ -1192,31 +1219,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               <span>{isSyncing ? "Syncing..." : "Sync Sheet"}</span>
             </button>
           </div>
-        </div>
-
-        {/* 2 Main Tabs Switcher: Add, View */}
-        <div className="timeline-main-mode-switcher">
-          <button
-            type="button"
-            className={`mode-tab-btn ${activeTab === "add" ? "active" : ""}`}
-            onClick={() => setActiveTab("add")}
-          >
-            <PlusCircle size={17} />
-            <span>{isEditingExisting ? "Edit" : "Add"}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`mode-tab-btn ${activeTab === "view" ? "active" : ""}`}
-            onClick={() => {
-              setActiveTab("view");
-              setIsEditingExisting(false);
-            }}
-          >
-            <BarChart3 size={17} />
-            <span>View</span>
-            <span className="tab-count-badge">{allTimelines.length}</span>
-          </button>
         </div>
       </div>
 
