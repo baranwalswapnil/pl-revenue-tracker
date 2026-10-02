@@ -1253,14 +1253,14 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           {/* Controls Bar: Search, Status Filter, Jump to Today, Zoom, View Mode */}
           {/* UNIFIED MODERN CONTROL CENTER CARD */}
           <div className="timeline-modern-control-card">
-            {/* Top Row: Search + Status Filter Pills + View/Zoom Quick Actions */}
-            <div className="control-card-top-row">
+            {/* Top Row: Dedicated Search Bar */}
+            <div className="control-card-search-row">
               {/* Search Box with Interactive Dropdown Recommendations */}
               <div className="modern-search-box" ref={searchBoxRef}>
                 <Search size={15} className="modern-search-icon" />
                 <input
                   type="text"
-                  placeholder="Search college name or code..."
+                  placeholder="Search college name, code, stream or trainer..."
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
@@ -1349,7 +1349,10 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                   </div>
                 )}
               </div>
+            </div>
 
+            {/* Middle Row: Status Filter Pills (Beneath Search Tab) + View/Zoom Quick Actions */}
+            <div className="control-card-filter-row">
               {/* Status Filter Pills */}
               <div className="modern-status-pills">
                 <button
