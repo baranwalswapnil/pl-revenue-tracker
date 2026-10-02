@@ -16,6 +16,8 @@ export interface GoogleSheetCollegeItem {
   college_code?: string;
   academic_year: string;
   passing_year: string;
+  description?: string;
+  assigned_person?: string;
   course_stream?: string;
   domain_of_training?: string;
   type_of_project?: string;
@@ -32,6 +34,7 @@ export interface GoogleSheetCollegeItem {
   attp_percentage?: string;
   invoice_count: number;
   additional_notes?: string;
+  notes?: string;
   raw_row?: Record<string, string>;
 }
 
@@ -92,6 +95,15 @@ const STORAGE_CACHED_ITEMS_KEY = "google_sheet_cached_colleges_v1";
 const STORAGE_CACHED_INVOICE_TRACKER_KEY = "google_sheet_cached_invoice_tracker_v1";
 const STORAGE_CACHED_MOUS_KEY = "google_sheet_cached_mous_26_27_v1";
 
+export const KNOWN_TAB_GIDS: Record<string, string> = {
+  "college training": "701648829",
+  "college training ": "701648829",
+  "mous 26-27": "42253217",
+  "invoice tracker": "1423830764",
+  "sheet1": "0",
+  "sheet 1": "0",
+};
+
 /**
  * Extracts Google Spreadsheet ID from a shared URL or returns the ID if already clean.
  */
@@ -115,8 +127,9 @@ export function extractSpreadsheetId(urlOrId: string): string | null {
 
 /**
  * Builds standard public Google Sheet CSV export endpoint.
+ * Supports exact tab GID mapping so College Training (GID 701648829) is always fetched correctly.
  */
-export function buildGoogleSheetCsvUrl(sheetUrlOrId: string, sheetName = ""): string {
+export function buildGoogleSheetCsvUrl(sheetUrlOrId: string, sheetNameOrGid = ""): string {
   const sheetId = extractSpreadsheetId(sheetUrlOrId);
   if (!sheetId) {
     // If it's already a direct CSV or Apps Script URL, return as is
@@ -124,10 +137,25 @@ export function buildGoogleSheetCsvUrl(sheetUrlOrId: string, sheetName = ""): st
   }
 
   const base = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv`;
-  if (sheetName && sheetName.trim()) {
-    return `${base}&sheet=${encodeURIComponent(sheetName.trim())}`;
+  const cleanTab = (sheetNameOrGid || "").trim();
+
+  // If directly numeric GID
+  if (/^\d+$/.test(cleanTab)) {
+    return `${base}&gid=${cleanTab}`;
   }
-  return base;
+
+  // Check known GIDs (e.g. College Training -> GID 701648829)
+  const normKey = cleanTab.toLowerCase();
+  if (KNOWN_TAB_GIDS[normKey]) {
+    return `${base}&gid=${KNOWN_TAB_GIDS[normKey]}`;
+  }
+
+  if (cleanTab) {
+    return `${base}&sheet=${encodeURIComponent(cleanTab)}`;
+  }
+
+  // Default to College Training tab (GID 701648829)
+  return `${base}&gid=701648829`;
 }
 
 /**
@@ -289,36 +317,37 @@ function findColumnIndex(headers: string[], ...candidates: string[]): number {
 
 /**
  * Converts parsed spreadsheet rows into clean GoogleSheetCollegeItem objects
- * fetching ONLY what is needed for Add College & Update College forms!
+ * Exclusively designed for the exact 'College Training' tab structure!
  */
 export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[] {
   if (!rows || rows.length < 2) return [];
 
-  const headerRowIdx = rows.findIndex((r) => r.some((cell) => cell.toLowerCase().includes("college") || cell.toLowerCase().includes("project")));
+  const headerRowIdx = rows.findIndex((r) =>
+    r.some((cell) => cell.toLowerCase().includes("college") || cell.toLowerCase().includes("project"))
+  );
   const effectiveHeaderRow = headerRowIdx !== -1 ? headerRowIdx : 0;
   const headers = rows[effectiveHeaderRow].map((h) => h.trim());
 
-  // Find column indices based on user's exact spreadsheet headers
+  // Matches exact headers from College Training sheet:
+  // Col A (0): College Name
+  // Col B (1): Project Code
+  // Col C (2): Description
+  // Col D (3): Assigned Person
+  // Col E (4): Start Day / Start Date
+  // Col F (5): End Date
+  const colCollegeName = findColumnIndex(headers, "college name", "collegename", "name of the college", "college", "name");
   const colProjCode = findColumnIndex(headers, "project code", "projectcode", "college project", "code");
-  const colCollegeName = findColumnIndex(headers, "name of the college", "college name", "collegename", "name");
-  const colCollegeCode = findColumnIndex(headers, "college code", "collegecode");
-  const colYear = findColumnIndex(headers, "year", "passing year", "batch year");
-  const colCourse = findColumnIndex(headers, "course/stream", "course", "stream", "department");
-  const colDomain = findColumnIndex(headers, "domain of training", "domain", "training domain");
-  const colTypeProj = findColumnIndex(headers, "type of project", "project type");
-  const colAcademicYear = findColumnIndex(headers, "academic year", "academicyear");
-  const colMouDate = findColumnIndex(headers, "mou signed date", "mou date", "mou signed");
-  const colStartDate = findColumnIndex(headers, "training start date", "start date", "starting date");
-  const colEndDate = findColumnIndex(headers, "training end date", "end date");
-  const colStudents = findColumnIndex(headers, "no of students", "students", "student count", "no. of students");
-  const colCostPerStudent = findColumnIndex(headers, "cost per student", "cost/student", "student cost");
-  const colTotalValue = findColumnIndex(headers, "total contract value", "total cost value", "contract value", "total value");
-  const colGstValue = findColumnIndex(headers, "total contract value (incl gst)", "total contract value (incl. gst)", "gst cost", "total with gst");
-  const colTrainingCost = findColumnIndex(headers, "total training cost", "training cost", "trainingcost", "trainer cost", "training_cost", "trainee cost");
-  const colHoursPlanned = findColumnIndex(headers, "hrs/batch", "hours/batch", "hours planned", "hrs planned", "hours");
-  const colPaymentType = findColumnIndex(headers, "type of payment", "payment type", "payment plan");
-  const colPaymentPct = findColumnIndex(headers, "% of payment", "percentage of payment", "payment percentage", "attp percentage");
-  const colInvoices = findColumnIndex(headers, "no of invoices", "no. of invoices", "invoice count", "invoices");
+  const colDesc = findColumnIndex(headers, "description", "desc");
+  const colAssigned = findColumnIndex(headers, "assigned person", "assigned", "poc");
+  const colStartDate = findColumnIndex(headers, "start day", "startday", "start date", "startdate", "training start date", "starting date");
+  const colEndDate = findColumnIndex(headers, "end date", "enddate", "training end date");
+
+  const colTotalHrs = findColumnIndex(headers, "total hrs", "hrs/batch", "hours planned", "hours");
+  const colPlanningHrs = findColumnIndex(headers, "planning hrs");
+  const colSSHrs = findColumnIndex(headers, "ss hrs");
+  const colTechHrs = findColumnIndex(headers, "technical hrs");
+  const colAptHrs = findColumnIndex(headers, "aptitude hrs");
+  const colTotalCost = findColumnIndex(headers, "total cost", "total contract value", "total cost value");
 
   const items: GoogleSheetCollegeItem[] = [];
 
@@ -326,132 +355,51 @@ export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[
     const row = rows[r];
     if (!row || row.length === 0) continue;
 
-    const collegeName = (colCollegeName !== -1 ? row[colCollegeName] : row[2] || "").trim();
-    const projectCode = (colProjCode !== -1 ? row[colProjCode] : row[1] || "").trim();
+    const collegeName = (colCollegeName !== -1 ? row[colCollegeName] : (row[0] || "")).trim();
+    const projectCode = (colProjCode !== -1 ? row[colProjCode] : (row[1] || "")).trim();
 
-    // Skip empty rows
+    // Skip empty rows (rows from row 14 onwards in College Training sheet)
     if (!collegeName && !projectCode) continue;
 
-    const studentCount = parseCleanNumber(colStudents !== -1 ? row[colStudents] : row[13], 0);
-    const costPerStudent = parseCleanNumber(colCostPerStudent !== -1 ? row[colCostPerStudent] : row[14], 0);
-    
-    let totalValue = parseCleanNumber(colTotalValue !== -1 ? row[colTotalValue] : row[15], 0);
-    if (totalValue === 0 && studentCount > 0 && costPerStudent > 0) {
-      totalValue = studentCount * costPerStudent;
-    }
-
-    let gstValue = parseCleanNumber(colGstValue !== -1 ? row[colGstValue] : row[16], 0);
-    if (gstValue === 0 && totalValue > 0) {
-      gstValue = totalValue * 1.18;
-    }
-
-    // Column R in Sheet 1 = Total Training Cost
-    const rawTrainingCostStr = colTrainingCost !== -1 ? (row[colTrainingCost] || "").trim() : (row[17] || "").trim();
-    const trainingCost = parseCleanNumber(rawTrainingCostStr, 0);
-
-    const rawYear = (colYear !== -1 ? row[colYear] : row[4] || "").trim();
-    let passingYear = "2026";
-    if (rawYear.match(/^\d{4}$/)) {
-      passingYear = rawYear;
-    } else if (rawYear.toLowerCase().includes("202")) {
-      const ym = rawYear.match(/202\d/);
-      if (ym) passingYear = ym[0];
-    } else if (rawYear.includes("1st")) {
-      passingYear = "2027";
-    } else if (rawYear.includes("2nd")) {
-      passingYear = "2026";
-    } else if (rawYear.includes("3rd")) {
-      passingYear = "2025";
-    } else if (rawYear.includes("4th")) {
-      passingYear = "2024";
-    }
-
-    const rawAcadYear = (colAcademicYear !== -1 ? row[colAcademicYear] : row[8] || "").trim();
-    let academicYear = "4th Year";
-    if (rawAcadYear) {
-      if (rawAcadYear.toLowerCase().includes("1st")) academicYear = "1st Year";
-      else if (rawAcadYear.toLowerCase().includes("2nd")) academicYear = "2nd Year";
-      else if (rawAcadYear.toLowerCase().includes("3rd")) academicYear = "3rd Year";
-      else if (rawAcadYear.toLowerCase().includes("4th")) academicYear = "4th Year";
-      else if (rawYear && (rawYear.includes("1st") || rawYear.includes("2nd") || rawYear.includes("3rd") || rawYear.includes("4th"))) {
-        academicYear = `${rawYear} Year`;
-      } else {
-        academicYear = rawAcadYear;
-      }
-    }
-
-    // Start Date: Col L (Training Start Date) or Col E (Year/Start Date if date present)
-    let rawStartDate = colStartDate !== -1 ? row[colStartDate] : row[11];
-    if ((!rawStartDate || !normalizeDate(rawStartDate)) && row[4] && (/\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}/.test(row[4]) || normalizeDate(row[4]))) {
-      rawStartDate = row[4];
-    }
-
-    // End Date: Col M (Training End Date) or Col F (Course/End Date if date present)
-    let rawEndDate = colEndDate !== -1 ? row[colEndDate] : row[12];
-    if ((!rawEndDate || !normalizeDate(rawEndDate)) && row[5] && (/\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}/.test(row[5]) || normalizeDate(row[5]))) {
-      rawEndDate = row[5];
-    }
+    let rawStartDate = colStartDate !== -1 ? row[colStartDate] : (row[4] || "");
+    let rawEndDate = colEndDate !== -1 ? row[colEndDate] : (row[5] || "");
 
     const startDate = normalizeDate(rawStartDate);
     const endDate = normalizeDate(rawEndDate);
-    const hoursPlanned = parseCleanNumber(colHoursPlanned !== -1 ? row[colHoursPlanned] : row[18], 40);
 
-    const rawPayType = colPaymentType !== -1 ? row[colPaymentType] : row[19];
-    const paymentType = normalizePaymentType(rawPayType);
-    
-    const rawPct = (colPaymentPct !== -1 ? row[colPaymentPct] : row[20] || "").trim();
-    let attpPercentage = "50%";
-    if (rawPct.includes("25")) attpPercentage = "25%";
-    else if (rawPct.includes("33") || rawPct.includes("30-30-40") || rawPct.includes("20-40-40")) attpPercentage = "33.34%";
-    else if (rawPct.includes("50")) attpPercentage = "50%";
-    else if (rawPct.includes("75")) attpPercentage = "75%";
-    else if (rawPct.includes("100")) attpPercentage = "100%";
-    else if (rawPct) {
-      attpPercentage = rawPct.includes("%") ? rawPct : `${rawPct}%`;
-    }
+    const desc = colDesc !== -1 ? (row[colDesc] || "").trim() : (row[2] || "").trim();
+    const assigned = colAssigned !== -1 ? (row[colAssigned] || "").trim() : (row[3] || "").trim();
 
-    const rawInvoicesStr = colInvoices !== -1 ? (row[colInvoices] || "").trim() : (row[21] || row[20] || "").trim();
-    const hasExplicitInvoices = rawInvoicesStr !== "" && !isNaN(Number(rawInvoicesStr.replace(/[^0-9]/g, "")));
-    let invoiceCount = hasExplicitInvoices ? parseCleanNumber(rawInvoicesStr, 0) : 0;
+    const hoursPlanned = parseCleanNumber(colTotalHrs !== -1 ? row[colTotalHrs] : (row[6] || 40), 40);
+    const totalCost = parseCleanNumber(colTotalCost !== -1 ? row[colTotalCost] : (row[15] || 0), 0);
 
-    const courseStream = colCourse !== -1 ? (row[colCourse] || "").trim() : "";
-    const domain = colDomain !== -1 ? (row[colDomain] || "").trim() : "";
-    const typeProj = colTypeProj !== -1 ? (row[colTypeProj] || "").trim() : "";
-    const mouDate = colMouDate !== -1 ? normalizeDate(row[colMouDate]) : "";
-    const collegeCode = colCollegeCode !== -1 ? (row[colCollegeCode] || "").trim() : "";
+    const notesParts: string[] = [];
+    if (desc) notesParts.push(`Desc: ${desc}`);
+    if (assigned) notesParts.push(`Assigned: ${assigned}`);
 
-    // Build extra notes from remaining metadata
-    const extraNotesArr: string[] = [];
-    if (courseStream) extraNotesArr.push(`Course/Stream: ${courseStream}`);
-    if (domain) extraNotesArr.push(`Training Domain: ${domain}`);
-    if (typeProj) extraNotesArr.push(`Project Type: ${typeProj}`);
-    if (mouDate) extraNotesArr.push(`MOU Signed: ${mouDate}`);
-
-    const id = `gsheet-${projectCode || collegeName.toLowerCase().replace(/[^a-z0-9]/g, "-") || r}`;
+    const id = `college-training-${r}`;
 
     items.push({
       id,
       college_name: collegeName || `College ${r}`,
       project_code: projectCode || `PRJ-${String(r).padStart(3, "0")}`,
-      college_code: collegeCode,
-      academic_year: academicYear,
-      passing_year: passingYear,
-      course_stream: courseStream,
-      domain_of_training: domain,
-      type_of_project: typeProj,
-      mou_signed_date: mouDate,
+      college_code: projectCode ? projectCode.split("/")[0] : "",
+      description: desc,
+      assigned_person: assigned,
+      academic_year: "26-27",
+      passing_year: "2026",
       training_start_date: startDate,
       training_end_date: endDate,
-      student_count: studentCount,
-      cost_per_student: costPerStudent,
-      total_cost_value: totalValue,
-      gst_cost: gstValue,
-      training_cost: trainingCost,
+      student_count: 0,
+      cost_per_student: 0,
+      total_cost_value: totalCost,
+      gst_cost: totalCost > 0 ? Math.round(totalCost * 1.18) : 0,
       hours_planned: hoursPlanned,
-      payment_type: paymentType,
-      attp_percentage: attpPercentage,
-      invoice_count: invoiceCount,
-      additional_notes: extraNotesArr.join(" | "),
+      payment_type: "ATP",
+      attp_percentage: "50%",
+      invoice_count: 1,
+      notes: notesParts.join(" | "),
+      additional_notes: notesParts.join(" | "),
     });
   }
 
@@ -2057,5 +2005,320 @@ export function saveCachedMOUItems(items: GoogleSheetMOUItem[]): void {
     console.error("Failed to save cached MOU items", e);
   }
 }
+
+export const STORAGE_CACHED_COLLEGE_TRAINING_KEY = "google_sheet_cached_college_training_v3";
+
+export const DEFAULT_COLLEGE_TRAINING_ITEMS: GoogleSheetCollegeItem[] = [
+  {
+    id: "college-training-1",
+    college_name: "Indira University - Pune",
+    project_code: "IU/MBA/2nd/SAP-FICO/26-27",
+    college_code: "IU",
+    description: "",
+    assigned_person: "MG",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-08-31",
+    training_end_date: "2026-09-05",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-2",
+    college_name: "Indira College of Engineering and Management",
+    project_code: "ICEM/MBA/2nd/SAP-HR/26-27",
+    college_code: "ICEM",
+    description: "",
+    assigned_person: "MG",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-09-07",
+    training_end_date: "2026-09-12",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-3",
+    college_name: "Indira University - Pune",
+    project_code: "IU/MBA/2nd/CERT/26-27",
+    college_code: "IU",
+    description: "",
+    assigned_person: "MG",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-08-17",
+    training_end_date: "2026-08-29",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-4",
+    college_name: "Maharaja Institute of Technology Mysore",
+    project_code: "KDK/Engg/4th/TP/26-27",
+    college_code: "KDK",
+    description: "",
+    assigned_person: "Shruti",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-09-01",
+    training_end_date: "2026-09-17",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-5",
+    college_name: "School of Information Technology",
+    project_code: "DIET/Engg/3rd/OT/26-27",
+    college_code: "DIET",
+    description: "FY SY",
+    assigned_person: "Shruti",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-09-15",
+    training_end_date: "2026-09-22",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-6",
+    college_name: "SAGE University",
+    project_code: "DIET/Engg/3rd/OT/26-27",
+    college_code: "DIET",
+    description: "Tentative End Date",
+    assigned_person: "Shruti",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-09-24",
+    training_end_date: "2026-09-30",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-7",
+    college_name: "Indira College of commerce and Science",
+    project_code: "DIET/Engg/3rd/OT/26-27",
+    college_code: "DIET",
+    description: "TY",
+    assigned_person: "Shruti",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-08-31",
+    training_end_date: "2026-09-05",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-8",
+    college_name: "Mauli College of Engineering & Technology",
+    project_code: "DIET/Engg/3rd/OT/26-27",
+    college_code: "DIET",
+    description: "",
+    assigned_person: "Shruti",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-08-31",
+    training_end_date: "2026-09-05",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-9",
+    college_name: "Bapuji Salunkhe Institute of Engineering and Technology",
+    project_code: "SOIT/MSC/2nd/TP/26-27",
+    college_code: "SOIT",
+    description: "",
+    assigned_person: "Shruti",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-09-24",
+    training_end_date: "2026-09-30",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-10",
+    college_name: "Sandeep Institute of Technology and Research Centre",
+    project_code: "SOIT/MSC/2nd/TP/26-27",
+    college_code: "SOIT",
+    description: "",
+    assigned_person: "",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "",
+    training_end_date: "",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-11",
+    college_name: "Sanjivani College of Engineering, Kopargaon",
+    project_code: "SCOE/Engg/4th/TP/26-27",
+    college_code: "SCOE",
+    description: "",
+    assigned_person: "",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "",
+    training_end_date: "",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-12",
+    college_name: "Indira University - Pune",
+    project_code: "IU/MBA/2nd/SAP - SD/26-27",
+    college_code: "IU",
+    description: "",
+    assigned_person: "",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "2026-08-17",
+    training_end_date: "2026-09-22",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+  {
+    id: "college-training-13",
+    college_name: "Indira College of commerce and Science",
+    project_code: "ICCS/UG/3rd/SAP/26-27",
+    college_code: "ICCS",
+    description: "",
+    assigned_person: "",
+    academic_year: "26-27",
+    passing_year: "2026",
+    training_start_date: "",
+    training_end_date: "",
+    student_count: 0,
+    cost_per_student: 0,
+    total_cost_value: 0,
+    gst_cost: 0,
+    hours_planned: 40,
+    payment_type: "ATP",
+    invoice_count: 1,
+  },
+];
+
+export function loadCachedCollegeTrainingItems(): GoogleSheetCollegeItem[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_CACHED_COLLEGE_TRAINING_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed.length <= 50) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to load cached College Training items", e);
+  }
+  return DEFAULT_COLLEGE_TRAINING_ITEMS;
+}
+
+export function saveCachedCollegeTrainingItems(items: GoogleSheetCollegeItem[]): void {
+  try {
+    localStorage.setItem(STORAGE_CACHED_COLLEGE_TRAINING_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error("Failed to save cached College Training items", e);
+  }
+}
+
+/**
+ * Directly fetches and parses the exact 'College Training' tab (GID 701648829).
+ */
+export async function fetchCollegeTrainingData(
+  sheetUrlOrId: string = DEFAULT_SHEET_URL
+): Promise<GoogleSheetCollegeItem[]> {
+  const url = sheetUrlOrId || DEFAULT_SHEET_URL;
+  const csvUrl = buildGoogleSheetCsvUrl(url, "College Training");
+
+  const response = await fetch(csvUrl, {
+    method: "GET",
+    headers: {
+      Accept: "text/csv,text/plain,*/*",
+    },
+    signal: AbortSignal.timeout(8000),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch 'College Training' tab. Status: ${response.status} (${response.statusText}).`
+    );
+  }
+
+  const csvText = await response.text();
+  const rows = parseCSV(csvText);
+
+  if (rows.length < 2) {
+    return DEFAULT_COLLEGE_TRAINING_ITEMS;
+  }
+
+  const items = mapRowsToCollegeItems(rows);
+  if (items.length > 0) {
+    saveCachedCollegeTrainingItems(items);
+    return items;
+  }
+
+  return DEFAULT_COLLEGE_TRAINING_ITEMS;
+}
+
 
 

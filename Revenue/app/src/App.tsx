@@ -4,10 +4,13 @@ import { INITIAL_PROJECTS, createEmptyDraft, computeAttpDetails } from "./lib/mo
 import {
   loadCachedSheetItems,
   loadCachedMOUItems,
+  loadCachedCollegeTrainingItems,
+  saveCachedCollegeTrainingItems,
   loadSavedSheetConfig,
   fetchGoogleSheetData,
   fetchInvoiceTrackerData,
   fetchMOUData,
+  fetchCollegeTrainingData,
   buildProjectsFromInvoiceTracker,
   convertSheetItemToDraft,
   convertSheetItemToProject,
@@ -95,6 +98,9 @@ export function App() {
   const [mouItems, setMouItems] = useState<GoogleSheetMOUItem[]>(() =>
     loadCachedMOUItems()
   );
+  const [collegeTrainingItems, setCollegeTrainingItems] = useState<GoogleSheetCollegeItem[]>(() =>
+    loadCachedCollegeTrainingItems()
+  );
   const [isGoogleSheetModalOpen, setIsGoogleSheetModalOpen] = useState(false);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
   const [lastLiveSyncTime, setLastLiveSyncTime] = useState<string | null>(null);
@@ -133,6 +139,17 @@ export function App() {
             saveCachedMOUItems(mouData);
           }
         } catch (mouErr) {
+          // Tab might not exist or network error, ignore gracefully
+        }
+
+        // 4. Fetch 'College Training' tab data exclusively for Step 8 Timeline
+        try {
+          const trainingData = await fetchCollegeTrainingData(config.sheetUrl);
+          if (!isCancelled && trainingData && trainingData.length > 0) {
+            setCollegeTrainingItems(trainingData);
+            saveCachedCollegeTrainingItems(trainingData);
+          }
+        } catch (ctErr) {
           // Tab might not exist or network error, ignore gracefully
         }
 
@@ -531,11 +548,11 @@ export function App() {
     }
   };
 
-  // Timeline count & handlers
+  // Timeline count & handlers (computed exclusively from College Training sheet)
   const activeTimelineCount = useMemo(() => {
-    const list = getAllEnrichedTimelines(googleSheetColleges);
-    return list.filter((item) => item.status === "Active").length;
-  }, [googleSheetColleges]);
+    const list = getAllEnrichedTimelines(collegeTrainingItems);
+    return list.filter((item) => item.status === "Active" || item.status === "Upcoming").length;
+  }, [collegeTrainingItems]);
 
   const handleOpenCollegeTimeline = () => {
     setCurrentView("college-timeline");
@@ -603,7 +620,11 @@ export function App() {
         onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
         onOpenCollegeTimeline={handleOpenCollegeTimeline}
         activeTimelineCount={activeTimelineCount}
-        googleSheetCount={googleSheetColleges.length}
+        googleSheetCount={
+          currentView === "college-timeline"
+            ? collegeTrainingItems.length
+            : googleSheetColleges.length
+        }
         isLiveSyncing={isLiveSyncing}
         lastLiveSyncTime={lastLiveSyncTime}
       />
@@ -711,7 +732,7 @@ export function App() {
         {/* Step 8: Active College Timeline Explorer & Schedule Screen */}
         {currentView === "college-timeline" && (
           <Step8_CollegeTimelinePage
-            googleSheetColleges={googleSheetColleges}
+            collegeTrainingItems={collegeTrainingItems}
             onBackToDashboard={() => navigateTo("dashboard")}
             onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
             onSaveCollegeTimeline={handleSaveCollegeTimeline}

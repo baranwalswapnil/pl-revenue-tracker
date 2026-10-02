@@ -32,11 +32,11 @@ import {
 } from "lucide-react";
 import type { Project } from "../lib/models";
 import {
-  loadCachedSheetItems,
-  loadCachedMOUItems,
+  loadCachedCollegeTrainingItems,
+  saveCachedCollegeTrainingItems,
+  fetchCollegeTrainingData,
+  DEFAULT_SHEET_URL,
   loadSavedSheetConfig,
-  fetchGoogleSheetData,
-  fetchMOUData,
   type GoogleSheetCollegeItem,
   type GoogleSheetMOUItem,
 } from "../lib/googleSheetsService";
@@ -66,7 +66,7 @@ export interface CategorizedTimelineItem extends EnrichedTimelineItem {
 
 interface Step8CollegeTimelinePageProps {
   projects?: Project[];
-  googleSheetColleges: GoogleSheetCollegeItem[];
+  collegeTrainingItems?: GoogleSheetCollegeItem[];
   mouItems?: GoogleSheetMOUItem[];
   onBackToDashboard: () => void;
   onOpenGoogleSheetSync?: () => void;
@@ -80,40 +80,73 @@ interface Step8CollegeTimelinePageProps {
 
 export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> = ({
   projects = [],
-  googleSheetColleges,
+  collegeTrainingItems,
   onBackToDashboard,
   onOpenGoogleSheetSync,
   onSaveCollegeTimeline,
 }) => {
   // Navigation Tabs: 'add' (Add / Register Form) | 'view' (Timeline Graph)
-  const [activeTab, setActiveTab] = useState<"add" | "view">("add");
+  const [activeTab, setActiveTab] = useState<"add" | "view">("view");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
 
-  // Local state fallback to guarantee immediate rendering of College Training records
+  // Local state initialized with collegeTrainingItems or loadCachedCollegeTrainingItems() (exact 13 records from College Training tab)
   const [localSheetColleges, setLocalSheetColleges] = useState<GoogleSheetCollegeItem[]>(() => {
-    if (googleSheetColleges && googleSheetColleges.length > 0) return googleSheetColleges;
-    return loadCachedSheetItems();
+    if (collegeTrainingItems && collegeTrainingItems.length > 0 && collegeTrainingItems.length <= 25) {
+      return collegeTrainingItems;
+    }
+    return loadCachedCollegeTrainingItems();
   });
 
   useEffect(() => {
-    if (googleSheetColleges && googleSheetColleges.length > 0) {
-      setLocalSheetColleges(googleSheetColleges);
+    if (collegeTrainingItems && collegeTrainingItems.length > 0 && collegeTrainingItems.length <= 25) {
+      setLocalSheetColleges(collegeTrainingItems);
     }
-  }, [googleSheetColleges]);
+  }, [collegeTrainingItems]);
 
-  // Auto-sync College Training exclusively on mount if local cache is empty
+  useEffect(() => {
+    try {
+      localStorage.removeItem("college_timeline_records_v1");
+      localStorage.removeItem("college_timeline_records_v2");
+    } catch {}
+  }, []);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    setSyncStatusMsg("Fetching latest College Training sheet...");
+    try {
+      const config = loadSavedSheetConfig();
+      const sheetUrl = config.sheetUrl || DEFAULT_SHEET_URL;
+      const items = await fetchCollegeTrainingData(sheetUrl);
+      if (items && items.length > 0) {
+        setLocalSheetColleges(items);
+        saveCachedCollegeTrainingItems(items);
+        setSyncStatusMsg(`Successfully synced ${items.length} records from College Training tab!`);
+      }
+    } catch (err: any) {
+      setSyncStatusMsg(err.message || "Failed to sync College Training");
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSyncStatusMsg(null), 3500);
+    }
+  };
+
+  // Auto-sync College Training live on mount to ensure fresh Gantt chart data
   useEffect(() => {
     const config = loadSavedSheetConfig();
-    if (!config.sheetUrl || !config.sheetUrl.trim()) return;
+    const sheetUrl = config.sheetUrl || DEFAULT_SHEET_URL;
+    if (!sheetUrl || !sheetUrl.trim()) return;
 
-    if (localSheetColleges.length === 0) {
-      fetchGoogleSheetData(config.sheetUrl, "College Training")
-        .then((items) => {
-          if (items && items.length > 0) {
-            setLocalSheetColleges(items);
-          }
-        })
-        .catch(() => {});
-    }
+    fetchCollegeTrainingData(sheetUrl)
+      .then((items) => {
+        if (items && items.length > 0) {
+          setLocalSheetColleges(items);
+          saveCachedCollegeTrainingItems(items);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not background-sync College Training:", err);
+      });
   }, []);
 
   // Filter and Search States
@@ -122,7 +155,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
   // Spreadsheet Grid Display Settings (2-Tier Year -> Month Filter + Specific Date Filter)
-  const [selectedYear, setSelectedYear] = useState<number | "all">(2026);
+  const [selectedYear, setSelectedYear] = useState<number | "all">("all");
   const [selectedMonth, setSelectedMonth] = useState<number | "all">("all");
   const [selectedSpecificDate, setSelectedSpecificDate] = useState<string | null>(null);
   const [dayCellWidth, setDayCellWidth] = useState<number>(34); // px per day column (26 compact, 34 standard, 46 wide)
@@ -1035,7 +1068,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   };
 
   // List of unique colleges from 'College Training' for auto-complete
-  const sheet1CollegeOptions = useMemo(() => {
+  const collegeTrainingOptions = useMemo(() => {
     const list: {
       name: string;
       code: string;
@@ -1067,12 +1100,12 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   }, [localSheetColleges]);
 
   const filteredAutocompleteColleges = useMemo(() => {
-    if (!collegeSearchPicker.trim()) return sheet1CollegeOptions.slice(0, 10);
+    if (!collegeSearchPicker.trim()) return collegeTrainingOptions.slice(0, 10);
     const q = collegeSearchPicker.toLowerCase();
-    return sheet1CollegeOptions
+    return collegeTrainingOptions
       .filter((c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q))
       .slice(0, 12);
-  }, [sheet1CollegeOptions, collegeSearchPicker]);
+  }, [collegeTrainingOptions, collegeSearchPicker]);
 
   return (
     <div className="timeline-page-container">
@@ -1087,17 +1120,21 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
           </div>
 
           <div className="timeline-hero-actions">
-            {onOpenGoogleSheetSync && (
-              <button
-                type="button"
-                className="timeline-sync-btn"
-                onClick={onOpenGoogleSheetSync}
-                title="Sync latest dates with Google Sheet 1"
-              >
-                <FileSpreadsheet size={15} />
-                <span>Sync Sheet</span>
-              </button>
+            {syncStatusMsg && (
+              <span style={{ fontSize: "12px", color: "var(--accent-primary, #6366f1)", fontWeight: 600, marginRight: "8px" }}>
+                {syncStatusMsg}
+              </span>
             )}
+            <button
+              type="button"
+              className="timeline-sync-btn"
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              title="Sync latest dates directly from College Training sheet tab"
+            >
+              <RefreshCw size={15} style={{ animation: isSyncing ? "spin 1s linear infinite" : "none" }} />
+              <span>{isSyncing ? "Syncing..." : "Sync Sheet"}</span>
+            </button>
           </div>
         </div>
 
@@ -1833,10 +1870,10 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                                     </span>
                                     <span className="incomplete-missing-desc">
                                       {!item.start_date && !item.end_date
-                                        ? "(Dates not set in Sheet1)"
+                                        ? "(Dates not set in College Training sheet)"
                                         : !item.start_date
-                                        ? "(Start Date missing in Sheet1)"
-                                        : "(End Date missing in Sheet1)"}
+                                        ? "(Start Date missing in College Training sheet)"
+                                        : "(End Date missing in College Training sheet)"}
                                     </span>
                                     <button
                                       type="button"
@@ -1897,13 +1934,15 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         <div className="popover-field-row">
                           <span className="popover-label">DESCRIPTION:</span>
                           <span className="popover-value">
-                            {currentPopupItem.course_stream || currentPopupItem.academic_year || "Training Schedule"}
+                            {currentPopupItem.description || currentPopupItem.academic_year || "Training Schedule"}
                           </span>
                         </div>
 
                         <div className="popover-field-row">
                           <span className="popover-label">ASSIGNED PERSON:</span>
-                          <span className="popover-value">MG</span>
+                          <span className="popover-value font-bold text-accent">
+                            {currentPopupItem.assigned_person || "N/A"}
+                          </span>
                         </div>
 
                         <div className="popover-field-row">
@@ -2163,7 +2202,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
             )}
 
             {/* Autocomplete Quick-Select */}
-            {!isEditingExisting && sheet1CollegeOptions.length > 0 && (
+            {!isEditingExisting && collegeTrainingOptions.length > 0 && (
               <div className="quick-autocomplete-section" ref={collegePickerRef}>
                 <label className="input-label">
                   <Sparkles size={14} className="text-accent" />

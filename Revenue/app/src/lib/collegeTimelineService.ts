@@ -3,14 +3,16 @@ import type { GoogleSheetCollegeItem, GoogleSheetMOUItem } from "./googleSheetsS
 
 export interface CollegeTimelineRecord {
   id: string;
-  project_code: string;       // Column B in College Training or MOUs Project Code
-  college_name: string;       // Column C in College Training or Total Engineering College
-  start_date: string;         // Training Start Date (YYYY-MM-DD)
-  end_date: string;           // Training End Date (YYYY-MM-DD)
+  project_code: string;       // Column B in College Training
+  college_name: string;       // Column A in College Training
+  start_date: string;         // Column E in College Training
+  end_date: string;           // Column F in College Training
   academic_year?: string;
   student_count?: number;
   course_stream?: string;
   domain_of_training?: string;
+  description?: string;       // Column C in College Training
+  assigned_person?: string;   // Column D in College Training
   notes?: string;
   source?: "sheet1" | "manual" | "project" | "mou_trainee" | "college_training";
   updated_at?: string;
@@ -31,7 +33,7 @@ export interface EnrichedTimelineItem extends CollegeTimelineRecord {
   endMonthYear: string;
 }
 
-const STORAGE_TIMELINES_KEY = "college_timeline_records_v1";
+const STORAGE_TIMELINES_KEY = "college_timeline_records_v3";
 
 /**
  * Normalizes date to standard YYYY-MM-DD format
@@ -285,10 +287,9 @@ function addDaysToDate(dateStr: string, days: number): string {
 }
 
 /**
- * Resolves exact training start & end dates for each college.
- * Strictly preserves the exact Sheet 1 Start Date (Column L) or MOU Signed Date (Column K).
- * Never mutates, shifts, or randomizes start dates.
- * If Column L and Column K are missing, returns empty start_date/end_date to mark as 'Incomplete Data'.
+ * Resolves exact training start & end dates for each college from College Training sheet:
+ * - Training Start Date: Column E (Start Date)
+ * - Training End Date: Column F (End Date)
  */
 export function resolveDistinctCollegeDates(record: {
   project_code: string;
@@ -307,39 +308,19 @@ export function resolveDistinctCollegeDates(record: {
   // If user explicitly entered / edited manual dates, preserve them directly
   if (record.source === "manual" && record.start_date) {
     const s = normalizeDateStr(record.start_date);
-    const e = normalizeDateStr(record.end_date) || addDaysToDate(s, 21);
+    const e = normalizeDateStr(record.end_date) || s;
     return { start_date: s, end_date: e };
   }
 
-  // 1. EXACT Start Date: Prioritize Column L (training_start_date), then Column K (mou_signed_date)
-  const rawStart = normalizeDateStr(record.start_date);
-  const rawMou = normalizeDateStr(record.mou_signed_date);
-  const startDate = rawStart || rawMou || "";
+  // 1. EXACT Start Date: from Column E of College Training
+  const startDate = normalizeDateStr(record.start_date);
 
   if (!startDate) {
     return { start_date: "", end_date: "" };
   }
 
-  // 2. End Date:
-  // If Column M has a valid end date that is after startDate, use it directly.
-  // If missing or <= startDate (single-day placeholder like 16/09/2026 to 16/09/2026),
-  // compute realistic duration from planned hours (21 to 42 days).
-  let rawEnd = normalizeDateStr(record.end_date);
-  let endDate = rawEnd;
-
-  if (!endDate) {
-    const hrs = record.hours_planned || 40;
-    const days = hrs >= 80 ? 42 : hrs >= 60 ? 28 : 21;
-    endDate = addDaysToDate(startDate, days);
-  } else {
-    const sTime = new Date(startDate).getTime();
-    const eTime = new Date(endDate).getTime();
-    if (eTime <= sTime) {
-      const hrs = record.hours_planned || 40;
-      const days = hrs >= 80 ? 42 : hrs >= 60 ? 28 : 21;
-      endDate = addDaysToDate(startDate, days);
-    }
-  }
+  // 2. EXACT End Date: from Column F of College Training
+  let endDate = normalizeDateStr(record.end_date) || startDate;
 
   return { start_date: startDate, end_date: endDate };
 }
@@ -356,7 +337,7 @@ export function getAllEnrichedTimelines(
   const map = new Map<string, CollegeTimelineRecord>();
 
   // 1. Process Google Sheet 'College Training' items exclusively
-  googleSheetColleges.forEach((sheetItem) => {
+  googleSheetColleges.forEach((sheetItem, idx) => {
     const projCode = (sheetItem.project_code || "").trim();
     const collegeName = (sheetItem.college_name || "").trim();
     if (!projCode && !collegeName) return;
@@ -367,27 +348,21 @@ export function getAllEnrichedTimelines(
       college_name: collegeName,
       start_date: sheetItem.training_start_date,
       end_date: sheetItem.training_end_date,
-      mou_signed_date: sheetItem.mou_signed_date,
-      course_stream: sheetItem.course_stream,
-      domain_of_training: sheetItem.domain_of_training,
-      type_of_project: sheetItem.type_of_project,
-      academic_year: sheetItem.academic_year,
-      student_count: sheetItem.student_count,
-      hours_planned: sheetItem.hours_planned,
       source: "college_training",
     });
 
-    const key = (projCode || collegeName).toLowerCase();
+    const key = sheetItem.id || `college-training-${idx + 1}`;
     map.set(key, {
-      id: sheetItem.id || `sheet-${projCode || collegeName}`,
+      id: key,
       project_code: projCode,
       college_name: collegeName,
       start_date: resolvedDates.start_date,
       end_date: resolvedDates.end_date,
-      academic_year: sheetItem.academic_year || "",
+      academic_year: sheetItem.academic_year || "26-27",
       student_count: sheetItem.student_count || 0,
-      course_stream: sheetItem.course_stream || "",
-      domain_of_training: sheetItem.domain_of_training || "",
+      description: sheetItem.description || "",
+      assigned_person: sheetItem.assigned_person || "",
+      notes: sheetItem.notes || sheetItem.additional_notes || "",
       source: "college_training",
       updated_at: new Date().toISOString(),
     });
@@ -395,18 +370,33 @@ export function getAllEnrichedTimelines(
 
   // 2. Apply manual overrides / user additions
   savedTimelines.forEach((saved) => {
-    const key = (saved.project_code || saved.college_name).toLowerCase();
-    const existing = map.get(key);
-    if (existing) {
-      map.set(key, {
+    const projCode = (saved.project_code || "").toLowerCase();
+    const collegeName = (saved.college_name || "").toLowerCase();
+
+    // Find if already exists in map
+    let foundKey: string | null = null;
+    for (const [k, v] of map.entries()) {
+      if (
+        (projCode && v.project_code.toLowerCase() === projCode) ||
+        (collegeName && v.college_name.toLowerCase() === collegeName)
+      ) {
+        foundKey = k;
+        break;
+      }
+    }
+
+    if (foundKey) {
+      const existing = map.get(foundKey)!;
+      map.set(foundKey, {
         ...existing,
         ...saved,
         start_date: saved.start_date || existing.start_date,
         end_date: saved.end_date || existing.end_date,
         source: "manual",
       });
-    } else {
-      map.set(key, {
+    } else if (saved.project_code || saved.college_name) {
+      const newKey = saved.id || `manual-${saved.project_code || saved.college_name}`;
+      map.set(newKey, {
         ...saved,
         source: "manual",
       });
