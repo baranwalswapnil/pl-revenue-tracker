@@ -7348,9 +7348,9 @@ a {
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  min-width: 360px;
-  max-width: 600px;
+  right: 0;
   width: 100%;
+  max-width: 100%;
   background: #ffffff;
   border: 1.5px solid #cbd5e1;
   border-radius: 12px;
