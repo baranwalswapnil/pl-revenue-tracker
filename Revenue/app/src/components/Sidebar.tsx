@@ -5,9 +5,9 @@ import {
   GraduationCap,
   PieChart,
   Settings,
-  Building2,
   Sparkles,
 } from "lucide-react";
+import gryphonLogo from "../assets/gryphon_logo.png";
 
 export type NavTab = "dashboard" | "new-entry" | "training-phase" | "health-report" | "settings";
 
@@ -51,7 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, projec
     <aside className="app-sidebar" aria-label="Main Navigation">
       <div className="sidebar-brand">
         <div className="brand-logo-wrap">
-          <Building2 size={22} className="brand-icon" />
+          <img src={gryphonLogo} alt="Gryphon Academy" className="brand-logo-img" />
         </div>
         <div className="brand-text">
           <div className="brand-title">Company Finance</div>

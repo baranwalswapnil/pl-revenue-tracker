@@ -1,6 +1,7 @@
 import React from "react";
-import { ArrowLeft, Building2, CalendarRange, Clock, FileSpreadsheet } from "lucide-react";
+import { ArrowLeft, CalendarRange, Clock, FileSpreadsheet } from "lucide-react";
 import timeLogo from "../assets/time_logo.jpg";
+import gryphonLogo from "../assets/gryphon_logo.png";
 
 interface HeaderProps {
   currentView: "dashboard" | "new-entry" | "training-phase" | "health-report" | "update-page" | "outstanding" | "tcv" | "college-timeline";
@@ -37,7 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
             title="Company Finance - Click to return to Dashboard"
           >
             <div className="brand-icon-box">
-              <Building2 size={22} />
+              <img src={gryphonLogo} alt="Gryphon Academy" className="brand-logo-img" />
             </div>
             <div className="brand-text-block">
               <span className="brand-name-main">Company Finance</span>
