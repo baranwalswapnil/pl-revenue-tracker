@@ -268,7 +268,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
     // If Training Start Date or Training End Date is missing, do NOT predict anything
     if (!s || !e) {
-      // Incomplete data items only match when viewing "All Years" and "All Months"
+      // Incomplete data items match when viewing "All Years" and "All Months"
       return year === "all" && month === "all";
     }
 
@@ -290,7 +290,8 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
     if (year === "all" && month !== "all") {
       const mStr = String(month).padStart(2, "0");
-      return availableYears.some((yr) => {
+      const effectiveYears = availableYears.length > 0 ? availableYears : [2026];
+      return effectiveYears.some((yr) => {
         const lastDay = new Date(yr, month, 0).getDate();
         const monthStart = `${yr}-${mStr}-01`;
         const monthEnd = `${yr}-${mStr}-${String(lastDay).padStart(2, "0")}`;
@@ -333,7 +334,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       };
     }
 
-    // 2. Specific Year + Specific Month (e.g. 2026 + December)
+    // 2. Specific Year + Specific Month (e.g. 2026 + August)
     if (selectedYear !== "all" && selectedMonth !== "all") {
       const mStr = String(selectedMonth).padStart(2, "0");
       const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
@@ -361,16 +362,19 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       };
     }
 
-    // 4. All Years + Specific Month (e.g. All Decembers)
+    // 4. All Years + Specific Month (defaulting to 2026 active cycle)
     if (selectedYear === "all" && selectedMonth !== "all") {
+      const targetYear = 2026;
+      const mStr = String(selectedMonth).padStart(2, "0");
+      const lastDay = new Date(targetYear, selectedMonth, 0).getDate();
       const mName = MONTHS_LIST.find((m) => m.num === selectedMonth)?.fullName || `Month ${selectedMonth}`;
       const mShort = MONTHS_LIST.find((m) => m.num === selectedMonth)?.shortName || `${selectedMonth}`;
       return {
-        type: "all_years_month" as const,
-        pStart: "",
-        pEnd: "",
-        label: `All ${mName}s`,
-        shortLabel: `${mShort}`,
+        type: "month" as const,
+        pStart: `${targetYear}-${mStr}-01`,
+        pEnd: `${targetYear}-${mStr}-${String(lastDay).padStart(2, "0")}`,
+        label: `${mName} ${targetYear}`,
+        shortLabel: `${mShort} ${targetYear}`,
         monthNum: selectedMonth,
       };
     }
@@ -389,7 +393,9 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   // Categorize a college schedule relative to the active focus period:
   // Group 1 (Top): Started in/on this Period
   // Group 2 (Middle): Ended in/on this Period (Started earlier)
-  // Group 3 (Bottom): Ongoing across this Period (Started before and ending after)
+  // Group 3 (Tier 3): Ongoing across this Period (Started before and ending after)
+  // Group 4 (Tier 4): Scheduled in other months/periods
+  // Group 5 (Tier 5): Incomplete / Missing Dates
   const categorizeTimelineItem = (
     item: EnrichedTimelineItem,
     period: typeof currentPeriodInfo
@@ -402,7 +408,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         ...item,
         periodCategory: "other",
         categoryLabel: "Incomplete / Missing Dates",
-        categoryOrder: 4,
+        categoryOrder: 5,
       };
     }
 
@@ -431,53 +437,24 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         };
       }
 
-      // Group 3: Ongoing Across this Period (Bottom of Graph)
+      // Group 3: Ongoing Across this Period (Bottom of active group)
       // (Started before this period, and extends after this period)
       if (s < pStart && e > pEnd) {
         return {
           ...item,
           periodCategory: "ongoing",
-          categoryLabel: `Ongoing Across ${label} (Started Before & Ending After)`,
+          categoryLabel: `Ongoing Across ${label}`,
           categoryOrder: 3,
         };
       }
 
+      // Group 4: Scheduled in other months (Outside active focus period)
       return {
         ...item,
         periodCategory: "other",
-        categoryLabel: "Other Period",
+        categoryLabel: `Scheduled (${formatTimelinePopupDate(s)} → ${formatTimelinePopupDate(e)})`,
         categoryOrder: 4,
       };
-    }
-
-    // If viewing All Years + Specific Month (e.g. Month 12)
-    if (period.type === "all_years_month" && period.monthNum) {
-      const targetMonth = period.monthNum;
-      const sMonth = parseInt(s.slice(5, 7), 10);
-      const eMonth = parseInt(e.slice(5, 7), 10);
-
-      if (sMonth === targetMonth) {
-        return {
-          ...item,
-          periodCategory: "starting",
-          categoryLabel: `Starting in ${period.label}`,
-          categoryOrder: 1,
-        };
-      } else if (eMonth === targetMonth) {
-        return {
-          ...item,
-          periodCategory: "ending",
-          categoryLabel: `Ending in ${period.label}`,
-          categoryOrder: 2,
-        };
-      } else {
-        return {
-          ...item,
-          periodCategory: "ongoing",
-          categoryLabel: `Ongoing in ${period.label}`,
-          categoryOrder: 3,
-        };
-      }
     }
 
     // Default: by Status
@@ -490,10 +467,12 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   };
 
   // Filtered timeline items based on search, status, and 2-tier Year -> Month selection,
-  // STRICTLY SORTED AS REQUESTED:
+  // STRICTLY SORTED TO PRIORITIZE ACTIVE MONTH ITEMS AT TOP WITHOUT DISCARDING OTHER SCHEDULES:
   // 1. Top: Started in this Period (Date/Month/Year)
   // 2. Middle: Ended in this Period
-  // 3. Bottom: Started before and ending after (Ongoing through period)
+  // 3. Ongoing: Started before and ending after
+  // 4. Other Months: Scheduled in other months
+  // 5. Incomplete: Missing start/end dates
   const filteredTimelines: CategorizedTimelineItem[] = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
 
@@ -516,16 +495,16 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         }
       }
 
-      // 3. Year / Month / Day Period Filter (Applied when not performing an explicit text search)
-      if (!term) {
-        if (selectedSpecificDate) {
-          const s = normalizeDateStr(item.start_date);
-          const e = normalizeDateStr(item.end_date);
-          if (!s || !e) return false;
-          return !(e < selectedSpecificDate || s > selectedSpecificDate);
-        }
-        if (!isItemInPeriod(item, selectedYear, selectedMonth)) {
-          return false;
+      // 3. Year Filter (when specific year selected and not searching by text)
+      if (!term && selectedYear !== "all") {
+        const s = normalizeDateStr(item.start_date);
+        const e = normalizeDateStr(item.end_date);
+        if (s || e) {
+          const yrStr = String(selectedYear);
+          const yearStart = `${yrStr}-01-01`;
+          const yearEnd = `${yrStr}-12-31`;
+          if (s && s > yearEnd) return false;
+          if (e && e < yearStart) return false;
         }
       }
 
@@ -535,7 +514,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     const categorized = matched.map((item) => categorizeTimelineItem(item, currentPeriodInfo));
 
     return categorized.sort((a, b) => {
-      // 1. Primary Sort: Category Order (1: Starting -> 2: Ending -> 3: Ongoing -> 4: Other)
+      // 1. Primary Sort: Category Order (1: Starting -> 2: Ending -> 3: Ongoing -> 4: Other Periods -> 5: Incomplete)
       if (a.categoryOrder !== b.categoryOrder) {
         return a.categoryOrder - b.categoryOrder;
       }
@@ -561,6 +540,13 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         return (a.end_date || "").localeCompare(b.end_date || "");
       }
 
+      // 5. Category 4 (Other Periods): by Start Date ascending, then college name
+      if (a.categoryOrder === 4) {
+        const sComp = (a.start_date || "9999").localeCompare(b.start_date || "9999");
+        if (sComp !== 0) return sComp;
+        return a.college_name.localeCompare(b.college_name);
+      }
+
       return a.college_name.localeCompare(b.college_name);
     });
   }, [
@@ -568,13 +554,10 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     searchTerm,
     statusFilter,
     selectedYear,
-    selectedMonth,
-    selectedSpecificDate,
     currentPeriodInfo,
-    availableYears,
   ]);
 
-  // Precomputed breakdown counts for the 3 categories
+  // Precomputed breakdown counts for the categories
   const categoryCounts = useMemo(() => {
     const counts: Record<PeriodCategory, number> = {
       starting: 0,
@@ -583,7 +566,10 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       other: 0,
     };
     filteredTimelines.forEach((t) => {
-      counts[t.periodCategory] = (counts[t.periodCategory] || 0) + 1;
+      if (t.categoryOrder === 1) counts.starting++;
+      else if (t.categoryOrder === 2) counts.ending++;
+      else if (t.categoryOrder === 3) counts.ongoing++;
+      else if (t.categoryOrder === 5 || t.status === "Incomplete Data" || !t.start_date || !t.end_date) counts.other++;
     });
     return counts;
   }, [filteredTimelines]);
@@ -763,20 +749,22 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
 
   // Jump scroll directly to any month in the current grid
   const handleJumpToMonth = (monthNum: number) => {
-    if (!gridScrollRef.current || gridData.days.length === 0) return;
-    
-    const targetMonthKey = selectedYear !== "all"
-      ? `${selectedYear}-${String(monthNum).padStart(2, "0")}`
-      : `-${String(monthNum).padStart(2, "0")}`;
+    setSelectedMonth(monthNum);
+    setSelectedSpecificDate(null);
 
-    const targetIdx = gridData.days.findIndex((d) =>
-      selectedYear !== "all"
-        ? d.monthKey === targetMonthKey
-        : d.dateStr.includes(targetMonthKey)
-    );
+    if (!gridScrollRef.current || gridData.days.length === 0) return;
+
+    const targetYear = selectedYear !== "all" ? selectedYear : 2026;
+    const targetMonthKey = `${targetYear}-${String(monthNum).padStart(2, "0")}`;
+
+    let targetIdx = gridData.days.findIndex((d) => d.monthKey === targetMonthKey);
+    if (targetIdx === -1) {
+      const suffix = `-${String(monthNum).padStart(2, "0")}`;
+      targetIdx = gridData.days.findIndex((d) => d.monthKey.endsWith(suffix));
+    }
 
     if (targetIdx !== -1) {
-      const scrollPos = Math.max(0, targetIdx * dayCellWidth - 70);
+      const scrollPos = Math.max(0, targetIdx * dayCellWidth - 40);
       gridScrollRef.current.scrollTo({
         left: scrollPos,
         behavior: "smooth",
@@ -830,7 +818,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       if (earliestStartDate) {
         const targetIdx = gridData.days.findIndex((d) => d.dateStr === earliestStartDate);
         if (targetIdx !== -1) {
-          // Scroll with a 70px offset so the starting date is clearly visible
           const scrollPos = Math.max(0, targetIdx * dayCellWidth - 70);
           gridScrollRef.current.scrollTo({ left: scrollPos, behavior: "smooth" });
           return;
@@ -845,23 +832,21 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         gridScrollRef.current.scrollTo({ left: 0, behavior: "smooth" });
       }
     } else {
-      const targetMonthKey = selectedYear !== "all"
-        ? `${selectedYear}-${String(selectedMonth).padStart(2, "0")}`
-        : `-${String(selectedMonth).padStart(2, "0")}`;
+      const targetYear = selectedYear !== "all" ? selectedYear : 2026;
+      const targetMonthKey = `${targetYear}-${String(selectedMonth).padStart(2, "0")}`;
 
-      const targetIdx = gridData.days.findIndex((d) =>
-        selectedYear !== "all"
-          ? d.monthKey === targetMonthKey
-          : d.dateStr.includes(targetMonthKey)
-      );
+      let targetIdx = gridData.days.findIndex((d) => d.monthKey === targetMonthKey);
+      if (targetIdx === -1) {
+        const suffix = `-${String(selectedMonth).padStart(2, "0")}`;
+        targetIdx = gridData.days.findIndex((d) => d.monthKey.endsWith(suffix));
+      }
 
       if (targetIdx !== -1) {
-        // Scroll with a 70px offset so the preceding month's end is visible before the 1st
-        const scrollPos = Math.max(0, targetIdx * dayCellWidth - 70);
+        const scrollPos = Math.max(0, targetIdx * dayCellWidth - 40);
         gridScrollRef.current.scrollTo({ left: scrollPos, behavior: "smooth" });
       }
     }
-  }, [selectedMonth, selectedYear, dayCellWidth, gridData, allTimelines]);
+  }, [selectedMonth, selectedYear, dayCellWidth, gridData]);
 
   // Scroll to Today Column in Grid
   const handleJumpToToday = () => {
@@ -1504,7 +1489,20 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 <button
                   type="button"
                   className={`month-pill-btn full-year-btn ${selectedMonth === "all" ? "active" : ""}`}
-                  onClick={() => setSelectedMonth("all")}
+                  onClick={() => {
+                    setSelectedMonth("all");
+                    setSelectedSpecificDate(null);
+                    const earliestStartDate = getEarliestTrainingStartDate(selectedYear, "all");
+                    if (earliestStartDate && gridScrollRef.current) {
+                      const targetIdx = gridData.days.findIndex((d) => d.dateStr === earliestStartDate);
+                      if (targetIdx !== -1) {
+                        gridScrollRef.current.scrollTo({
+                          left: Math.max(0, targetIdx * dayCellWidth - 70),
+                          behavior: "smooth",
+                        });
+                      }
+                    }
+                  }}
                   title={`View Full Year ${selectedYear === "all" ? "" : selectedYear} (12 Months)`}
                 >
                   <Calendar size={12} />
@@ -1520,11 +1518,15 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                         key={m.num}
                         type="button"
                         className={`month-pill-btn ${isSelected ? "active" : ""} ${count > 0 ? "has-data" : "no-data"}`}
-                        onClick={() => setSelectedMonth(m.num)}
-                        title={`${m.fullName} ${selectedYear === "all" ? "" : selectedYear} · ${count} Colleges`}
+                        onClick={() => handleJumpToMonth(m.num)}
+                        title={`${m.fullName} ${selectedYear === "all" ? "" : selectedYear} · ${count} Colleges active`}
                       >
                         <span>{m.shortName}</span>
-                        {count > 0 && <span className="month-count-dot">{count}</span>}
+                        {count > 0 ? (
+                          <span className="month-count-dot">{count}</span>
+                        ) : (
+                          <span className="month-zero-dot">0</span>
+                        )}
                       </button>
                     );
                   })}
@@ -1542,8 +1544,20 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                   </span>
                   <span className="focus-total-badge">
                     {filteredTimelines.length} {filteredTimelines.length === 1 ? "College" : "Colleges"}
+                    {selectedMonth !== "all" && ` (${monthCounts[selectedMonth] || 0} active in ${MONTHS_LIST.find((m) => m.num === selectedMonth)?.shortName})`}
                   </span>
                 </div>
+
+                {selectedMonth !== "all" && (monthCounts[selectedMonth] || 0) === 0 && (
+                  <button
+                    type="button"
+                    className="quick-jump-active-btn"
+                    onClick={() => handleJumpToMonth(8)}
+                    title="Jump to August 2026 where schedules begin"
+                  >
+                    ⚡ Jump to Aug Schedules
+                  </button>
+                )}
 
                 {selectedSpecificDate && (
                   <button
@@ -1707,23 +1721,28 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                     {/* 2. MONTH SPANNING HEADERS ROW (Clickable to jump directly to month) */}
                     <div className="spreadsheet-months-row">
                       <div className="row-number-header-cell month-stub" />
-                      {gridData.months.map((m) => (
-                        <div
-                          key={m.monthKey}
-                          className="month-group-cell clickable-month-header"
-                          style={{
-                            width: `${m.daysCount * dayCellWidth}px`,
-                          }}
-                          onClick={() => {
-                            setSelectedMonth(m.monthIndex + 1);
-                            setSelectedSpecificDate(null);
-                            handleJumpToMonth(m.monthIndex + 1);
-                          }}
-                          title={`Click to filter & jump to ${m.monthLabel}`}
-                        >
-                          {m.monthLabel}
-                        </div>
-                      ))}
+                      {gridData.months.map((m) => {
+                        const isThisMonthSelected =
+                          selectedMonth !== "all" &&
+                          (selectedMonth === m.monthIndex + 1 ||
+                            (m.monthKey && m.monthKey.endsWith(`-${String(selectedMonth).padStart(2, "0")}`)));
+
+                        return (
+                          <div
+                            key={m.monthKey}
+                            className={`month-group-cell clickable-month-header ${isThisMonthSelected ? "active-month-header" : ""}`}
+                            style={{
+                              width: `${m.daysCount * dayCellWidth}px`,
+                            }}
+                            onClick={() => {
+                              handleJumpToMonth(m.monthIndex + 1);
+                            }}
+                            title={`Click to filter & jump to ${m.monthLabel}`}
+                          >
+                            <span>{m.monthLabel}</span>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* 4. DAY NUMBERS ROW (17, 18, 19 ... 23 (Red for Sunday), 24 ...) */}
@@ -2031,15 +2050,18 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                             <tr className="table-category-divider-row">
                               <td colSpan={9}>
                                 <div className={`table-divider-content divider-${item.periodCategory}`}>
-                                  <span className="divider-badge-num">{item.categoryOrder}</span>
+                                  <span className="divider-badge-num">
+                                    {item.categoryOrder <= 3 ? item.categoryOrder : item.categoryOrder === 4 ? "•" : "!"}
+                                  </span>
                                   <span className="divider-text">
                                     {item.categoryOrder === 1 && `Group 1: Colleges Starting in ${currentPeriodInfo.label}`}
                                     {item.categoryOrder === 2 && `Group 2: Colleges Ending in ${currentPeriodInfo.label} (Started Earlier)`}
                                     {item.categoryOrder === 3 && `Group 3: Colleges Ongoing Across ${currentPeriodInfo.label}`}
-                                    {item.categoryOrder === 4 && "Incomplete / Missing Dates"}
+                                    {item.categoryOrder === 4 && (selectedMonth !== "all" ? `Other College Schedules (Active in Different Months)` : "Other College Schedules")}
+                                    {item.categoryOrder === 5 && "Incomplete / Missing Dates"}
                                   </span>
                                   <span className="divider-count">
-                                    ({categoryCounts[item.periodCategory]} Colleges)
+                                    ({item.categoryOrder === 1 ? categoryCounts.starting : item.categoryOrder === 2 ? categoryCounts.ending : item.categoryOrder === 3 ? categoryCounts.ongoing : item.categoryOrder === 4 ? filteredTimelines.filter(t => t.categoryOrder === 4).length : categoryCounts.other} Colleges)
                                   </span>
                                 </div>
                               </td>

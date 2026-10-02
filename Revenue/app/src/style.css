@@ -7834,9 +7834,44 @@ a {
   font-weight: 800;
 }
 
+.month-zero-dot {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
 .month-pill-btn.active .month-count-dot {
   background: rgba(255, 255, 255, 0.25);
   color: #ffffff;
+}
+
+.month-pill-btn.active .month-zero-dot {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.quick-jump-active-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #dbeafe;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-jump-active-btn:hover {
+  background: #bfdbfe;
+  color: #1e40af;
+  transform: translateY(-1px);
 }
 
 /* 3. Bottom Row: Focus Period & Category Stats Badges */
@@ -8113,6 +8148,13 @@ a {
 .month-group-cell.clickable-month-header:hover {
   background: #e2e8f0;
   color: #0f172a;
+}
+
+.month-group-cell.active-month-header {
+  background: #e0e7ff !important;
+  color: #3730a3 !important;
+  font-weight: 800;
+  box-shadow: inset 0 -2px 0 #4f46e5;
 }
 
 /* 3. Day Numbers Row */
