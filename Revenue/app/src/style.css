@@ -8049,6 +8049,124 @@ a {
   box-shadow: inset 0 -2px 0 #4f46e5;
 }
 
+/* TOP HORIZONTAL SLIDING BAR IN BETWEEN MONTHS AND DATE */
+.spreadsheet-top-slider-row {
+  display: flex;
+  background: #f1f5f9;
+  border-bottom: 1.5px solid #cbd5e1;
+  height: 22px;
+  align-items: center;
+  position: relative;
+}
+
+.row-number-header-cell.slider-stub {
+  width: 48px;
+  min-width: 48px;
+  height: 100%;
+  background: #e2e8f0;
+  border-right: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+}
+
+.slider-stub-label {
+  font-size: 8.5px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.spreadsheet-top-slider-container {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 6px;
+  gap: 6px;
+  background: #f8fafc;
+  position: sticky;
+  left: 48px;
+  z-index: 4;
+  box-sizing: border-box;
+}
+
+.slider-nav-arrow-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 16px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 8.5px;
+  color: #2563eb;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.slider-nav-arrow-btn:hover {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  transform: scale(1.06);
+}
+
+.slider-nav-arrow-btn:active {
+  transform: scale(0.94);
+}
+
+.spreadsheet-slider-track {
+  position: relative;
+  flex: 1;
+  height: 13px;
+  background: #e2e8f0;
+  border-radius: 7px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 2.5px rgba(15, 23, 42, 0.12);
+  border: 1px solid #cbd5e1;
+}
+
+.spreadsheet-slider-thumb {
+  position: absolute;
+  top: 1px;
+  height: 9px;
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  border-radius: 5px;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  cursor: grab;
+  transition: left 0.04s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spreadsheet-slider-thumb:hover {
+  background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 50%, #3b82f6 100%);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.6);
+}
+
+.spreadsheet-slider-thumb:active {
+  cursor: grabbing;
+  background: #1e40af;
+}
+
+.slider-thumb-grip {
+  font-size: 7px;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: -1px;
+  user-select: none;
+  font-weight: 900;
+}
+
 /* 3. Day Numbers Row */
 .spreadsheet-days-row {
   display: flex;

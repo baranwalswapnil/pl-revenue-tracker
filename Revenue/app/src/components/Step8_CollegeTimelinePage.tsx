@@ -720,6 +720,80 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     });
   };
 
+  // Top Horizontal Slider State & Drag Handlers (Positioned between Months and Date)
+  const [scrollProgress, setScrollProgress] = useState(0); // 0 to 1
+  const [thumbWidthPct, setThumbWidthPct] = useState(15);
+  const [sliderViewportWidth, setSliderViewportWidth] = useState(1000);
+  const isDraggingSlider = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartScrollLeft = useRef(0);
+  const sliderTrackRef = useRef<HTMLDivElement>(null);
+
+  // Sync scrollProgress with gridScrollRef
+  useEffect(() => {
+    const el = gridScrollRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll > 0) {
+        setScrollProgress(Math.max(0, Math.min(1, el.scrollLeft / maxScroll)));
+        setThumbWidthPct(Math.max(6, Math.min(50, (el.clientWidth / el.scrollWidth) * 100)));
+      } else {
+        setScrollProgress(0);
+        setThumbWidthPct(100);
+      }
+      setSliderViewportWidth(Math.max(300, el.clientWidth - 48));
+    };
+
+    handleScroll();
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, [gridData, dayCellWidth]);
+
+  const handleSliderTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!sliderTrackRef.current || !gridScrollRef.current) return;
+    const rect = sliderTrackRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+    const maxScroll = gridScrollRef.current.scrollWidth - gridScrollRef.current.clientWidth;
+    gridScrollRef.current.scrollTo({
+      left: ratio * maxScroll,
+      behavior: "smooth",
+    });
+  };
+
+  const handleThumbMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    isDraggingSlider.current = true;
+    dragStartX.current = e.clientX;
+    dragStartScrollLeft.current = gridScrollRef.current?.scrollLeft || 0;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingSlider.current || !gridScrollRef.current || !sliderTrackRef.current) return;
+      const trackWidth = sliderTrackRef.current.clientWidth;
+      if (trackWidth <= 0) return;
+      const deltaX = moveEvent.clientX - dragStartX.current;
+      const maxScroll = gridScrollRef.current.scrollWidth - gridScrollRef.current.clientWidth;
+      const scrollDelta = (deltaX / trackWidth) * maxScroll;
+      gridScrollRef.current.scrollLeft = Math.max(0, Math.min(maxScroll, dragStartScrollLeft.current + scrollDelta));
+    };
+
+    const handleMouseUp = () => {
+      isDraggingSlider.current = false;
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  };
+
   // Jump scroll directly to any month in the current grid
   const handleJumpToMonth = (monthNum: number) => {
     setSelectedMonth(monthNum);
@@ -1660,6 +1734,55 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* 3. TOP HORIZONTAL SLIDING BAR IN BETWEEN MONTHS AND DATE */}
+                    <div className="spreadsheet-top-slider-row">
+                      <div className="row-number-header-cell slider-stub">
+                        <span className="slider-stub-label">SLIDE</span>
+                      </div>
+                      <div
+                        className="spreadsheet-top-slider-container"
+                        style={{
+                          width: `${sliderViewportWidth}px`,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="slider-nav-arrow-btn left-arrow"
+                          onClick={() => handleScrollHorizontal(-20 * dayCellWidth)}
+                          title="Slide Left (Earlier Days)"
+                          aria-label="Slide Left"
+                        >
+                          ◀
+                        </button>
+                        <div
+                          className="spreadsheet-slider-track"
+                          ref={sliderTrackRef}
+                          onClick={handleSliderTrackClick}
+                          title="Click or drag sliding bar to navigate timeline"
+                        >
+                          <div
+                            className="spreadsheet-slider-thumb"
+                            style={{
+                              width: `${thumbWidthPct}%`,
+                              left: `calc(${scrollProgress * (100 - thumbWidthPct)}%)`,
+                            }}
+                            onMouseDown={handleThumbMouseDown}
+                          >
+                            <span className="slider-thumb-grip">❙❙</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="slider-nav-arrow-btn right-arrow"
+                          onClick={() => handleScrollHorizontal(20 * dayCellWidth)}
+                          title="Slide Right (Later Days)"
+                          aria-label="Slide Right"
+                        >
+                          ▶
+                        </button>
+                      </div>
                     </div>
 
                     {/* 4. DAY NUMBERS ROW (17, 18, 19 ... 23 (Red for Sunday), 24 ...) */}
