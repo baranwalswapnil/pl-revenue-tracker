@@ -1,9 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import {
-  ArrowLeft,
   Calendar,
   Clock,
-  Building2,
   Search,
   PlusCircle,
   BarChart3,
@@ -14,28 +12,26 @@ import {
   Edit3,
   Trash2,
   ChevronRight,
-  Filter,
   Sparkles,
   CalendarDays,
   Check,
   X,
   Layers,
-  ArrowRight,
   ChevronLeft,
   ChevronDown,
   Crosshair,
   Grid,
 } from "lucide-react";
 import type { Project } from "../lib/models";
-import {
-  loadCachedCollegeTrainingItems,
-  saveCachedCollegeTrainingItems,
-  fetchCollegeTrainingData,
-  DEFAULT_SHEET_URL,
-  loadSavedSheetConfig,
-  type GoogleSheetCollegeItem,
-  type GoogleSheetMOUItem,
+import type {
+  GoogleSheetCollegeItem,
+  GoogleSheetMOUItem,
 } from "../lib/googleSheetsService";
+import {
+  loadCachedProjectDataItems,
+  saveCachedProjectDataItems,
+  fetchProjectDataItems,
+} from "../lib/projectDataService";
 import {
   getAllEnrichedTimelines,
   saveCollegeTimelineRecord,
@@ -55,11 +51,13 @@ export type PeriodCategory = "starting" | "ending" | "ongoing" | "other";
 export interface CategorizedTimelineItem extends EnrichedTimelineItem {
   periodCategory: PeriodCategory;
   categoryLabel: string;
-  categoryOrder: number; // 1: Starting, 2: Ending, 3: Ongoing, 4: Other / Incomplete
+  categoryOrder: number; // 1: Starting, 2: Ending, 3: Ongoing, 4: Other, 5: Incomplete
 }
 
 interface Step8CollegeTimelinePageProps {
   projects?: Project[];
+  // Kept for backward compatibility with the parent. The timeline now reads
+  // the "Project Data" worksheet itself and ignores this prop.
   collegeTrainingItems?: GoogleSheetCollegeItem[];
   mouItems?: GoogleSheetMOUItem[];
   onBackToDashboard: () => void;
@@ -73,8 +71,6 @@ interface Step8CollegeTimelinePageProps {
 }
 
 export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> = ({
-  projects = [],
-  collegeTrainingItems,
   onBackToDashboard,
   onOpenGoogleSheetSync,
   onSaveCollegeTimeline,
@@ -84,62 +80,42 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
 
-  // Local state initialized with collegeTrainingItems or loadCachedCollegeTrainingItems() (exact 13 records from College Training tab)
-  const [localSheetColleges, setLocalSheetColleges] = useState<GoogleSheetCollegeItem[]>(() => {
-    if (collegeTrainingItems && collegeTrainingItems.length > 0 && collegeTrainingItems.length <= 25) {
-      return collegeTrainingItems;
-    }
-    return loadCachedCollegeTrainingItems();
-  });
-
-  useEffect(() => {
-    if (collegeTrainingItems && collegeTrainingItems.length > 0 && collegeTrainingItems.length <= 25) {
-      setLocalSheetColleges(collegeTrainingItems);
-    }
-  }, [collegeTrainingItems]);
-
-  useEffect(() => {
-    try {
-      localStorage.removeItem("college_timeline_records_v1");
-      localStorage.removeItem("college_timeline_records_v2");
-    } catch {}
-  }, []);
+  // Data source: "Project Data" worksheet (cached locally, refreshed live on mount)
+  const [localSheetColleges, setLocalSheetColleges] = useState<GoogleSheetCollegeItem[]>(() =>
+    loadCachedProjectDataItems()
+  );
 
   const handleManualSync = async () => {
     setIsSyncing(true);
-    setSyncStatusMsg("Fetching latest College Training sheet...");
+    setSyncStatusMsg("Fetching latest Project Data sheet...");
     try {
-      const config = loadSavedSheetConfig();
-      const sheetUrl = config.sheetUrl || DEFAULT_SHEET_URL;
-      const items = await fetchCollegeTrainingData(sheetUrl);
+      const items = await fetchProjectDataItems();
       if (items && items.length > 0) {
         setLocalSheetColleges(items);
-        saveCachedCollegeTrainingItems(items);
-        setSyncStatusMsg(`Successfully synced ${items.length} records from College Training tab!`);
+        saveCachedProjectDataItems(items);
+        setSyncStatusMsg(`Successfully synced ${items.length} records from Project Data tab!`);
+      } else {
+        setSyncStatusMsg("Project Data tab returned no rows.");
       }
     } catch (err: any) {
-      setSyncStatusMsg(err.message || "Failed to sync College Training");
+      setSyncStatusMsg(err.message || "Failed to sync Project Data");
     } finally {
       setIsSyncing(false);
-      setTimeout(() => setSyncStatusMsg(null), 3500);
+      setTimeout(() => setSyncStatusMsg(null), 5000);
     }
   };
 
-  // Auto-sync College Training live on mount to ensure fresh Gantt chart data
+  // Auto-sync Project Data live on mount to ensure fresh Gantt chart data
   useEffect(() => {
-    const config = loadSavedSheetConfig();
-    const sheetUrl = config.sheetUrl || DEFAULT_SHEET_URL;
-    if (!sheetUrl || !sheetUrl.trim()) return;
-
-    fetchCollegeTrainingData(sheetUrl)
+    fetchProjectDataItems()
       .then((items) => {
         if (items && items.length > 0) {
           setLocalSheetColleges(items);
-          saveCachedCollegeTrainingItems(items);
+          saveCachedProjectDataItems(items);
         }
       })
       .catch((err) => {
-        console.warn("Could not background-sync College Training:", err);
+        console.warn("Could not background-sync Project Data:", err);
       });
   }, []);
 
@@ -222,7 +198,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     };
   }, []);
 
-  // Compute all enriched college timeline records exclusively from the 'College Training' tab
+  // Compute all enriched college timeline records exclusively from the 'Project Data' tab
   const allTimelines = useMemo(() => {
     return getAllEnrichedTimelines(localSheetColleges);
   }, [localSheetColleges, refreshKey]);
@@ -436,7 +412,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       }
 
       // Group 2: Ended on / in this Period (Middle of Graph)
-      // (Started before this period, and concludes on/within this period)
       if (s < pStart && e >= pStart && e <= pEnd) {
         return {
           ...item,
@@ -447,7 +422,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       }
 
       // Group 3: Ongoing Across this Period (Bottom of active group)
-      // (Started before this period, and extends after this period)
       if (s < pStart && e > pEnd) {
         return {
           ...item,
@@ -476,12 +450,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   };
 
   // Filtered timeline items based on search, status, and 2-tier Year -> Month selection,
-  // STRICTLY SORTED TO PRIORITIZE ACTIVE MONTH ITEMS AT TOP WITHOUT DISCARDING OTHER SCHEDULES:
-  // 1. Top: Started in this Period (Date/Month/Year)
-  // 2. Middle: Ended in this Period
-  // 3. Ongoing: Started before and ending after
-  // 4. Other Months: Scheduled in other months
-  // 5. Incomplete: Missing start/end dates
+  // sorted to prioritize active-period items at the top without discarding other schedules.
   const filteredTimelines: CategorizedTimelineItem[] = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
 
@@ -523,7 +492,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     const categorized = matched.map((item) => categorizeTimelineItem(item, currentPeriodInfo));
 
     return categorized.sort((a, b) => {
-      // 1. Primary Sort: Category Order (1: Starting -> 2: Ending -> 3: Ongoing -> 4: Other Periods -> 5: Incomplete)
+      // 1. Primary Sort: Category Order
       if (a.categoryOrder !== b.categoryOrder) {
         return a.categoryOrder - b.categoryOrder;
       }
@@ -599,7 +568,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
   const searchSuggestions = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
     if (!term) {
-      // Return top 8 colleges when search input is focused but empty
       return allTimelines.slice(0, 8);
     }
     return allTimelines
@@ -646,9 +614,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return { minYear, minMonth, maxYear, maxMonth };
   }, [allTimelines]);
 
-  // Generate Continuous Day-by-Day Grid Data:
-  // ALWAYS generate the full 12-month calendar for selectedYear (or all years for 'all')
-  // so the grid is never cropped to a single month, allowing full horizontal scrolling across all dates!
+  // Generate Continuous Day-by-Day Grid Data
   const gridData = useMemo(() => {
     if (selectedYear === "all") {
       return generateDayGridData(
@@ -684,7 +650,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     const startsBeforeGrid = normStart < firstGridDate;
     const endsAfterGrid = normEnd > lastGridDate;
 
-    // Find column index of start date (or clamp to 0 if started before current view)
     let startCol = 0;
     if (!startsBeforeGrid) {
       const exactIdx = gridData.days.findIndex((d) => d.dateStr === normStart);
@@ -696,7 +661,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       }
     }
 
-    // Find column index of end date (or clamp to last column if continues past current view)
     let endCol = gridData.days.length - 1;
     if (!endsAfterGrid) {
       let idx = -1;
@@ -872,7 +836,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     return startDates[0];
   };
 
-  // Auto-scroll grid to earliest training start date or selected month whenever selectedMonth or selectedYear changes
+  // Auto-scroll grid to earliest training start date or selected month whenever selection changes
   useEffect(() => {
     if (!gridScrollRef.current || gridData.days.length === 0) return;
 
@@ -888,7 +852,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         }
       }
 
-      // Fallback: If no start date found, but today is in view, scroll to today, else 0
+      // Fallback: scroll to today if in view, else 0
       if (gridData.todayColIndex !== null) {
         const scrollPos = Math.max(0, gridData.todayColIndex * dayCellWidth - 220);
         gridScrollRef.current.scrollTo({ left: scrollPos, behavior: "smooth" });
@@ -918,7 +882,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     const currentYr = now.getFullYear();
     const currentMo = now.getMonth() + 1;
 
-    // Switch to current year & month if not already visible
     if (selectedYear !== currentYr) {
       setSelectedYear(currentYr);
     }
@@ -957,11 +920,9 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       const yr = parseInt(s.slice(0, 4), 10);
       const mo = parseInt(s.slice(5, 7), 10);
 
-      // Align Year filter if different
       if (!isNaN(yr) && selectedYear !== "all" && selectedYear !== yr) {
         setSelectedYear(yr);
       }
-      // Set month to "all" (or the month) so the continuous ribbon includes the date
       if (selectedMonth !== "all" && selectedMonth !== mo) {
         setSelectedMonth("all");
       }
@@ -970,7 +931,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         if (!gridScrollRef.current) return;
         const targetIdx = gridData.days.findIndex((d) => d.dateStr === s);
         if (targetIdx !== -1) {
-          // Position the start date column right at the beginning of the viewport with 60px breathing space
           const scrollPos = Math.max(0, targetIdx * dayCellWidth - 60);
           gridScrollRef.current.scrollTo({
             left: scrollPos,
@@ -979,12 +939,11 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         }
       };
 
-      // Perform scroll with progressive delays to account for React re-render
+      // Progressive delays to account for React re-render
       setTimeout(scrollToStartColumn, 50);
       setTimeout(scrollToStartColumn, 180);
       setTimeout(scrollToStartColumn, 350);
 
-      // Smooth scroll the college's row into vertical view
       setTimeout(() => {
         const rowElem = document.getElementById(`timeline-row-${item.id}`);
         if (rowElem) {
@@ -1049,7 +1008,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
       }
     }
 
-    // Save to local storage
     saveCollegeTimelineRecord({
       project_code: projCode,
       college_name: collegeName,
@@ -1077,7 +1035,6 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
         setIsEditingExisting(false);
       }, 1000);
     } else {
-      // Clear form
       setFormData({
         id: "",
         project_code: "",
@@ -1116,7 +1073,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
     }
   };
 
-  // List of unique colleges from 'College Training' for auto-complete
+  // List of unique colleges from 'Project Data' for auto-complete
   const collegeTrainingOptions = useMemo(() => {
     const list: {
       name: string;
@@ -1206,7 +1163,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               className="timeline-sync-btn"
               onClick={handleManualSync}
               disabled={isSyncing}
-              title="Sync latest dates directly from College Training sheet tab"
+              title="Sync latest dates directly from the Project Data sheet tab"
             >
               <RefreshCw size={15} style={{ animation: isSyncing ? "spin 1s linear infinite" : "none" }} />
               <span>{isSyncing ? "Syncing..." : "Sync Sheet"}</span>
@@ -1260,12 +1217,11 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               </div>
             </div>
           </div>
-          {/* Controls Bar: Search, Status Filter, Jump to Today, Zoom, View Mode */}
+
           {/* UNIFIED MODERN CONTROL CENTER CARD */}
           <div className="timeline-modern-control-card">
             {/* Top Row: Dedicated Search Bar */}
             <div className="control-card-search-row">
-              {/* Search Box with Interactive Dropdown Recommendations */}
               <div className="modern-search-box" ref={searchBoxRef}>
                 <Search size={16} className="modern-search-icon" />
                 <input
@@ -1370,9 +1326,8 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               </div>
             </div>
 
-            {/* Middle Row: Status Filter Pills (Beneath Search Tab) + View/Zoom Quick Actions */}
+            {/* Middle Row: Status Filter Pills + View/Zoom Quick Actions */}
             <div className="control-card-filter-row">
-              {/* Status Filter Pills */}
               <div className="modern-status-pills">
                 <button
                   type="button"
@@ -1475,7 +1430,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
               </div>
             </div>
 
-            {/* Middle Row: Year & Month Dropdowns Filter Ribbon */}
+            {/* Year & Month Dropdowns Filter Ribbon */}
             <div className="control-card-timeline-ribbon">
               <div className="ribbon-dropdowns-container">
                 {/* 1. Year Dropdown Selector */}
@@ -1656,19 +1611,19 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
             </div>
           </div>
 
-          {/* SPREADSHEET PROJECT TIMELINE GRID (MATCHING REFERENCE IMAGE) */}
+          {/* SPREADSHEET PROJECT TIMELINE GRID */}
           {viewMode === "grid" && (
             <div className="spreadsheet-timeline-wrapper">
               <div className="spreadsheet-scroll-box" ref={gridScrollRef}>
-                  <div
-                    className="spreadsheet-grid-canvas"
-                    style={{
-                      minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
-                    }}
-                  >
-                  {/* STICKY DATE & MONTH HEADER (Pinned at top while scrolling rows) */}
+                <div
+                  className="spreadsheet-grid-canvas"
+                  style={{
+                    minWidth: `${Math.max(1000, gridData.days.length * dayCellWidth + 60)}px`,
+                  }}
+                >
+                  {/* STICKY DATE & MONTH HEADER */}
                   <div className="spreadsheet-sticky-header">
-                    {/* 1. TOP HEADER BANNER: "Project Timeline" */}
+                    {/* 1. TOP HEADER BANNER */}
                     <div className="spreadsheet-title-banner">
                       <div className="title-banner-left">
                         <button
@@ -1702,7 +1657,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       </div>
                     </div>
 
-                    {/* 2. MONTH SPANNING HEADERS ROW (Clickable to jump directly to month) */}
+                    {/* 2. MONTH SPANNING HEADERS ROW */}
                     <div className="spreadsheet-months-row">
                       <div className="row-number-header-cell month-stub" />
                       {gridData.months.map((m) => {
@@ -1729,7 +1684,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       })}
                     </div>
 
-                    {/* 3. TOP HORIZONTAL SLIDING BAR IN BETWEEN MONTHS AND DATE */}
+                    {/* 3. TOP HORIZONTAL SLIDING BAR */}
                     <div className="spreadsheet-top-slider-row">
                       <div className="row-number-header-cell slider-stub">
                         <span className="slider-stub-label">SLIDE</span>
@@ -1779,7 +1734,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                       </div>
                     </div>
 
-                    {/* 4. DAY NUMBERS ROW (17, 18, 19 ... 23 (Red for Sunday), 24 ...) */}
+                    {/* 4. DAY NUMBERS ROW */}
                     <div className="spreadsheet-days-row">
                       <div className="row-number-header-cell day-stub" />
                       {gridData.days.map((day) => {
@@ -1831,117 +1786,117 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                             id={`timeline-row-${item.id || rowIdx}`}
                             className={`spreadsheet-row ${isPinned ? "row-pinned" : ""} ${isIncomplete ? "row-incomplete" : ""}`}
                           >
-                              {/* Left Row Number (1, 2, 3...) */}
-                              <div className="row-index-cell">{rowIdx + 1}</div>
+                            {/* Left Row Number */}
+                            <div className="row-index-cell">{rowIdx + 1}</div>
 
-                              {/* Background Day Cells */}
-                              <div className="row-cells-track">
-                                {gridData.days.map((day) => (
-                                  <div
-                                    key={day.dateStr}
-                                    className={`matrix-grid-cell ${day.isSunday ? "sunday-matrix-cell" : ""} ${selectedSpecificDate === day.dateStr ? "selected-col-matrix-cell" : ""}`}
-                                    style={{ width: `${dayCellWidth}px` }}
-                                  />
-                                ))}
+                            {/* Background Day Cells */}
+                            <div className="row-cells-track">
+                              {gridData.days.map((day) => (
+                                <div
+                                  key={day.dateStr}
+                                  className={`matrix-grid-cell ${day.isSunday ? "sunday-matrix-cell" : ""} ${selectedSpecificDate === day.dateStr ? "selected-col-matrix-cell" : ""}`}
+                                  style={{ width: `${dayCellWidth}px` }}
+                                />
+                              ))}
 
-                                {/* Today Vertical Line Marker */}
-                                {gridData.todayColIndex !== null && (
-                                  <div
-                                    className="matrix-today-vertical-line"
-                                    style={{
-                                      left: `${gridData.todayColIndex * dayCellWidth + dayCellWidth / 2}px`,
-                                    }}
-                                    title={`Today: ${new Date().toLocaleDateString("en-IN")}`}
-                                  />
-                                )}
+                              {/* Today Vertical Line Marker */}
+                              {gridData.todayColIndex !== null && (
+                                <div
+                                  className="matrix-today-vertical-line"
+                                  style={{
+                                    left: `${gridData.todayColIndex * dayCellWidth + dayCellWidth / 2}px`,
+                                  }}
+                                  title={`Today: ${new Date().toLocaleDateString("en-IN")}`}
+                                />
+                              )}
 
-                                {/* The Colored College Schedule Bar */}
-                                {dayRange ? (
-                                  <div
-                                    className={`timeline-block-bar ${isPinned ? "bar-pinned" : ""}`}
-                                    style={{
-                                      left: `${dayRange.startCol * dayCellWidth + 2}px`,
-                                      width: `${dayRange.span * dayCellWidth - 4}px`,
-                                      background: theme.bg,
-                                      borderColor: theme.borderColor,
-                                      boxShadow: isHovered || isPinned ? "0 4px 14px rgba(0,0,0,0.3)" : theme.shadow,
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      const rect = e.currentTarget.getBoundingClientRect();
-                                      setHoveredItem({
-                                        item,
-                                        x: rect.left + rect.width / 2,
-                                        y: rect.bottom + 8,
-                                      });
-                                    }}
-                                    onMouseLeave={() => {
-                                      if (!pinnedItem) setHoveredItem(null);
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setPinnedItem(pinnedItem?.id === item.id ? null : item);
-                                    }}
-                                  >
-                                    <div className="bar-inner-text">
-                                      <div className="bar-title-row">
-                                        {dayRange.startsBeforeGrid && (
-                                          <span className="bar-continuation-arrow left-arrow" title={`Started before view on ${formatTimelinePopupDate(item.start_date)}`}>
-                                            ◀
-                                          </span>
-                                        )}
-                                        <span className="bar-college-name" title={item.college_name}>
-                                          {item.college_name || "College Name"}
+                              {/* The Colored College Schedule Bar */}
+                              {dayRange ? (
+                                <div
+                                  className={`timeline-block-bar ${isPinned ? "bar-pinned" : ""}`}
+                                  style={{
+                                    left: `${dayRange.startCol * dayCellWidth + 2}px`,
+                                    width: `${dayRange.span * dayCellWidth - 4}px`,
+                                    background: theme.bg,
+                                    borderColor: theme.borderColor,
+                                    boxShadow: isHovered || isPinned ? "0 4px 14px rgba(0,0,0,0.3)" : theme.shadow,
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setHoveredItem({
+                                      item,
+                                      x: rect.left + rect.width / 2,
+                                      y: rect.bottom + 8,
+                                    });
+                                  }}
+                                  onMouseLeave={() => {
+                                    if (!pinnedItem) setHoveredItem(null);
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPinnedItem(pinnedItem?.id === item.id ? null : item);
+                                  }}
+                                >
+                                  <div className="bar-inner-text">
+                                    <div className="bar-title-row">
+                                      {dayRange.startsBeforeGrid && (
+                                        <span className="bar-continuation-arrow left-arrow" title={`Started before view on ${formatTimelinePopupDate(item.start_date)}`}>
+                                          ◀
                                         </span>
-                                        {dayRange.endsAfterGrid && (
-                                          <span className="bar-continuation-arrow right-arrow" title={`Continues after view until ${formatTimelinePopupDate(item.end_date)}`}>
-                                            ▶
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className="bar-sub-row">
-                                        {item.project_code && (
-                                          <span className="bar-project-code" title={item.project_code}>
-                                            {item.project_code}
-                                          </span>
-                                        )}
-                                        <span className="bar-dates-tag">
-                                          {formatTimelinePopupDate(item.start_date)} → {formatTimelinePopupDate(item.end_date)}
+                                      )}
+                                      <span className="bar-college-name" title={item.college_name}>
+                                        {item.college_name || "College Name"}
+                                      </span>
+                                      {dayRange.endsAfterGrid && (
+                                        <span className="bar-continuation-arrow right-arrow" title={`Continues after view until ${formatTimelinePopupDate(item.end_date)}`}>
+                                          ▶
                                         </span>
-                                      </div>
+                                      )}
+                                    </div>
+                                    <div className="bar-sub-row">
+                                      {item.project_code && (
+                                        <span className="bar-project-code" title={item.project_code}>
+                                          {item.project_code}
+                                        </span>
+                                      )}
+                                      <span className="bar-dates-tag">
+                                        {formatTimelinePopupDate(item.start_date)} → {formatTimelinePopupDate(item.end_date)}
+                                      </span>
                                     </div>
                                   </div>
-                                ) : isIncomplete ? (
-                                  <div
-                                    className="incomplete-row-placeholder"
-                                    onClick={() => setPinnedItem(pinnedItem?.id === item.id ? null : item)}
+                                </div>
+                              ) : isIncomplete ? (
+                                <div
+                                  className="incomplete-row-placeholder"
+                                  onClick={() => setPinnedItem(pinnedItem?.id === item.id ? null : item)}
+                                >
+                                  <span className="incomplete-badge-tag">
+                                    ⚠️ Incomplete Data
+                                  </span>
+                                  <span className="incomplete-college-title">
+                                    {item.college_name || item.project_code}
+                                  </span>
+                                  <span className="incomplete-missing-desc">
+                                    {!item.start_date && !item.end_date
+                                      ? "(Dates not set in Project Data sheet)"
+                                      : !item.start_date
+                                      ? "(Start Date missing in Project Data sheet)"
+                                      : "(End Date missing in Project Data sheet)"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="incomplete-set-dates-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditItem(item);
+                                    }}
                                   >
-                                    <span className="incomplete-badge-tag">
-                                      ⚠️ Incomplete Data
-                                    </span>
-                                    <span className="incomplete-college-title">
-                                      {item.college_name || item.project_code}
-                                    </span>
-                                    <span className="incomplete-missing-desc">
-                                      {!item.start_date && !item.end_date
-                                        ? "(Dates not set in College Training sheet)"
-                                        : !item.start_date
-                                        ? "(Start Date missing in College Training sheet)"
-                                        : "(End Date missing in College Training sheet)"}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      className="incomplete-set-dates-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEditItem(item);
-                                      }}
-                                    >
-                                      + Set Dates
-                                    </button>
-                                  </div>
-                                ) : null}
-                              </div>
+                                    + Set Dates
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
+                          </div>
                         );
                       })
                     )}
@@ -1949,7 +1904,7 @@ export const Step8_CollegeTimelinePage: React.FC<Step8CollegeTimelinePageProps> 
                 </div>
               </div>
 
-              {/* Floating Excel-Style Popover Note Card (Matching Reference Image) */}
+              {/* Floating Excel-Style Popover Note Card */}
               {(hoveredItem || pinnedItem) && (
                 (() => {
                   const currentPopupItem = pinnedItem || hoveredItem?.item;

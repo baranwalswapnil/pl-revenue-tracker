@@ -98,7 +98,8 @@ const STORAGE_CACHED_MOUS_KEY = "google_sheet_cached_mous_26_27_v1";
 export const KNOWN_TAB_GIDS: Record<string, string> = {
   "college training": "701648829",
   "college training ": "701648829",
-  "mous 26-27": "42253217",
+  "project data": "1809774664",
+  "project data ": "1809774664",
   "invoice tracker": "1423830764",
   "sheet1": "0",
   "sheet 1": "0",
@@ -127,7 +128,7 @@ export function extractSpreadsheetId(urlOrId: string): string | null {
 
 /**
  * Builds standard public Google Sheet CSV export endpoint.
- * Supports exact tab GID mapping so College Training (GID 701648829) is always fetched correctly.
+ * Accurately targets sheet tabs via &sheet= (e.g. Business Data 26-27 or Invoice Tracker).
  */
 export function buildGoogleSheetCsvUrl(sheetUrlOrId: string, sheetNameOrGid = ""): string {
   const sheetId = extractSpreadsheetId(sheetUrlOrId);
@@ -144,18 +145,19 @@ export function buildGoogleSheetCsvUrl(sheetUrlOrId: string, sheetNameOrGid = ""
     return `${base}&gid=${cleanTab}`;
   }
 
-  // Check known GIDs (e.g. College Training -> GID 701648829)
-  const normKey = cleanTab.toLowerCase();
-  if (KNOWN_TAB_GIDS[normKey]) {
-    return `${base}&gid=${KNOWN_TAB_GIDS[normKey]}`;
-  }
-
+  // Prioritize exact tab name via &sheet=
   if (cleanTab) {
     return `${base}&sheet=${encodeURIComponent(cleanTab)}`;
   }
 
-  // Default to College Training tab (GID 701648829)
-  return `${base}&gid=701648829`;
+  // Check if URL itself has a gid parameter (excluding 1630818274 which is the DataEntry form tab)
+  const urlGidMatch = sheetUrlOrId.match(/[?&#]gid=([0-9]+)/);
+  if (urlGidMatch && urlGidMatch[1] && urlGidMatch[1] !== "1630818274") {
+    return `${base}&gid=${urlGidMatch[1]}`;
+  }
+
+  // Default to Business Data 26-27 tab
+  return `${base}&sheet=${encodeURIComponent("Business Data 26-27")}`;
 }
 
 /**
@@ -280,8 +282,8 @@ function normalizeDate(raw: any): string {
   return str;
 }
 
-export const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw/edit?usp=sharing";
-export const DEFAULT_SHEET_NAME = "College Training";
+export const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aUlKfxXgeXJ6HWQMmy6RG5ITUBGQ-2nRVMoEnxwFN9k/edit?gid=1630818274#gid=1630818274";
+export const DEFAULT_SHEET_NAME = "Business Data 26-27";
 
 /**
  * Normalizes payment types (FNF, ATP, ATTP, EMI) from sheet notations like AT, AP, ATT, ATTT, EMI-8
@@ -316,86 +318,97 @@ function findColumnIndex(headers: string[], ...candidates: string[]): number {
 }
 
 /**
- * Converts parsed spreadsheet rows into clean GoogleSheetCollegeItem objects
- * Exclusively designed for the exact 'College Training' tab structure!
+ * Converts parsed spreadsheet rows into clean GoogleSheetCollegeItem objects.
+ * Flexible column matching supports both 'MOUs' and 'College Training' sheets!
  */
 export function mapRowsToCollegeItems(rows: string[][]): GoogleSheetCollegeItem[] {
   if (!rows || rows.length < 2) return [];
 
   const headerRowIdx = rows.findIndex((r) =>
-    r.some((cell) => cell.toLowerCase().includes("college") || cell.toLowerCase().includes("project"))
+    r.some((cell) => cell.toLowerCase().includes("college") || cell.toLowerCase().includes("project") || cell.toLowerCase().includes("contract"))
   );
   const effectiveHeaderRow = headerRowIdx !== -1 ? headerRowIdx : 0;
   const headers = rows[effectiveHeaderRow].map((h) => h.trim());
 
-  // Matches exact headers from College Training sheet:
-  // Col A (0): College Name
-  // Col B (1): Project Code
-  // Col C (2): Description
-  // Col D (3): Assigned Person
-  // Col E (4): Start Day / Start Date
-  // Col F (5): End Date
-  const colCollegeName = findColumnIndex(headers, "college name", "collegename", "name of the college", "college", "name");
+  // Matches headers across both MOUs and College Training sheets
+  const colCollegeName = findColumnIndex(headers, "total engineering college", "college name", "collegename", "name of the college", "college", "name");
   const colProjCode = findColumnIndex(headers, "project code", "projectcode", "college project", "code");
-  const colDesc = findColumnIndex(headers, "description", "desc");
+  const colCollegeCode = findColumnIndex(headers, "college code", "collegecode");
+  const colDesc = findColumnIndex(headers, "description", "desc", "domain of training", "course/stream");
   const colAssigned = findColumnIndex(headers, "assigned person", "assigned", "poc");
-  const colStartDate = findColumnIndex(headers, "start day", "startday", "start date", "startdate", "training start date", "starting date");
-  const colEndDate = findColumnIndex(headers, "end date", "enddate", "training end date");
+  const colStartDate = findColumnIndex(headers, "training start date", "start day", "startday", "start date", "startdate", "starting date");
+  const colEndDate = findColumnIndex(headers, "training end date", "end date", "enddate");
+  const colMouDate = findColumnIndex(headers, "mou signed date", "mou date", "mou signed");
 
-  const colTotalHrs = findColumnIndex(headers, "total hrs", "hrs/batch", "hours planned", "hours");
+  const colTotalHrs = findColumnIndex(headers, "hrs/batch", "total hrs", "hours planned", "hours");
   const colPlanningHrs = findColumnIndex(headers, "planning hrs");
   const colSSHrs = findColumnIndex(headers, "ss hrs");
   const colTechHrs = findColumnIndex(headers, "technical hrs");
   const colAptHrs = findColumnIndex(headers, "aptitude hrs");
-  const colTotalCost = findColumnIndex(headers, "total cost", "total contract value", "total cost value");
+  const colTotalCost = findColumnIndex(headers, "total contract value", "total cost value", "total cost", "contract value");
+  const colGstCost = findColumnIndex(headers, "total contract value (incl gst)", "total contract value (incl. gst)", "gst cost", "total with gst");
+  const colStudents = findColumnIndex(headers, "no of students", "students", "student count");
+  const colCostPerStudent = findColumnIndex(headers, "cost per student", "cost/student");
+  const colPaymentType = findColumnIndex(headers, "payment type", "payment terms", "payment");
+  const colAcademicYear = findColumnIndex(headers, "academic year", "academicyear", "year", "batch year");
 
   const items: GoogleSheetCollegeItem[] = [];
 
-  for (let r = 1; r < rows.length; r++) {
+  for (let r = effectiveHeaderRow + 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row || row.length === 0) continue;
 
-    const collegeName = (colCollegeName !== -1 ? row[colCollegeName] : (row[0] || "")).trim();
-    const projectCode = (colProjCode !== -1 ? row[colProjCode] : (row[1] || "")).trim();
+    const collegeName = (colCollegeName !== -1 ? row[colCollegeName] : (row[4] || row[0] || "")).trim();
+    const projectCode = (colProjCode !== -1 ? row[colProjCode] : (row[3] || row[1] || "")).trim();
+    const collegeCode = (colCollegeCode !== -1 ? row[colCollegeCode] : (row[5] || "")).trim();
 
-    // Skip empty rows (rows from row 14 onwards in College Training sheet)
+    // Skip empty rows
     if (!collegeName && !projectCode) continue;
 
-    let rawStartDate = colStartDate !== -1 ? row[colStartDate] : (row[4] || "");
-    let rawEndDate = colEndDate !== -1 ? row[colEndDate] : (row[5] || "");
+    let rawStartDate = colStartDate !== -1 ? row[colStartDate] : (row[13] || row[4] || "");
+    let rawEndDate = colEndDate !== -1 ? row[colEndDate] : (row[14] || row[5] || "");
+    let rawMouDate = colMouDate !== -1 ? row[colMouDate] : (row[12] || "");
 
     const startDate = normalizeDate(rawStartDate);
     const endDate = normalizeDate(rawEndDate);
+    const mouDate = normalizeDate(rawMouDate);
 
     const desc = colDesc !== -1 ? (row[colDesc] || "").trim() : (row[2] || "").trim();
     const assigned = colAssigned !== -1 ? (row[colAssigned] || "").trim() : (row[3] || "").trim();
 
-    const hoursPlanned = parseCleanNumber(colTotalHrs !== -1 ? row[colTotalHrs] : (row[6] || 40), 40);
-    const totalCost = parseCleanNumber(colTotalCost !== -1 ? row[colTotalCost] : (row[15] || 0), 0);
+    const hoursPlanned = parseCleanNumber(colTotalHrs !== -1 ? row[colTotalHrs] : (row[21] || row[6] || 40), 40);
+    const totalCost = parseCleanNumber(colTotalCost !== -1 ? row[colTotalCost] : (row[17] || row[15] || 0), 0);
+    const gstCost = parseCleanNumber(colGstCost !== -1 ? row[colGstCost] : (row[18] || 0), totalCost > 0 ? Math.round(totalCost * 1.18) : 0);
+    const studentCount = parseCleanNumber(colStudents !== -1 ? row[colStudents] : (row[15] || 0), 0);
+    const costPerStudent = parseCleanNumber(colCostPerStudent !== -1 ? row[colCostPerStudent] : (row[16] || 0), 0);
+    const rawPayment = colPaymentType !== -1 ? row[colPaymentType] : (row[20] || row[22] || "");
+    const paymentType = normalizePaymentType(rawPayment);
+    const academicYear = colAcademicYear !== -1 ? (row[colAcademicYear] || "26-27").trim() : "26-27";
 
     const notesParts: string[] = [];
     if (desc) notesParts.push(`Desc: ${desc}`);
     if (assigned) notesParts.push(`Assigned: ${assigned}`);
 
-    const id = `college-training-${r}`;
+    const id = `gsheet-item-${r}-${(projectCode || collegeName).toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
 
     items.push({
       id,
       college_name: collegeName || `College ${r}`,
       project_code: projectCode || `PRJ-${String(r).padStart(3, "0")}`,
-      college_code: projectCode ? projectCode.split("/")[0] : "",
+      college_code: collegeCode || (projectCode ? projectCode.split("/")[0] : ""),
       description: desc,
       assigned_person: assigned,
-      academic_year: "26-27",
+      academic_year: academicYear || "26-27",
       passing_year: "2026",
       training_start_date: startDate,
       training_end_date: endDate,
-      student_count: 0,
-      cost_per_student: 0,
+      mou_signed_date: mouDate,
+      student_count: studentCount,
+      cost_per_student: costPerStudent,
       total_cost_value: totalCost,
-      gst_cost: totalCost > 0 ? Math.round(totalCost * 1.18) : 0,
+      gst_cost: gstCost,
       hours_planned: hoursPlanned,
-      payment_type: "ATP",
+      payment_type: paymentType,
       attp_percentage: "50%",
       invoice_count: 1,
       notes: notesParts.join(" | "),
@@ -557,10 +570,14 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
       totalContractValue = studentCount * costPerStudent;
     }
 
-    const dateRaised = normalizeDate(colDateRaised !== -1 ? row[colDateRaised] : "");
+    // User specification: Date is in Column K (idx 10), Status is in Column N (idx 13)
+    const rawDateRaised = (row[10] || (colDateRaised !== -1 ? row[colDateRaised] : "") || "").trim();
+    const dateRaised = normalizeDate(rawDateRaised);
+
     const invoiceCode = (colInvoiceCode !== -1 ? (row[colInvoiceCode] || "").trim() : "") || `INV-${String(invoiceNo).padStart(2, "0")}`;
     const invoiceType = colInvoiceType !== -1 ? (row[colInvoiceType] || "").trim() : "";
-    const status = colStatus !== -1 ? (row[colStatus] || "").trim() : "";
+    const rawStatus = (row[13] || (colStatus !== -1 ? row[colStatus] : "") || "").trim();
+    const status = rawStatus;
     const remarks = colRemarks !== -1 ? (row[colRemarks] || "").trim() : "";
     const gaInvoiceCode = colGaCode !== -1 ? (row[colGaCode] || "").trim() : "";
     const printed = colPrinted !== -1 ? (row[colPrinted] || "").trim() : "";
@@ -574,7 +591,7 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
     const parsedRec = parseReceivedValue(rawReceived, amountRaised);
     const parsedRawReceivedNum = parseCleanNumber(rawReceived, 0);
 
-    // 1. Check if Received / Collected (supports "received", "recieved", "paid", "cleared", "yes", etc.)
+    // 1. Check if Received / Collected (supports "received", "paid", etc.)
     const isReceived = Boolean(
       statusLower.includes("rec") ||
       statusLower.includes("paid") ||
@@ -601,25 +618,19 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
 
     const dateReceived = parsedRec.dateReceived || (isReceived ? dateRaised : "");
 
-    // 2. Check if Processed / Raised (Pending / Outstanding)
-    const isProcessedOrRaised = Boolean(
-      isReceived ||
-      statusLower.includes("process") ||
+    // 2. Check if Status is explicitly 'raised' or 'processed' (Column N)
+    const isRaisedOrProcessed = Boolean(
+      statusLower === "raised" ||
+      statusLower === "processed" ||
       statusLower.includes("raise") ||
-      statusLower.includes("pend") ||
-      statusLower.includes("hold") ||
-      statusLower.includes("ti for pi") ||
-      typeLower.includes("process") ||
-      typeLower.includes("raise") ||
-      (amountRaised > 0 && dateRaised.length > 0) ||
-      amountRaised > 0
+      statusLower.includes("process")
     );
 
-    const isRaised = Boolean(isReceived || isProcessedOrRaised || amountRaised > 0);
+    const isRaised = Boolean(isReceived || isRaisedOrProcessed);
 
     const finalStatus = isReceived
       ? "Received"
-      : isRaised
+      : isRaisedOrProcessed
       ? "Pending Payment"
       : "Unraised";
 
@@ -1756,9 +1767,14 @@ export function loadSavedSheetConfig(): GoogleSheetConfig {
     const raw = localStorage.getItem(STORAGE_CONFIG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      // Automatically migrate legacy default sheet config
+      const isLegacyUrl = parsed.sheetUrl && parsed.sheetUrl.includes("1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw");
+      const url = isLegacyUrl || !parsed.sheetUrl ? envUrl : parsed.sheetUrl;
+      const sheet = isLegacyUrl || !parsed.sheetName || parsed.sheetName === "College Training" || parsed.sheetName === "MOUs" ? envSheetName : parsed.sheetName;
+
       return {
-        sheetUrl: parsed.sheetUrl || envUrl,
-        sheetName: parsed.sheetName || envSheetName,
+        sheetUrl: url,
+        sheetName: sheet,
         scriptUrl: parsed.scriptUrl || envScriptUrl,
         autoSync: parsed.autoSync !== false,
         lastSyncedAt: parsed.lastSyncedAt,
@@ -1822,18 +1838,30 @@ export function saveCachedInvoiceTrackerItems(items: GoogleSheetInvoiceTrackerIt
 export function parseMOUDateMonth(raw: string): { monthNum: number; year: number; display: string } {
   if (!raw) return { monthNum: 0, year: 0, display: "" };
   const str = String(raw).trim();
+  const displayNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
 
   // GViz Date(2026,3,1) format
   const dateMatch = str.match(/Date\((\d+),\s*(\d+),\s*(\d+)\)/);
   if (dateMatch) {
     const y = parseInt(dateMatch[1], 10);
     const mIdx = parseInt(dateMatch[2], 10); // 0-based
-    const monthNames = [
-      "January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"
-    ];
-    const monthName = monthNames[mIdx] || `Month ${mIdx + 1}`;
+    const monthName = displayNames[mIdx] || `Month ${mIdx + 1}`;
     return { monthNum: mIdx + 1, year: y, display: `${monthName} ${y}` };
+  }
+
+  // Excel serial date (e.g. 45832)
+  if (/^\d{5}$/.test(str)) {
+    const serial = parseInt(str, 10);
+    const utcDays = serial - 25569;
+    const date = new Date(utcDays * 86400 * 1000);
+    if (!isNaN(date.getTime())) {
+      const m = date.getUTCMonth() + 1;
+      const y = date.getUTCFullYear();
+      return { monthNum: m, year: y, display: `${displayNames[m - 1]} ${y}` };
+    }
   }
 
   // Extract explicit 4-digit year if present (e.g. 2026, 2027)
@@ -1846,7 +1874,6 @@ export function parseMOUDateMonth(raw: string): { monthNum: number; year: number
   // Standard month names (e.g. "April 2026", "August", "Aug 2026")
   const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
   const monthShorts = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-  const displayNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
   const lower = str.toLowerCase();
   for (let i = 0; i < 12; i++) {
     if (lower.includes(monthNames[i]) || lower.includes(monthShorts[i])) {
@@ -1855,11 +1882,20 @@ export function parseMOUDateMonth(raw: string): { monthNum: number; year: number
     }
   }
 
-  // Format DD/MM/YYYY or YYYY-MM-DD
+  // Format DD/MM/YYYY, DD-MM-YYYY, or YYYY-MM-DD
   const parts = str.split(/[-/]/);
   if (parts.length >= 2) {
-    let m = parseInt(parts[1], 10);
-    let y = parts.length >= 3 ? parseInt(parts[2], 10) : 0;
+    let m = 0;
+    let y = 0;
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD
+      y = parseInt(parts[0], 10);
+      m = parseInt(parts[1], 10);
+    } else {
+      // DD/MM/YYYY or DD-MM-YYYY
+      m = parseInt(parts[1], 10);
+      y = parts.length >= 3 ? parseInt(parts[2], 10) : 0;
+    }
     if (y < 100 && y > 0) y += 2000;
     if (!isNaN(m) && m >= 1 && m <= 12) {
       const finalYear = y || 2026;
@@ -1871,80 +1907,125 @@ export function parseMOUDateMonth(raw: string): { monthNum: number; year: number
 }
 
 /**
- * Maps raw spreadsheet rows from 'MOUs 26-27' tab into GoogleSheetMOUItem[]
+ * Maps raw spreadsheet rows from 'Business Data 26-27' tab into GoogleSheetMOUItem[]
+ * Per user specification:
+ * - Col D (idx 3): Project Code
+ * - Col E (idx 4): College Name
+ * - Col F (idx 5): MOU signed date
+ * - Col G (idx 6): Stream
+ * - Col H (idx 7): Student Count
+ * - Col I (idx 8): Cost Per Student
+ * - Col J (idx 9): TCV without GST
+ * - Col K (idx 10): TCV incl GST (Sum of TCV incl GST only)
  */
 export function mapMOURowsToItems(rows: string[][]): GoogleSheetMOUItem[] {
   if (!rows || rows.length < 2) return [];
 
-  const headers = rows[0].map((h) => h.trim());
+  // Find header row if present
+  const headerRowIdx = rows.findIndex((r) =>
+    r.some(
+      (cell) =>
+        cell.toLowerCase().includes("college") ||
+        cell.toLowerCase().includes("project") ||
+        cell.toLowerCase().includes("contract") ||
+        cell.toLowerCase().includes("stream")
+    )
+  );
 
-  const colContractType = findColumnIndex(headers, "contract type", "contracttype");
-  const colProjCode = findColumnIndex(headers, "project code", "projectcode", "code");
-  const colCollegeName = findColumnIndex(headers, "total engineering college", "college name", "name of the college", "college", "name");
+  const effectiveHeaderRow = headerRowIdx !== -1 ? headerRowIdx : 0;
+  const headers = rows[effectiveHeaderRow].map((h) => h.trim());
+
+  const colContractType = findColumnIndex(headers, "contract type", "contracttype", "mou_fy");
+  const colProjCode = findColumnIndex(headers, "project_code", "project code", "projectcode", "code");
+  const colCollegeName = findColumnIndex(headers, "college name", "total engineering college", "name of the college", "college", "name");
   const colCollegeCode = findColumnIndex(headers, "college code", "collegecode");
-  const colYear = findColumnIndex(headers, "year", "batch year");
-  const colCourse = findColumnIndex(headers, "course/stream", "course", "stream");
-  const colDomain = findColumnIndex(headers, "domain of training", "domain");
-  const colTypeProj = findColumnIndex(headers, "type of project", "project type");
+  const colCourse = findColumnIndex(headers, "course / stream", "course/stream", "stream", "course");
   const colAcademicYear = findColumnIndex(headers, "academic year", "academicyear");
-  const colMouDate = findColumnIndex(headers, "mou signed date", "mou date", "mou signed");
-  const colStartDate = findColumnIndex(headers, "training start date", "start date");
-  const colEndDate = findColumnIndex(headers, "training end date", "end date");
-  const colStudents = findColumnIndex(headers, "no of students", "students", "student count");
+  const colMouDate = findColumnIndex(headers, "mou signed date", "mou_signed_date", "mou date", "mou signed");
+  const colStudents = findColumnIndex(headers, "students_count", "no of students", "students", "student count");
   const colCostPerStudent = findColumnIndex(headers, "cost per student", "cost/student");
-  const colTotalValue = findColumnIndex(headers, "total contract value", "total cost value", "contract value");
-  const colGstValue = findColumnIndex(headers, "total contract value (incl gst)", "total contract value (incl. gst)", "gst cost", "total with gst");
-  const colMonth = findColumnIndex(headers, "month");
+  const colTotalValue = findColumnIndex(headers, "total contract value ex.gst", "total contract value", "tcv without gst", "without gst", "contract value");
+  const colGstValue = findColumnIndex(headers, "total contract value", "total contract value (incl gst)", "total contract value (incl. gst)", "tcv with gst", "tcv incl gst", "incl gst", "with gst");
+  const colMonth = findColumnIndex(headers, "month", "date & month", "date and month");
 
   const items: GoogleSheetMOUItem[] = [];
 
-  for (let r = 1; r < rows.length; r++) {
+  for (let r = effectiveHeaderRow + 1; r < rows.length; r++) {
     const row = rows[r];
     if (!row || row.length === 0) continue;
 
-    const collegeName = (colCollegeName !== -1 ? row[colCollegeName] : row[4] || row[2] || "").trim();
-    const projectCode = (colProjCode !== -1 ? row[colProjCode] : row[3] || row[1] || "").trim();
+    // Col D (idx 3): Project code
+    const projectCode = (row[3] || (colProjCode !== -1 ? row[colProjCode] : "")).trim();
+    // Col E (idx 4): College name
+    const collegeName = (row[4] || (colCollegeName !== -1 ? row[colCollegeName] : "")).trim();
+    // Col F (idx 5): MOU signed date
+    const mouDate = (row[5] || (colMouDate !== -1 ? row[colMouDate] : "") || row[20] || "").trim();
+    // Col G (idx 6): Stream
+    const stream = (row[6] || (colCourse !== -1 ? row[colCourse] : "")).trim();
+    // Col H (idx 7): Student count
+    const studentCount = parseCleanNumber(row[7] !== undefined && row[7] !== "" ? row[7] : (colStudents !== -1 ? row[colStudents] : 0), 0);
+    // Col I (idx 8): Cost per student
+    const costPerStudent = parseCleanNumber(row[8] !== undefined && row[8] !== "" ? row[8] : (colCostPerStudent !== -1 ? row[colCostPerStudent] : 0), 0);
+    // Col J (idx 9): TCV without GST
+    let tcvWithoutGst = parseCleanNumber(row[9] !== undefined && row[9] !== "" ? row[9] : (colTotalValue !== -1 ? row[colTotalValue] : 0), 0);
+    // Col K (idx 10): TCV incl GST
+    let tcvWithGst = parseCleanNumber(row[10] !== undefined && row[10] !== "" ? row[10] : (colGstValue !== -1 ? row[colGstValue] : 0), 0);
 
-    const tcv = parseCleanNumber(colTotalValue !== -1 ? row[colTotalValue] : row[17], 0);
-    const tcvGst = parseCleanNumber(colGstValue !== -1 ? row[colGstValue] : row[18], 0);
-
-    if (!collegeName && !projectCode && tcv === 0) continue;
-
-    // Col AR (idx 43) is the Month column in MOUs 26-27
-    let rawMonthVal = (row[43] || (colMonth !== -1 ? row[colMonth] : "") || "").trim();
-    if (!rawMonthVal && row[11]) {
-      rawMonthVal = row[11].trim();
+    // Filter out form/data-entry header text and empty junk rows
+    const colLower = collegeName.toLowerCase();
+    const prjLower = projectCode.toLowerCase();
+    if (
+      colLower.includes("mou details") ||
+      colLower.includes("data entry") ||
+      colLower.includes("have you created") ||
+      colLower.includes("project code") ||
+      colLower.includes("training details") ||
+      colLower.includes("training start") ||
+      colLower === "college name" ||
+      prjLower.includes("project code") ||
+      prjLower.includes("project_code")
+    ) {
+      continue;
     }
-    const parsedMonth = parseMOUDateMonth(rawMonthVal);
-    const monthVal = parsedMonth.display || rawMonthVal;
 
-    const studentCount = parseCleanNumber(colStudents !== -1 ? row[colStudents] : row[15], 0);
-    const costPerStudent = parseCleanNumber(colCostPerStudent !== -1 ? row[colCostPerStudent] : row[16], 0);
-    const mouDate = normalizeDate(colMouDate !== -1 ? row[colMouDate] : row[12]);
-    const startDate = normalizeDate(colStartDate !== -1 ? row[colStartDate] : row[13]);
-    const endDate = normalizeDate(colEndDate !== -1 ? row[colEndDate] : row[14]);
+    if (!collegeName && !projectCode) continue;
+    if (tcvWithGst === 0 && tcvWithoutGst === 0 && studentCount === 0 && (!collegeName || colLower.includes("total"))) continue;
+
+    if (tcvWithGst === 0 && tcvWithoutGst > 0) {
+      tcvWithGst = Math.round(tcvWithoutGst * 1.18);
+    }
+    if (tcvWithoutGst === 0 && tcvWithGst > 0) {
+      tcvWithoutGst = Math.round(tcvWithGst / 1.18);
+    }
+
+    // Derive display month from MOU signed date (Col F) or explicit Month column
+    const parsedMonth = parseMOUDateMonth(mouDate || (colMonth !== -1 ? row[colMonth] : "") || "");
+    const monthVal = parsedMonth.display || mouDate || "";
+
+    const academicYear = (row[25] || (colAcademicYear !== -1 ? row[colAcademicYear] : "") || "26-27").trim();
+    const paymentType = (row[11] || row[14] || "").trim();
 
     items.push({
-      id: `mou-${r}-${(projectCode || collegeName).toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
-      contractType: (colContractType !== -1 ? row[colContractType] : row[0] || "New").trim(),
+      id: `tcv-${r}-${(projectCode || collegeName).toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+      contractType: (colContractType !== -1 ? row[colContractType] : row[2] || row[0] || "New").trim(),
       sNo: r,
-      projectCode: projectCode || `PRJ-MOU-${r}`,
+      projectCode: projectCode || `PRJ-${r}`,
       collegeName: collegeName || `College ${r}`,
-      collegeCode: (colCollegeCode !== -1 ? row[colCollegeCode] : row[5] || "").trim(),
-      year: (colYear !== -1 ? row[colYear] : row[6] || "").trim(),
-      courseStream: (colCourse !== -1 ? row[colCourse] : row[7] || "").trim(),
-      domainOfTraining: (colDomain !== -1 ? row[colDomain] : row[8] || "").trim(),
-      typeOfProject: (colTypeProj !== -1 ? row[colTypeProj] : row[9] || "").trim(),
-      academicYear: (colAcademicYear !== -1 ? row[colAcademicYear] : row[10] || "26-27").trim(),
+      collegeCode: (colCollegeCode !== -1 ? row[colCollegeCode] : (projectCode ? projectCode.split("/")[0] : "")).trim(),
+      year: academicYear,
+      courseStream: stream,
+      domainOfTraining: stream,
+      typeOfProject: "",
+      academicYear: academicYear,
       mouSignedDate: mouDate,
-      trainingStartDate: startDate,
-      trainingEndDate: endDate,
+      trainingStartDate: "",
+      trainingEndDate: "",
       studentCount,
       costPerStudent,
-      totalContractValue: tcv,
-      totalContractValueGst: tcvGst > 0 ? tcvGst : (tcv > 0 ? Math.round(tcv * 1.18) : 0),
-      paymentType: (row[20] || row[22] || "").trim(),
-      hrsBatch: (row[21] || "").trim(),
+      totalContractValue: tcvWithoutGst,
+      totalContractValueGst: tcvWithGst,
+      paymentType: paymentType,
+      hrsBatch: "",
       month: monthVal,
       rawRow: row,
     });
@@ -1954,44 +2035,88 @@ export function mapMOURowsToItems(rows: string[][]): GoogleSheetMOUItem[] {
 }
 
 /**
- * Fetches Google Sheet CSV for 'MOUs 26-27' tab directly via browser fetch()
+ * Fetches Google Sheet CSV for 'Business Data 26-27' tab directly via browser fetch()
  */
 export async function fetchMOUData(
   sheetUrlOrId: string,
-  tabName = "MOUs 26-27"
+  tabName = "Business Data 26-27"
 ): Promise<GoogleSheetMOUItem[]> {
-  const csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, tabName);
+  const tabsToTry = [
+    tabName,
+    "Business Data 26-27",
+    "business data 26-27",
+    "Business Data",
+    "MOUs",
+    "MOUs 26-27",
+  ].filter((v, i, a) => v && a.indexOf(v) === i);
+  let lastError: any = null;
 
-  const response = await fetch(csvUrl, {
-    method: "GET",
-    headers: {
-      Accept: "text/csv,text/plain,*/*",
-    },
-    signal: AbortSignal.timeout(8000),
-  });
+  for (const tab of tabsToTry) {
+    try {
+      const csvUrl = buildGoogleSheetCsvUrl(sheetUrlOrId, tab);
+      const response = await fetch(csvUrl, {
+        method: "GET",
+        headers: {
+          Accept: "text/csv,text/plain,*/*",
+        },
+        signal: AbortSignal.timeout(8000),
+      });
 
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch '${tabName}' tab. Status: ${response.status} (${response.statusText}). Make sure the tab name is exactly '${tabName}' and the sheet is public.`
-    );
+      if (!response.ok) {
+        lastError = new Error(
+          `Failed to fetch '${tab}' tab. Status: ${response.status} (${response.statusText}). Make sure the tab name is exactly '${tab}' and the sheet is public.`
+        );
+        continue;
+      }
+
+      const csvText = await response.text();
+      const rows = parseCSV(csvText);
+
+      if (rows.length < 2) {
+        lastError = new Error(`'${tab}' tab returned no data rows.`);
+        continue;
+      }
+
+      const items = mapMOURowsToItems(rows);
+      saveCachedMOUItems(items);
+      return items;
+    } catch (err: any) {
+      lastError = err;
+    }
   }
 
-  const csvText = await response.text();
-  const rows = parseCSV(csvText);
-
-  if (rows.length < 2) {
-    throw new Error(`'${tabName}' tab returned no data rows.`);
-  }
-
-  const items = mapMOURowsToItems(rows);
-  saveCachedMOUItems(items);
-  return items;
+  throw lastError || new Error(`Failed to fetch Business Data / MOU data.`);
 }
 
 export function loadCachedMOUItems(): GoogleSheetMOUItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_CACHED_MOUS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: GoogleSheetMOUItem[] = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Discard any previously cached corrupted DataEntry rows
+        const clean = parsed.filter((item) => {
+          const col = (item.collegeName || "").toLowerCase();
+          const prj = (item.projectCode || "").toLowerCase();
+          if (
+            col.includes("mou details") ||
+            col.includes("have you created") ||
+            col.includes("project code") ||
+            col.includes("training details") ||
+            col.includes("training start") ||
+            prj.includes("project code") ||
+            prj.includes("project_code")
+          ) {
+            return false;
+          }
+          return true;
+        });
+        if (clean.length !== parsed.length) {
+          saveCachedMOUItems(clean);
+        }
+        return clean;
+      }
+    }
   } catch (e) {
     console.warn("Failed to load cached MOU items", e);
   }

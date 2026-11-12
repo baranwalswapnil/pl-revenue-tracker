@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import * as XLSX from "xlsx";
 import {
   ArrowLeft,
   Calendar,
@@ -18,12 +19,15 @@ import {
   Eye,
   Edit3,
   RefreshCw,
+  Check,
 } from "lucide-react";
 import type { Project } from "../lib/models";
 import { formatINR } from "../lib/mockData";
 import {
   ALL_MONTHS,
   ALL_QUARTERS,
+  calendarYearForMonth,
+  fiscalYearLabel,
   calculatePeriodOutstanding,
   type OutstandingPeriod,
   type MonthMeta,
@@ -38,7 +42,69 @@ interface Step6OutstandingPageProps {
   onViewProject: (project: Project) => void;
   onEditProject: (project: Project) => void;
   onOpenGoogleSheetSync?: () => void;
+  onRefreshData?: () => Promise<void>;
+  isSyncing?: boolean;
 }
+
+type StatusFilter = "all" | "pending" | "received";
+
+/* ------------------------------------------------------------------ */
+/* Helpers (single source of truth for rules used in several places)   */
+/* ------------------------------------------------------------------ */
+
+// Pending = not received yet and has positive pending amount or status is Pending Payment.
+const isPendingItem = (i: EnrichedInvoiceItem): boolean =>
+  !i.isReceived && ((i.outstandingAmount ?? 0) > 0 || i.status === "Pending Payment");
+const isReceivedItem = (i: EnrichedInvoiceItem): boolean =>
+  Boolean(i.isReceived || i.status === "Received" || (i.outstandingAmount === 0 && (i.amountRaised || i.amount)));
+
+// Invoice amount used for display and totals (falls back to `amount`).
+const getInvoiceAmount = (i: EnrichedInvoiceItem): number | undefined | null =>
+  i.amountRaised || i.amount;
+
+const getInvoiceAmountNum = (i: EnrichedInvoiceItem): number =>
+  getInvoiceAmount(i) || 0;
+
+const isPrinted = (printed: unknown): boolean => {
+  if (typeof printed === "string") {
+    const v = printed.trim().toLowerCase();
+    return v === "yes" || v === "true";
+  }
+  return Boolean(printed);
+};
+
+const formatDate = (value?: string | null): string => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return value; // keep raw text if not a parseable date
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const labelForPeriod = (p: OutstandingPeriod, year: number): string => {
+  // `year` is the year the financial year STARTS (2026 = Apr 2026 to Mar 2027)
+  if (p.type === "month") {
+    const m = ALL_MONTHS.find((x) => x.num === p.month);
+    return m ? `${m.name} ${calendarYearForMonth(year, m.num)}` : `Month ${fiscalYearLabel(year)}`;
+  }
+  if (p.type === "quarter") {
+    const q = ALL_QUARTERS.find((x) => x.key === p.quarter);
+    return q ? `${q.title} (${q.rangeText}) ${fiscalYearLabel(year)}` : `Quarter ${fiscalYearLabel(year)}`;
+  }
+  return `${fiscalYearLabel(year)} (Apr – Mar)`;
+};
+
+// Safe CSV cell: always quoted, quotes escaped, formulas neutralised
+const csvCell = (v: unknown): string => {
+  let s = v === null || v === undefined ? "" : String(v);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return `"${s.replace(/"/g, '""')}"`;
+};
+
+const YEAR_OPTIONS = [2027, 2026, 2025, 2024, 2023];
 
 export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
   projects,
@@ -47,14 +113,29 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
   onViewProject,
   onEditProject,
   onOpenGoogleSheetSync,
+  onRefreshData,
+  isSyncing = false,
 }) => {
   const [currentPeriod, setCurrentPeriod] = useState<OutstandingPeriod>(initialPeriod);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "received">("all");
-  const [selectedYear, setSelectedYear] = useState<number>(currentPeriod.year || 2026);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedCollege, setSelectedCollege] = useState<string>("all");
   const [collegeSearchTerm, setCollegeSearchTerm] = useState<string>("");
   const [isCollegeDropdownOpen, setIsCollegeDropdownOpen] = useState<boolean>(false);
+  const [isLocalRefreshing, setIsLocalRefreshing] = useState<boolean>(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+
+  // Year is derived from the period so the two can never drift apart
+  const selectedYear: number = currentPeriod.year || 2026;
+  const isRefreshing = isLocalRefreshing || isSyncing;
+
+  const yearOptions = useMemo(
+    () =>
+      YEAR_OPTIONS.includes(selectedYear)
+        ? YEAR_OPTIONS
+        : [selectedYear, ...YEAR_OPTIONS].sort((a, b) => b - a),
+    [selectedYear]
+  );
 
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableScrollRef = useRef<HTMLDivElement>(null);
@@ -63,44 +144,69 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
   const isSyncingScroll = useRef(false);
 
-  // Close college dropdown on outside click
+  // If the parent passes a different initial period later, follow it
   useEffect(() => {
+    setCurrentPeriod(initialPeriod);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    initialPeriod.type,
+    initialPeriod.year,
+    initialPeriod.month,
+    initialPeriod.quarter,
+    initialPeriod.label,
+  ]);
+
+  // Close college dropdown on outside click or Escape
+  useEffect(() => {
+    if (!isCollegeDropdownOpen) return;
+
+    const close = () => {
+      setIsCollegeDropdownOpen(false);
+      setCollegeSearchTerm("");
+    };
     const handleClickOutside = (event: MouseEvent) => {
       if (
         collegeDropdownRef.current &&
         !collegeDropdownRef.current.contains(event.target as Node)
       ) {
-        setIsCollegeDropdownOpen(false);
+        close();
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
 
-  // Distinct list of colleges with their invoice and project counts
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isCollegeDropdownOpen]);
+
+  const closeCollegeDropdown = () => {
+    setIsCollegeDropdownOpen(false);
+    setCollegeSearchTerm("");
+  };
+
+  // Distinct colleges (case-insensitive) with invoice and project counts
   const collegeOptions = useMemo(() => {
-    const map = new Map<string, { invoiceCount: number; projectCount: number }>();
+    const map = new Map<string, { name: string; invoiceCount: number; projectCount: number }>();
     projects.forEach((p) => {
       const name = (p.college_name || "").trim();
       if (!name) return;
-      if (!map.has(name)) {
-        map.set(name, { invoiceCount: 0, projectCount: 0 });
+      const key = name.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { name, invoiceCount: 0, projectCount: 0 });
       }
-      const data = map.get(name)!;
+      const data = map.get(key)!;
       data.projectCount++;
       data.invoiceCount += (p.invoices || []).length;
     });
 
-    return Array.from(map.entries())
-      .map(([name, data]) => ({
-        name,
-        invoiceCount: data.invoiceCount,
-        projectCount: data.projectCount,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [projects]);
 
-  // Filtered college list for dropdown search
   const filteredCollegeOptions = useMemo(() => {
     if (!collegeSearchTerm) return collegeOptions;
     const term = collegeSearchTerm.toLowerCase().trim();
@@ -110,62 +216,120 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
   // Projects filtered by selected college
   const filteredProjects = useMemo(() => {
     if (selectedCollege === "all") return projects;
-    return projects.filter(
-      (p) => (p.college_name || "").toLowerCase().trim() === selectedCollege.toLowerCase().trim()
-    );
+    const target = selectedCollege.toLowerCase().trim();
+    return projects.filter((p) => (p.college_name || "").toLowerCase().trim() === target);
   }, [projects, selectedCollege]);
 
-  // Re-calculate summary whenever period or filtered projects change
+  // Summary for current period + college
   const summary = useMemo(() => {
     return calculatePeriodOutstanding(filteredProjects, currentPeriod);
   }, [filteredProjects, currentPeriod]);
 
-  // Filter items by search term and status
+  // Dev check: duplicate ids in the data break React row reconciliation
+  useEffect(() => {
+    const seen = new Set<string>();
+    const dupes = new Set<string>();
+    summary.items.forEach((i) => {
+      const k = String(i.id);
+      if (seen.has(k)) dupes.add(k);
+      seen.add(k);
+    });
+    if (dupes.size > 0) {
+      console.warn("Step6: duplicate invoice ids in data:", Array.from(dupes));
+    }
+  }, [summary.items]);
+
+  // Tab counts use exactly the same predicates as the filter below
+  const pendingTabCount = useMemo(
+    () => summary.items.filter(isPendingItem).length,
+    [summary.items]
+  );
+  const receivedTabCount = useMemo(
+    () => summary.items.filter(isReceivedItem).length,
+    [summary.items]
+  );
+
+  // Colleges that actually have invoices in this period
+  const collegesInScope = useMemo(() => {
+    const set = new Set<string>();
+    summary.items.forEach((i) => {
+      const n = (i.collegeName || "").trim().toLowerCase();
+      if (n) set.add(n);
+    });
+    return set.size;
+  }, [summary.items]);
+
+  // Search + status filter, then a stable sort
   const filteredItems = useMemo(() => {
     const term = searchTerm.toLowerCase().trim();
-    return summary.items.filter((item) => {
-      if (!term) {
-        if (statusFilter === "pending") return item.isPendingInPeriod || !item.isReceived;
-        if (statusFilter === "received") return item.isReceived;
-        return true;
-      }
 
-      const matchesSearch =
-        item.collegeName.toLowerCase().includes(term) ||
-        item.projectCode.toLowerCase().includes(term) ||
-        item.invoiceCode.toLowerCase().includes(term) ||
-        item.academicYear.toLowerCase().includes(term) ||
-        (item.gaInvoiceCode && item.gaInvoiceCode.toLowerCase().includes(term)) ||
-        (item.invoiceType && item.invoiceType.toLowerCase().includes(term)) ||
-        (item.remarks && item.remarks.toLowerCase().includes(term)) ||
-        (item.tdsStatus && item.tdsStatus.toLowerCase().includes(term));
+    const matchesStatus = (i: EnrichedInvoiceItem) =>
+      statusFilter === "pending"
+        ? isPendingItem(i)
+        : statusFilter === "received"
+        ? isReceivedItem(i)
+        : true;
 
-      if (!matchesSearch) return false;
+    const matchesSearch = (i: EnrichedInvoiceItem) => {
+      if (!term) return true;
+      return (
+        (i.collegeName || "").toLowerCase().includes(term) ||
+        (i.projectCode || "").toLowerCase().includes(term) ||
+        (i.invoiceCode || "").toLowerCase().includes(term) ||
+        (i.academicYear || "").toLowerCase().includes(term) ||
+        (!!i.gaInvoiceCode && i.gaInvoiceCode.toLowerCase().includes(term)) ||
+        (!!i.invoiceType && i.invoiceType.toLowerCase().includes(term)) ||
+        (!!i.remarks && i.remarks.toLowerCase().includes(term)) ||
+        (!!i.tdsStatus && i.tdsStatus.toLowerCase().includes(term))
+      );
+    };
 
-      if (statusFilter === "pending") return item.isPendingInPeriod || !item.isReceived;
-      if (statusFilter === "received") return item.isReceived;
-
-      return true;
-    });
+    return summary.items
+      .filter((i) => matchesSearch(i) && matchesStatus(i))
+      .sort(
+        (a, b) =>
+          (a.collegeName || "").localeCompare(b.collegeName || "") ||
+          (a.invoiceCode || "").localeCompare(b.invoiceCode || "", undefined, { numeric: true })
+      );
   }, [summary.items, searchTerm, statusFilter]);
 
+  // Footer totals, computed once
+  const totals = useMemo(() => {
+    const raised = filteredItems.reduce((sum, i) => sum + getInvoiceAmountNum(i), 0);
+    const received = filteredItems
+      .filter(isReceivedItem)
+      .reduce((sum, i) => sum + getInvoiceAmountNum(i), 0);
+    const outstanding = filteredItems.reduce((sum, i) => sum + (i.outstandingAmount || 0), 0);
+    const pct = raised > 0 ? (received / raised) * 100 : 0;
+    return { raised, received, outstanding, pct };
+  }, [filteredItems]);
+
+  const isEmpty = filteredItems.length === 0;
+  const hasActiveFilters = searchTerm.trim() !== "" || statusFilter !== "all";
+
+  // Keep the top scrollbar width in sync with the real table width
   useEffect(() => {
+    const el = tableRef.current;
+    if (!el) {
+      setTableScrollWidth(0);
+      return;
+    }
     const updateWidth = () => {
-      if (tableRef.current) {
-        const width = Math.max(tableRef.current.scrollWidth, tableRef.current.offsetWidth);
-        setTableScrollWidth(width);
-      }
+      setTableScrollWidth(Math.max(el.scrollWidth, el.offsetWidth));
     };
     updateWidth();
-    const timer1 = setTimeout(updateWidth, 50);
-    const timer2 = setTimeout(updateWidth, 200);
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(updateWidth);
+      observer.observe(el);
+    }
     window.addEventListener("resize", updateWidth);
     return () => {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
+      observer?.disconnect();
       window.removeEventListener("resize", updateWidth);
     };
-  }, [filteredItems, summary]);
+  }, [isEmpty]);
 
   const handleTopScroll = () => {
     if (!isSyncingScroll.current && topScrollRef.current && tableScrollRef.current) {
@@ -187,43 +351,57 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
     }
   };
 
-  // Switch to specific quarter
+  const handleRefreshClick = async () => {
+    if (!onRefreshData || isRefreshing) return;
+    setIsLocalRefreshing(true);
+    setRefreshError(null);
+    try {
+      await onRefreshData();
+    } catch (e) {
+      console.error("Step6 refresh error:", e);
+      setRefreshError("Could not sync invoices. Check your connection and try again.");
+    } finally {
+      setIsLocalRefreshing(false);
+    }
+  };
+
+  // Period switchers (labels all come from the same helper shape)
+  const handleSelectAllYear = () => {
+    setCurrentPeriod({
+      type: "all",
+      year: selectedYear,
+      label: labelForPeriod({ type: "all", year: selectedYear, label: "" }, selectedYear),
+    });
+  };
+
   const handleSelectQuarter = (q: QuarterMeta) => {
-    const nextPeriod: OutstandingPeriod = {
+    setCurrentPeriod({
       type: "quarter",
       year: selectedYear,
       quarter: q.key,
-      label: `${q.title} (${q.rangeText}) ${selectedYear}`,
-    };
-    setCurrentPeriod(nextPeriod);
+      label: `${q.title} (${q.rangeText}) ${fiscalYearLabel(selectedYear)}`,
+    });
   };
 
-  // Switch to specific month
   const handleSelectMonth = (m: MonthMeta) => {
-    const nextPeriod: OutstandingPeriod = {
+    setCurrentPeriod({
       type: "month",
       year: selectedYear,
       month: m.num,
-      label: `${m.name} ${selectedYear}`,
-    };
-    setCurrentPeriod(nextPeriod);
+      label: `${m.name} ${calendarYearForMonth(selectedYear, m.num)}`,
+    });
   };
 
-  // Switch year
   const handleYearChange = (year: number) => {
-    setSelectedYear(year);
     setCurrentPeriod((prev) => ({
       ...prev,
       year,
-      label:
-        prev.type === "month"
-          ? `${summary.monthName || "Month"} ${year}`
-          : `${summary.quarterName || "Quarter"} ${year}`,
+      label: labelForPeriod(prev, year),
     }));
   };
 
-  // Export to CSV
-  const handleExportCSV = () => {
+  // Export to Excel (.xlsx format with formatted column widths)
+  const handleExportExcel = () => {
     const headers = [
       "#",
       "Project Code",
@@ -251,44 +429,70 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
 
     const rows = filteredItems.map((item, index) => [
       index + 1,
-      `"${item.projectCode}"`,
-      `"${item.collegeName}"`,
-      `"${item.academicYear}"`,
-      `"${item.invoiceCode}"`,
-      `"${item.gaInvoiceCode || ""}"`,
-      `"${item.invoiceType || ""}"`,
-      `"${item.label}"`,
-      `"${item.percentage}%"`,
-      item.amountFromMou || 0,
-      item.amountRaised || item.amount,
+      item.projectCode || "",
+      item.collegeName || "",
+      item.academicYear || "",
+      item.invoiceCode || "",
+      item.gaInvoiceCode || "",
+      item.invoiceType || "",
+      item.label || "",
+      item.percentage !== undefined && item.percentage !== null ? `${item.percentage}%` : "",
+      item.amountFromMou ?? 0,
+      getInvoiceAmountNum(item),
       item.isRaised ? "Raised" : "Pending",
       item.dateRaised || "",
       item.raisedProofUrl || "",
       item.isReceived ? "Received" : "Pending",
       item.dateReceived || "",
       item.receivedProofUrl || "",
-      item.outstandingAmount,
-      `"${item.status}"`,
-      `"${item.tdsStatus || ""}"`,
-      `"${item.printed || ""}"`,
-      `"${(item.remarks || "").replace(/"/g, '""')}"`,
+      item.outstandingAmount || 0,
+      item.status || "",
+      item.tdsStatus || "",
+      isPrinted(item.printed) ? "Yes" : "No",
+      item.remarks || "",
     ]);
 
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws["!cols"] = [
+      { wch: 6 },
+      { wch: 25 },
+      { wch: 35 },
+      { wch: 15 },
+      { wch: 18 },
+      { wch: 25 },
+      { wch: 15 },
+      { wch: 20 },
+      { wch: 10 },
+      { wch: 22 },
+      { wch: 25 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 30 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 30 },
+      { wch: 24 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 30 },
+    ];
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute(
-      "download",
-      `outstanding_report_${currentPeriod.label.replace(/[^a-zA-Z0-9]/g, "_")}.csv`
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Outstanding Report");
+    XLSX.writeFile(
+      wb,
+      `outstanding_report_${currentPeriod.label.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`
     );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
+
+  const onKeyActivate =
+    (fn: () => void) => (e: React.KeyboardEvent<HTMLElement>) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        fn();
+      }
+    };
 
   return (
     <div className="outstanding-page-container">
@@ -306,7 +510,14 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
           </button>
 
           <div className="outstanding-breadcrumbs">
-            <span className="crumb-item" onClick={onBackToDashboard} style={{ cursor: "pointer" }}>
+            <span
+              className="crumb-item"
+              role="button"
+              tabIndex={0}
+              onClick={onBackToDashboard}
+              onKeyDown={onKeyActivate(onBackToDashboard)}
+              style={{ cursor: "pointer" }}
+            >
               Dashboard
             </span>
             <ChevronRight size={14} className="crumb-separator" />
@@ -329,7 +540,10 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                 {selectedCollege !== "all" && (
                   <span className="hero-selected-college-tag">
                     {" • "}
-                    <Building2 size={13} style={{ display: "inline", verticalAlign: "-1px", marginRight: "3px" }} />
+                    <Building2
+                      size={13}
+                      style={{ display: "inline", verticalAlign: "-1px", marginRight: "3px" }}
+                    />
                     {selectedCollege}
                   </span>
                 )}
@@ -337,37 +551,97 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
             </div>
           </div>
 
-          <div className="hero-year-selector-wrap">
+          <div
+            className="hero-year-selector-wrap"
+            style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}
+          >
             <span className="year-selector-label">Financial Year:</span>
             <select
               className="styled-year-dropdown"
               value={selectedYear}
               onChange={(e) => handleYearChange(parseInt(e.target.value, 10))}
             >
-              <option value={2026}>2026</option>
-              <option value={2025}>2025</option>
-              <option value={2024}>2024</option>
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {fiscalYearLabel(y)}
+                </option>
+              ))}
             </select>
+
+            {onRefreshData && (
+              <button
+                type="button"
+                className={`outstanding-refresh-btn ${isRefreshing ? "spinning" : ""}`}
+                onClick={handleRefreshClick}
+                disabled={isRefreshing}
+                title="Sync latest invoices from Invoice Tracker sheet"
+              >
+                <RefreshCw size={15} />
+                <span>{isRefreshing ? "Syncing..." : "Sync Invoices"}</span>
+              </button>
+            )}
+
+            {onOpenGoogleSheetSync && (
+              <button
+                type="button"
+                className="outstanding-refresh-btn"
+                onClick={onOpenGoogleSheetSync}
+                title="Open Google Sheet sync settings"
+              >
+                <FileSpreadsheet size={15} />
+                <span>Google Sheet</span>
+              </button>
+            )}
           </div>
         </div>
 
+        {refreshError && (
+          <div
+            role="alert"
+            style={{
+              marginTop: "10px",
+              padding: "8px 12px",
+              borderRadius: "8px",
+              background: "#fef2f2",
+              color: "#b91c1c",
+              fontSize: "0.85rem",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span>{refreshError}</span>
+            <button
+              type="button"
+              onClick={() => setRefreshError(null)}
+              aria-label="Dismiss error"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* IN-PAGE PERIOD & COLLEGE SWITCHER */}
         <div className="inpage-period-switcher-wrap">
-          {/* Row 0: College Selector Dropdown */}
+          {/* College Selector Dropdown */}
           <div className="outstanding-college-filter-bar" ref={collegeDropdownRef}>
             <div className="switcher-group-label">
               <Building2 size={15} />
               <span>Filter by College:</span>
-              {selectedCollege !== "all" && (
-                <span className="active-filter-badge">Active</span>
-              )}
+              {selectedCollege !== "all" && <span className="active-filter-badge">Active</span>}
             </div>
 
             <div className="tcv-custom-select-wrap outstanding-college-select-wrap">
               <button
                 type="button"
                 className={`tcv-select-trigger-btn ${isCollegeDropdownOpen ? "active" : ""}`}
-                onClick={() => setIsCollegeDropdownOpen(!isCollegeDropdownOpen)}
+                aria-haspopup="listbox"
+                aria-expanded={isCollegeDropdownOpen}
+                onClick={() =>
+                  isCollegeDropdownOpen ? closeCollegeDropdown() : setIsCollegeDropdownOpen(true)
+                }
               >
                 <span className="tcv-trigger-text">
                   {selectedCollege === "all"
@@ -394,53 +668,62 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                         type="button"
                         className="clear-dropdown-search"
                         onClick={() => setCollegeSearchTerm("")}
+                        aria-label="Clear college search"
                       >
                         &times;
                       </button>
                     )}
                   </div>
 
-                  <div className="tcv-dropdown-options-list">
+                  <div className="tcv-dropdown-options-list" role="listbox">
                     <div
+                      role="option"
+                      aria-selected={selectedCollege === "all"}
+                      tabIndex={0}
                       className={`tcv-dropdown-option ${selectedCollege === "all" ? "selected" : ""}`}
                       onClick={() => {
                         setSelectedCollege("all");
-                        setIsCollegeDropdownOpen(false);
+                        closeCollegeDropdown();
                       }}
+                      onKeyDown={onKeyActivate(() => {
+                        setSelectedCollege("all");
+                        closeCollegeDropdown();
+                      })}
                     >
                       <div className="option-name-row">
-                        <span className="option-name font-semibold">
-                          All Colleges
-                        </span>
-                        <span className="option-meta-badge">
-                          {collegeOptions.length} colleges
-                        </span>
+                        <span className="option-name font-semibold">All Colleges</span>
+                        <span className="option-meta-badge">{collegeOptions.length} colleges</span>
                       </div>
-                      {selectedCollege === "all" && (
-                        <Check size={16} className="check-mark-icon" />
-                      )}
+                      {selectedCollege === "all" && <Check size={16} className="check-mark-icon" />}
                     </div>
 
-                    {filteredCollegeOptions.map((c) => (
-                      <div
-                        key={c.name}
-                        className={`tcv-dropdown-option ${selectedCollege === c.name ? "selected" : ""}`}
-                        onClick={() => {
-                          setSelectedCollege(c.name);
-                          setIsCollegeDropdownOpen(false);
-                        }}
-                      >
-                        <div className="option-name-row">
-                          <span className="option-name">{c.name}</span>
-                          <span className="option-val-tag">
-                            {c.invoiceCount} invoice{c.invoiceCount === 1 ? "" : "s"}
-                          </span>
+                    {filteredCollegeOptions.map((c) => {
+                      const isSelected =
+                        selectedCollege.toLowerCase().trim() === c.name.toLowerCase();
+                      const pick = () => {
+                        setSelectedCollege(c.name);
+                        closeCollegeDropdown();
+                      };
+                      return (
+                        <div
+                          key={c.name}
+                          role="option"
+                          aria-selected={isSelected}
+                          tabIndex={0}
+                          className={`tcv-dropdown-option ${isSelected ? "selected" : ""}`}
+                          onClick={pick}
+                          onKeyDown={onKeyActivate(pick)}
+                        >
+                          <div className="option-name-row">
+                            <span className="option-name">{c.name}</span>
+                            <span className="option-val-tag">
+                              {c.invoiceCount} invoice{c.invoiceCount === 1 ? "" : "s"}
+                            </span>
+                          </div>
+                          {isSelected && <Check size={16} className="check-mark-icon" />}
                         </div>
-                        {selectedCollege === c.name && (
-                          <Check size={16} className="check-mark-icon" />
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
 
                     {filteredCollegeOptions.length === 0 && (
                       <div className="tcv-dropdown-empty">
@@ -467,13 +750,22 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
 
           <div className="outstanding-filter-divider" />
 
-          {/* 1. Quarterly Tabs */}
+          {/* Full Year & Quarterly Tabs */}
           <div className="switcher-section-group">
             <div className="switcher-group-label">
               <Layers size={14} />
-              <span>Quarterly Reports:</span>
+              <span>Period Reports:</span>
             </div>
             <div className="quarter-tabs-row">
+              <button
+                type="button"
+                className={`quarter-tab-pill all-pill ${currentPeriod.type === "all" ? "active" : ""}`}
+                onClick={handleSelectAllYear}
+              >
+                <span className="q-pill-code">All Months</span>
+                <span className="q-pill-range">({fiscalYearLabel(selectedYear)})</span>
+              </button>
+
               {ALL_QUARTERS.map((q) => {
                 const isActive =
                   currentPeriod.type === "quarter" && currentPeriod.quarter === q.key;
@@ -492,7 +784,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
             </div>
           </div>
 
-          {/* 2. Monthly Tabs */}
+          {/* Monthly Tabs */}
           <div className="switcher-section-group" style={{ marginTop: "12px" }}>
             <div className="switcher-group-label">
               <Calendar size={14} />
@@ -500,8 +792,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
             </div>
             <div className="month-tabs-row">
               {ALL_MONTHS.map((m) => {
-                const isActive =
-                  currentPeriod.type === "month" && currentPeriod.month === m.num;
+                const isActive = currentPeriod.type === "month" && currentPeriod.month === m.num;
                 return (
                   <button
                     key={m.num}
@@ -534,7 +825,8 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
             </div>
             <div className="kpi-footer-row">
               <span className="kpi-count-text">
-                <strong>{summary.raisedCount}</strong> invoice{summary.raisedCount === 1 ? "" : "s"} raised
+                <strong>{summary.raisedCount}</strong> invoice{summary.raisedCount === 1 ? "" : "s"}{" "}
+                raised
               </span>
               <span className="kpi-period-tag">{currentPeriod.label}</span>
             </div>
@@ -578,7 +870,8 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
             </div>
             <div className="kpi-footer-row">
               <span className="kpi-count-text">
-                <strong>{summary.outstandingCount}</strong> pending invoice{summary.outstandingCount === 1 ? "" : "s"}
+                <strong>{summary.outstandingCount}</strong> pending invoice
+                {summary.outstandingCount === 1 ? "" : "s"}
               </span>
               <span className="kpi-pending-status">
                 {summary.outstandingAmount > 0 ? "Requires Collection" : "Fully Cleared"}
@@ -601,9 +894,9 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
             </div>
             <div className="kpi-footer-row">
               <span className="kpi-count-text">
-                Across <strong>{filteredProjects.length}</strong> college{filteredProjects.length === 1 ? "" : "s"}
+                Across <strong>{collegesInScope}</strong> college{collegesInScope === 1 ? "" : "s"}
               </span>
-              <span className="kpi-period-tag">{selectedYear}</span>
+              <span className="kpi-period-tag">{fiscalYearLabel(selectedYear)}</span>
             </div>
           </div>
         </div>
@@ -637,48 +930,102 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
               className={`filter-tab-btn pending-tab ${statusFilter === "pending" ? "active" : ""}`}
               onClick={() => setStatusFilter("pending")}
             >
-              Pending ({summary.outstandingCount})
+              Pending ({pendingTabCount})
             </button>
             <button
               type="button"
               className={`filter-tab-btn received-tab ${statusFilter === "received" ? "active" : ""}`}
               onClick={() => setStatusFilter("received")}
             >
-              Received ({summary.receivedCount})
+              Received ({receivedTabCount})
             </button>
           </div>
 
           <button
             type="button"
-            className="export-csv-btn"
-            onClick={handleExportCSV}
-            title="Export this report to CSV"
+            className="export-csv-btn export-excel-btn"
+            onClick={handleExportExcel}
+            disabled={isEmpty}
+            title="Export this report to Excel (.xlsx)"
           >
             <Download size={15} />
-            <span>Export CSV</span>
+            <span>Export Excel</span>
           </button>
         </div>
 
-        {/* Top Synchronized Horizontal Sliding Scrollbar */}
-        <div
-          className="table-top-scrollbar-wrap"
-          ref={topScrollRef}
-          onScroll={handleTopScroll}
-          title="Slide horizontally to view all table columns"
-        >
-          <div style={{ width: `${Math.max(tableScrollWidth, 1)}px`, height: "1px" }} />
-        </div>
+        {/* Top Synchronized Horizontal Scrollbar (hidden when there is no table) */}
+        {!isEmpty && (
+          <div
+            className="table-top-scrollbar-wrap"
+            ref={topScrollRef}
+            onScroll={handleTopScroll}
+            title="Slide horizontally to view all table columns"
+          >
+            <div style={{ width: `${Math.max(tableScrollWidth, 1)}px`, height: "1px" }} />
+          </div>
+        )}
 
         {/* Invoices Table */}
-        <div className="outstanding-table-scroll-wrap" ref={tableScrollRef} onScroll={handleTableScroll}>
-          {filteredItems.length === 0 ? (
+        <div
+          className="outstanding-table-scroll-wrap"
+          ref={tableScrollRef}
+          onScroll={handleTableScroll}
+        >
+          {isEmpty ? (
             <div className="empty-invoices-box">
               <Clock size={40} className="empty-icon" />
-              <h3>No Invoices Found for {currentPeriod.label}</h3>
+              <h3>
+                {hasActiveFilters
+                  ? "No invoices match your search or filter"
+                  : `No Invoices Found for ${currentPeriod.label}`}
+              </h3>
               <p>
-                There are no invoices matching this period or filter. Try switching to another
-                Quarter or Month above.
+                {hasActiveFilters
+                  ? "Try clearing the search box or switching back to All Invoices."
+                  : "There are no invoices in this period. Try another quarter or month above, or view all months."}
               </p>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "10px",
+                  justifyContent: "center",
+                  marginTop: "1rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    className="outstanding-refresh-btn"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setStatusFilter("all");
+                    }}
+                  >
+                    <span>Clear search & filter</span>
+                  </button>
+                )}
+                {!hasActiveFilters && currentPeriod.type !== "all" && (
+                  <button
+                    type="button"
+                    className="outstanding-refresh-btn"
+                    onClick={handleSelectAllYear}
+                  >
+                    <span>View All Months ({fiscalYearLabel(selectedYear)})</span>
+                  </button>
+                )}
+                {onRefreshData && (
+                  <button
+                    type="button"
+                    className="outstanding-refresh-btn"
+                    onClick={handleRefreshClick}
+                    disabled={isRefreshing}
+                  >
+                    <RefreshCw size={15} className={isRefreshing ? "spinning" : ""} />
+                    <span>{isRefreshing ? "Syncing..." : "Sync Invoices"}</span>
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <table className="outstanding-data-table" ref={tableRef}>
@@ -693,21 +1040,39 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                   <th>Tick Received</th>
                   <th className="text-right">Outstanding (₹)</th>
                   <th className="text-center">Status</th>
-                  <th className="text-center" style={{ width: "110px" }}>Actions</th>
+                  <th className="text-center" style={{ width: "110px" }}>
+                    Actions
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody key={`${statusFilter}|${currentPeriod.label}|${selectedCollege}`}>
                 {filteredItems.map((item, idx) => {
+                  const amount = getInvoiceAmount(item);
+                  const showMouAmount =
+                    !!item.amountFromMou && item.amountFromMou !== (amount ?? 0);
+
                   return (
-                    <tr key={item.id} className={item.isReceived ? "row-received" : "row-pending"}>
+                    <tr
+                      key={`${item.id ?? ""}|${item.projectCode ?? ""}|${item.invoiceCode ?? ""}|${idx}`}
+                      className={item.isReceived ? "row-received" : "row-pending"}
+                    >
+                      {/* Running row number for the current view */}
                       <td className="text-muted font-mono">{idx + 1}</td>
                       <td>
                         <div className="college-info-cell">
                           <span className="college-main-name">
-                            {item.collegeName ? item.collegeName : <span className="missing-data-text">Missing data</span>}
+                            {item.collegeName ? (
+                              item.collegeName
+                            ) : (
+                              <span className="missing-data-text">Missing data</span>
+                            )}
                           </span>
                           <span className="project-code-sub">
-                            {item.projectCode ? item.projectCode : <span className="missing-data-text">Missing data</span>}
+                            {item.projectCode ? (
+                              item.projectCode
+                            ) : (
+                              <span className="missing-data-text">Missing data</span>
+                            )}
                           </span>
                         </div>
                       </td>
@@ -716,7 +1081,10 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                           <div className="milestone-badge-row">
                             <span className="invoice-code-badge">{item.invoiceCode || "INV"}</span>
                             {item.gaInvoiceCode && (
-                              <span className="ga-code-badge" title={`GA Invoice Code / Tally ERP: ${item.gaInvoiceCode}`}>
+                              <span
+                                className="ga-code-badge"
+                                title={`GA Invoice Code / Tally ERP: ${item.gaInvoiceCode}`}
+                              >
                                 GA: {item.gaInvoiceCode}
                               </span>
                             )}
@@ -736,21 +1104,25 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                       </td>
                       <td>
                         <span className="share-pct-pill">
-                          {item.percentage !== undefined && item.percentage !== null ? `${item.percentage}%` : <span className="missing-data-text">Missing data</span>}
+                          {item.percentage !== undefined && item.percentage !== null ? (
+                            `${item.percentage}%`
+                          ) : (
+                            <span className="missing-data-text">Missing data</span>
+                          )}
                         </span>
                       </td>
                       <td className="text-right">
                         <div className="amount-cell-wrap">
                           <span className="font-semibold text-main">
-                            {(item.amountRaised || item.amount) ? (
-                              formatINR(item.amountRaised || item.amount)
+                            {amount !== undefined && amount !== null ? (
+                              formatINR(amount)
                             ) : (
                               <span className="missing-data-text">Missing data</span>
                             )}
                           </span>
-                          {item.amountFromMou && item.amountFromMou !== (item.amountRaised || item.amount) && (
+                          {showMouAmount && (
                             <span className="mou-amount-sub" title="MOU Planned Amount">
-                              MOU: {formatINR(item.amountFromMou)}
+                              MOU: {formatINR(item.amountFromMou as number)}
                             </span>
                           )}
                         </div>
@@ -759,10 +1131,12 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                         <div className="proof-cell-wrap">
                           {item.isRaised ? (
                             <span className="status-indicator-badge raised-badge">
-                              ✓ Raised {item.dateRaised ? `(${item.dateRaised})` : ""}
+                              ✓ Raised {item.dateRaised ? `(${formatDate(item.dateRaised)})` : ""}
                             </span>
                           ) : (
-                            <span className="status-indicator-badge unraised-badge">Pending Raise</span>
+                            <span className="status-indicator-badge unraised-badge">
+                              Pending Raise
+                            </span>
                           )}
                           {item.raisedProofUrl && (
                             <a
@@ -781,10 +1155,13 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                         <div className="proof-cell-wrap">
                           {item.isReceived ? (
                             <span className="status-indicator-badge received-badge">
-                              ✓ Received {item.dateReceived ? `(${item.dateReceived})` : ""}
+                              ✓ Received{" "}
+                              {item.dateReceived ? `(${formatDate(item.dateReceived)})` : ""}
                             </span>
                           ) : (
-                            <span className="status-indicator-badge pending-received-badge">Pending</span>
+                            <span className="status-indicator-badge pending-received-badge">
+                              Pending
+                            </span>
                           )}
                           {item.receivedProofUrl && (
                             <a
@@ -822,9 +1199,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                               TDS: {item.tdsStatus}
                             </span>
                           )}
-                          {(typeof item.printed === "string"
-                            ? item.printed.trim().toLowerCase() === "yes" || item.printed.trim().toLowerCase() === "true"
-                            : Boolean(item.printed)) && (
+                          {isPrinted(item.printed) && (
                             <span className="printed-tag" title="Hardcopy Printed & Dispatched">
                               🖨️ Hardcopy
                             </span>
@@ -838,6 +1213,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                             className="row-action-btn view-btn"
                             onClick={() => onViewProject(item.project)}
                             title="View Health Report"
+                            aria-label="View Health Report"
                           >
                             <Eye size={15} />
                           </button>
@@ -846,6 +1222,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                             className="row-action-btn edit-btn"
                             onClick={() => onEditProject(item.project)}
                             title="Edit / Update Milestones"
+                            aria-label="Edit / Update Milestones"
                           >
                             <Edit3 size={15} />
                           </button>
@@ -855,23 +1232,24 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                   );
                 })}
               </tbody>
-              {/* Summary Totals Row */}
+              {/* Totals for the rows currently shown (respects search + status filter) */}
               <tfoot>
                 <tr className="table-totals-row">
                   <td colSpan={4} className="font-bold">
-                    Total for {currentPeriod.label} ({filteredItems.length} Invoices)
+                    {hasActiveFilters ? "Filtered total" : "Total"} for {currentPeriod.label} (
+                    {filteredItems.length} Invoices)
                   </td>
                   <td className="text-right font-bold text-blue-600">
-                    {formatINR(filteredItems.reduce((sum, item) => sum + item.amount, 0))}
+                    {formatINR(totals.raised)}
                   </td>
                   <td colSpan={2} className="text-center font-semibold text-emerald-600">
-                    Received: {formatINR(filteredItems.filter((i) => i.isReceived).reduce((sum, item) => sum + item.amount, 0))}
+                    Received: {formatINR(totals.received)}
                   </td>
                   <td className="text-right font-bold text-amber-600">
-                    {formatINR(filteredItems.reduce((sum, item) => sum + item.outstandingAmount, 0))}
+                    {formatINR(totals.outstanding)}
                   </td>
                   <td colSpan={2} className="text-center text-muted font-medium">
-                    {summary.collectionEfficiencyPct.toFixed(1)}% Collected
+                    {totals.pct.toFixed(1)}% Collected
                   </td>
                 </tr>
               </tfoot>

@@ -446,16 +446,6 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
                 <span>{googleSheetCount > 0 ? `Sheet (${googleSheetCount})` : "Sync Sheet"}</span>
               </button>
             )}
-
-            <button
-              type="button"
-              className="toolbar-btn export-btn"
-              onClick={exportToCSV}
-              title="Export as Excel / CSV"
-            >
-              <Download size={15} />
-              <span>Export CSV</span>
-            </button>
           </div>
         </div>
 
