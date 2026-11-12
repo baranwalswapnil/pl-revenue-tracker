@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import * as XLSX from "xlsx";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -12,6 +13,7 @@ import {
   RefreshCw,
   Sparkles,
   ChevronDown,
+  Check,
 } from "lucide-react";
 import { type GoogleSheetMOUItem, parseMOUDateMonth } from "../lib/googleSheetsService";
 import { formatINR } from "../lib/mockData";
@@ -128,7 +130,8 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
       }
       const data = map.get(name)!;
       data.count++;
-      data.tcv += item.totalContractValue || 0;
+      // Sum of TCV incl GST only per user specification
+      data.tcv += item.totalContractValueGst || (item.totalContractValue ? Math.round(item.totalContractValue * 1.18) : 0);
     });
 
     const list = Array.from(map.entries()).map(([name, data]) => ({
@@ -161,9 +164,10 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
       if (parsed.monthNum > 0 && parsed.year > 0) {
         const key = `${parsed.year}-${parsed.monthNum}`;
         const existing = statsMap.get(key) || { count: 0, tcv: 0, tcvGst: 0 };
+        const tcvGstVal = item.totalContractValueGst || (item.totalContractValue ? Math.round(item.totalContractValue * 1.18) : 0);
         existing.count += 1;
-        existing.tcv += item.totalContractValue || 0;
-        existing.tcvGst += item.totalContractValueGst || 0;
+        existing.tcv += tcvGstVal; // Sum of TCV incl GST only
+        existing.tcvGst += tcvGstVal;
         statsMap.set(key, existing);
       }
     });
@@ -365,20 +369,20 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     return `Full Year ${selectedYear}`;
   }, [periodMode, selectedQuarter, selectedMonthNum, selectedYear]);
 
-  // CSV Export handler
-  const handleExportCSV = () => {
+  // Excel Export handler (.xlsx format)
+  const handleExportExcel = () => {
     const headers = [
       "#",
       "Contract Type",
       "College Name",
       "Project Code",
       "MOU Signed Date",
-      "Date & Month (Col AR)",
+      "Date & Month",
       "Academic Year",
       "No of Students",
       "Cost Per Student (INR)",
-      "Total Contract Value (INR) [Col R]",
-      "Total Contract Value with GST (INR) [Col S]",
+      "Total Contract Value without GST (INR)",
+      "Total Contract Value with GST (INR)",
       "Payment Type",
       "Course/Stream",
       "Domain of Training",
@@ -386,35 +390,45 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
     const rows = filteredItems.map((item, idx) => [
       idx + 1,
-      `"${item.contractType || "New"}"`,
-      `"${item.collegeName || "Missing data"}"`,
-      `"${item.projectCode || "Missing data"}"`,
-      `"${item.mouSignedDate || ""}"`,
-      `"${item.month || "Missing data"}"`,
-      `"${item.academicYear || "26-27"}"`,
+      item.contractType || "New",
+      item.collegeName || "Missing data",
+      item.projectCode || "Missing data",
+      item.mouSignedDate || "",
+      item.month || "Missing data",
+      item.academicYear || "26-27",
       item.studentCount || 0,
       item.costPerStudent || 0,
       item.totalContractValue || 0,
       item.totalContractValueGst || 0,
-      `"${item.paymentType || ""}"`,
-      `"${item.courseStream || ""}"`,
-      `"${item.domainOfTraining || ""}"`,
+      item.paymentType || "",
+      item.courseStream || "",
+      item.domainOfTraining || "",
     ]);
 
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws["!cols"] = [
+      { wch: 6 },
+      { wch: 15 },
+      { wch: 35 },
+      { wch: 25 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 15 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 25 },
+      { wch: 25 },
+      { wch: 16 },
+      { wch: 25 },
+      { wch: 25 },
+    ];
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute(
-      "download",
-      `TCV_MOUs_26_27_Report_${currentPeriodLabel.replace(/[^a-zA-Z0-9]/g, "_")}.csv`
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "TCV MOUs Report");
+    XLSX.writeFile(
+      wb,
+      `TCV_MOUs_26_27_Report_${currentPeriodLabel.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`
     );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   return (
@@ -457,7 +471,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                 Total Contract Value (TCV) Explorer
               </h1>
               <p className="outstanding-page-sub-title">
-                Sourced from <strong>MOUs 26-27</strong> sheet • Total Contract Value (Col R), Total with GST (Col S), Date & Month (Col AR)
+                Sourced from <strong>Business Data 26-27</strong> sheet • Project Code (Col D), College Name (Col E), Stream (Col G), Students (Col H), Rate (Col I), TCV without GST (Col J), TCV incl GST (Col K)
               </p>
             </div>
           </div>
@@ -469,7 +483,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                 className={`outstanding-refresh-btn ${isLocalRefreshing ? "spinning" : ""}`}
                 onClick={handleRefreshClick}
                 disabled={isLocalRefreshing}
-                title="Sync latest data from MOUs 26-27 sheet"
+                title="Sync latest data from Business Data 26-27 sheet"
               >
                 <RefreshCw size={15} />
                 <span>{isLocalRefreshing ? "Syncing..." : "Sync Sheet"}</span>
@@ -478,12 +492,12 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
             <button
               type="button"
-              className="outstanding-export-btn"
-              onClick={handleExportCSV}
-              title="Export filtered records to CSV"
+              className="outstanding-export-btn export-excel-btn"
+              onClick={handleExportExcel}
+              title="Export filtered records to Excel (.xlsx)"
             >
               <Download size={15} />
-              <span>Export CSV</span>
+              <span>Export Excel</span>
             </button>
           </div>
         </div>
@@ -723,28 +737,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
       {/* KPI METRIC CARDS (TOTAL CONTRACT VALUE & GST SUMMARY) */}
       <div className="outstanding-kpis-grid tcv-kpis-grid">
-        {/* Card 1: Total Contract Value (Col R) */}
-        <div className="kpi-card total-kpi-card">
-          <div className="kpi-card-inner">
-            <div className="kpi-header-row">
-              <span className="kpi-title">Total Contract Value (₹)</span>
-              <span className="kpi-badge-icon total-badge-icon">
-                <Coins size={18} />
-              </span>
-            </div>
-            <div className="kpi-value-row">
-              <span className="kpi-amount">{formatINR(summary.totalTcv)}</span>
-            </div>
-            <div className="kpi-footer-row">
-              <span className="kpi-count-text">
-                Base Revenue Sourced from <strong>Column R</strong>
-              </span>
-              <span className="kpi-period-tag">{currentPeriodLabel}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Total Contract Value Incl GST (Col S) */}
+        {/* Card 1: Total Contract Value Incl GST (Col K) - Primary Sum */}
         <div className="kpi-card received-kpi-card">
           <div className="kpi-card-inner">
             <div className="kpi-header-row">
@@ -758,11 +751,32 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
             </div>
             <div className="kpi-footer-row">
               <span className="kpi-count-text">
-                Gross with 18% GST Sourced from <strong>Column S</strong>
+                Gross with GST Sourced from <strong>Column K</strong>
               </span>
               <span className="kpi-pct-tag" style={{ color: "#16a34a", background: "#dcfce7" }}>
-                18% GST
+                Sum of TCV incl GST
               </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Base Contract Value without GST (Col J) */}
+        <div className="kpi-card total-kpi-card">
+          <div className="kpi-card-inner">
+            <div className="kpi-header-row">
+              <span className="kpi-title">Base Value without GST (₹)</span>
+              <span className="kpi-badge-icon total-badge-icon">
+                <Coins size={18} />
+              </span>
+            </div>
+            <div className="kpi-value-row">
+              <span className="kpi-amount">{formatINR(summary.totalTcv)}</span>
+            </div>
+            <div className="kpi-footer-row">
+              <span className="kpi-count-text">
+                Base Sourced from <strong>Column J</strong>
+              </span>
+              <span className="kpi-period-tag">{currentPeriodLabel}</span>
             </div>
           </div>
         </div>
@@ -781,7 +795,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
             </div>
             <div className="kpi-footer-row">
               <span className="kpi-count-text">
-                Calculated difference (<strong>Col S - Col R</strong>)
+                Calculated difference (<strong>Col K - Col J</strong>)
               </span>
               <span className="kpi-period-tag">Tax Component</span>
             </div>
@@ -798,7 +812,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
               </span>
             </div>
             <div className="kpi-value-row">
-              <span className="kpi-amount">{summary.mouCount} MOUs</span>
+              <span className="kpi-amount">{summary.mouCount} Records</span>
             </div>
             <div className="kpi-footer-row">
               <span className="kpi-count-text">
@@ -836,7 +850,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
           <div className="tcv-record-counter-badge">
             Showing <strong>{filteredItems.length}</strong> of{" "}
-            <strong>{mouItems.length}</strong> records from MOUs 26-27
+            <strong>{mouItems.length}</strong> records from Business Data 26-27
           </div>
         </div>
 
@@ -861,28 +875,41 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
           {filteredItems.length === 0 ? (
             <div className="empty-invoices-box">
               <FileSpreadsheet size={40} className="empty-icon" />
-              <h3>No MOU Records Found</h3>
+              <h3>No Records Found</h3>
               <p>
-                There are no records matching the selected College or Period.
-                Try adjusting your filters above.
+                {mouItems.length === 0
+                  ? "No MOU records are currently loaded. Click below to sync latest data directly from the Business Data 26-27 sheet."
+                  : "There are no records matching the selected College or Period. Try adjusting your filters above."}
               </p>
+              {mouItems.length === 0 && onRefreshData && (
+                <button
+                  type="button"
+                  className="outstanding-refresh-btn"
+                  style={{ marginTop: "1rem", margin: "1rem auto 0" }}
+                  onClick={handleRefreshClick}
+                  disabled={isLocalRefreshing}
+                >
+                  <RefreshCw size={15} className={isLocalRefreshing ? "spinning" : ""} />
+                  <span>{isLocalRefreshing ? "Syncing..." : "Sync Business Data 26-27"}</span>
+                </button>
+              )}
             </div>
           ) : (
             <table className="outstanding-data-table tcv-data-table" ref={tableRef}>
               <thead>
                 <tr>
                   <th style={{ width: "45px" }}>#</th>
-                  <th>College Name & Project Code</th>
-                  <th>Date & Month (Col AR)</th>
+                  <th>College Name (Col E) & Project Code (Col D)</th>
+                  <th>Date & Month</th>
                   <th className="text-center th-highlight-students">
-                    Students & Rate
+                    Students (Col H) & Rate (Col I)
                   </th>
-                  <th className="text-right th-highlight-tcv">
-                    Total Contract Value (₹) [Col R]
+                  <th className="text-right">
+                    TCV without GST (₹) [Col J]
                   </th>
-                  <th className="text-right">Total with GST (₹) [Col S]</th>
+                  <th className="text-right th-highlight-tcv">Total with GST (₹) [Col K]</th>
                   <th className="text-right">GST Amount (₹)</th>
-                  <th className="text-center">Contract & Stream</th>
+                  <th className="text-center">Stream (Col G)</th>
                 </tr>
               </thead>
               <tbody>
@@ -953,20 +980,20 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                           )}
                         </div>
                       </td>
-                      <td className="text-right font-semibold td-highlight-tcv">
+                      <td className="text-right text-muted font-mono">
                         {isMissingTcv ? (
                           <span className="missing-data-text">Missing data</span>
                         ) : (
-                          <span className="tcv-base-amount highlighted">
+                          <span>
                             {formatINR(item.totalContractValue)}
                           </span>
                         )}
                       </td>
-                      <td className="text-right">
+                      <td className="text-right font-semibold td-highlight-tcv">
                         {isMissingTcvGst ? (
                           <span className="badge-pill missing-badge">Missing data</span>
                         ) : (
-                          <span className="badge-pill green-badge font-semibold">
+                          <span className="tcv-base-amount highlighted green-badge">
                             {formatINR(item.totalContractValueGst)}
                           </span>
                         )}

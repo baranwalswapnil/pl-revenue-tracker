@@ -1,27 +1,29 @@
 import type { Project, InvoiceMilestone } from "./models";
 import { generateMilestoneInvoices } from "./mockData";
 
-export type PeriodType = "month" | "quarter";
+export type PeriodType = "all" | "month" | "quarter";
 
 export interface OutstandingPeriod {
   type: PeriodType;
+  /**
+   * Year in which the FINANCIAL YEAR STARTS (April to March).
+   * 2026 = FY 2026-27 = Apr 2026 to Mar 2027.
+   */
   year: number;
-  month?: number; // 1 to 12
+  month?: number; // 1 to 12 (calendar month number)
   quarter?: "Q1" | "Q2" | "Q3" | "Q4"; // Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar
   label: string;
 }
 
 export interface MonthMeta {
-  num: number; // 1-12
+  num: number; // 1-12 (calendar month number)
   name: string;
   short: string;
   quarter: "Q1" | "Q2" | "Q3" | "Q4";
 }
 
+// Ordered April to March so the month buttons follow the financial year
 export const ALL_MONTHS: MonthMeta[] = [
-  { num: 1, name: "January", short: "Jan", quarter: "Q4" },
-  { num: 2, name: "February", short: "Feb", quarter: "Q4" },
-  { num: 3, name: "March", short: "Mar", quarter: "Q4" },
   { num: 4, name: "April", short: "Apr", quarter: "Q1" },
   { num: 5, name: "May", short: "May", quarter: "Q1" },
   { num: 6, name: "June", short: "Jun", quarter: "Q1" },
@@ -31,6 +33,9 @@ export const ALL_MONTHS: MonthMeta[] = [
   { num: 10, name: "October", short: "Oct", quarter: "Q3" },
   { num: 11, name: "November", short: "Nov", quarter: "Q3" },
   { num: 12, name: "December", short: "Dec", quarter: "Q3" },
+  { num: 1, name: "January", short: "Jan", quarter: "Q4" },
+  { num: 2, name: "February", short: "Feb", quarter: "Q4" },
+  { num: 3, name: "March", short: "Mar", quarter: "Q4" },
 ];
 
 export interface QuarterMeta {
@@ -76,6 +81,27 @@ export const ALL_QUARTERS: QuarterMeta[] = [
     color: "#8b5cf6",
   },
 ];
+
+/* ------------------------------------------------------------------ */
+/* Financial year helpers (Indian FY: April to March)                  */
+/* ------------------------------------------------------------------ */
+
+export const FY_START_MONTH = 4;
+
+/** Financial year (by start year) that a calendar date belongs to. */
+export function getFiscalYear(parts: { year: number; month: number }): number {
+  return parts.month >= FY_START_MONTH ? parts.year : parts.year - 1;
+}
+
+/** 2026 -> "FY 2026-27" */
+export function fiscalYearLabel(startYear: number): string {
+  return `FY ${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+}
+
+/** Calendar year in which `month` falls inside the FY that starts in `startYear`. */
+export function calendarYearForMonth(startYear: number, month: number): number {
+  return month >= FY_START_MONTH ? startYear : startYear + 1;
+}
 
 export interface EnrichedInvoiceItem {
   id: string;
@@ -149,6 +175,25 @@ export function parseDateParts(dateStr?: string): { year: number; month: number;
     return { year: parseInt(dmy[3], 10), month: parseInt(dmy[2], 10), day: parseInt(dmy[1], 10) };
   }
 
+  // DD/MM/YY or DD-MM-YY (e.g. 15/06/26 -> 2026-06-15)
+  const dmyShort = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2})$/);
+  if (dmyShort) {
+    const yr = parseInt(dmyShort[3], 10);
+    return { year: 2000 + yr, month: parseInt(dmyShort[2], 10), day: parseInt(dmyShort[1], 10) };
+  }
+
+  // Excel serial date (e.g. 45000 - 60000), read in UTC to avoid time zone shifts
+  if (/^\d{5}$/.test(str)) {
+    const serial = parseInt(str, 10);
+    const utcDays = Math.floor(serial - 25569);
+    const date = new Date(utcDays * 86400 * 1000);
+    return {
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+    };
+  }
+
   try {
     const d = new Date(str);
     if (!isNaN(d.getTime())) {
@@ -162,14 +207,17 @@ export function parseDateParts(dateStr?: string): { year: number; month: number;
 }
 
 /**
- * Checks if a given date falls inside the requested OutstandingPeriod
+ * Checks if a given date falls inside the requested OutstandingPeriod.
+ * period.year is the FINANCIAL year start (2026 = Apr 2026 to Mar 2027),
+ * so Q4 of 2026 means Jan to Mar 2027.
  */
 export function isDateInPeriod(dateStr: string | undefined, period: OutstandingPeriod): boolean {
   if (!dateStr) return false;
   const parts = parseDateParts(dateStr);
   if (!parts) return false;
 
-  if (period.year && parts.year !== period.year) {
+  // Compare financial years, not calendar years
+  if (period.year && getFiscalYear(parts) !== period.year) {
     return false;
   }
 
@@ -223,111 +271,100 @@ export function calculatePeriodOutstanding(
           );
 
     projectInvoices.forEach((inv, idx) => {
-      const isRaisedInPeriod = isDateInPeriod(inv.dateRaised, period);
-      const isReceivedInPeriod = isDateInPeriod(inv.dateReceived, period);
-
-      // Check if invoice belongs to or is active in this period
-      const isRelevantForPeriod =
-        isRaisedInPeriod ||
-        isReceivedInPeriod ||
-        (!inv.dateRaised && isDateInPeriod(projStartDate, period));
-
-      if (isRelevantForPeriod) {
-        const invTypeLower = (inv.invoiceType || "").toLowerCase();
-        const invStatusLower = (inv.status || "").toLowerCase();
-        const invDateReceived = (inv.dateReceived || "").trim();
-
-        // 1. Check if Received / Collected (matches "received", "recieved", "paid", "cleared", dateReceived)
-        const isActuallyReceived = Boolean(
-          inv.isReceived ||
-          invTypeLower.includes("rec") ||
-          invTypeLower.includes("paid") ||
-          invTypeLower.includes("clear") ||
-          invStatusLower.includes("rec") ||
-          invStatusLower.includes("paid") ||
-          invStatusLower.includes("clear") ||
-          invDateReceived.length > 0
-        );
-
-        // 2. Check if Processed / Raised (matches "processed", "raised", "pending", "hold", "ti for pi", dateRaised, amountRaised)
-        // Only explicitly Raised and Processed invoices should be counted in Outstanding / Pending Balance
-        const isActuallyRaised = Boolean(
-          isActuallyReceived ||
-          inv.isRaised ||
-          invTypeLower.includes("process") ||
-          invTypeLower.includes("raise") ||
-          invTypeLower.includes("pend") ||
-          invTypeLower.includes("hold") ||
-          invTypeLower.includes("ti for pi") ||
-          invStatusLower.includes("process") ||
-          invStatusLower.includes("raise") ||
-          invStatusLower.includes("pend") ||
-          invStatusLower.includes("hold") ||
-          invStatusLower.includes("ti for pi") ||
-          (inv.dateRaised && inv.dateRaised.trim().length > 0) ||
-          (inv.amountRaised && inv.amountRaised > 0)
-        );
-
-        let status: "Received" | "Pending Payment" | "Unraised" = "Unraised";
-        if (isActuallyReceived) {
-          status = "Received";
-        } else if (isActuallyRaised) {
-          status = "Pending Payment";
-        }
-
-        const milestoneAmt = inv.amountRaised || inv.amount || 0;
-        const pendingBal = isActuallyReceived ? 0 : (isActuallyRaised ? milestoneAmt : 0);
-
-        if (isActuallyRaised) {
-          raisedCount++;
-          raisedAmount += milestoneAmt;
-        }
-
-        if (isActuallyReceived) {
-          receivedCount++;
-          receivedAmount += milestoneAmt;
-        } else if (isActuallyRaised) {
-          // ONLY Processed / Raised invoices come in Outstanding / Pending Balance
-          outstandingCount++;
-          outstandingAmount += milestoneAmt;
-        }
-
-        items.push({
-          id: inv.id || `${proj.id}-inv-${idx + 1}`,
-          projectId: proj.id,
-          collegeName: proj.college_name,
-          projectCode: proj.project_code,
-          academicYear: proj.academic_year,
-          passingYear: proj.passing_year,
-          paymentType: proj.payment_type,
-          invoiceNumber: inv.invoiceNumber || idx + 1,
-          invoiceCode: inv.invoiceCode || `INV-${String(idx + 1).padStart(2, "0")}`,
-          label: inv.label || `Milestone ${idx + 1}`,
-          percentage: inv.percentage || 100 / projectInvoices.length,
-          amount: inv.amount,
-          amountFromMou: inv.amountFromMou,
-          amountRaised: inv.amountRaised || (isActuallyRaised ? inv.amount : 0),
-          isRaised: isActuallyRaised,
-          dateRaised: inv.dateRaised,
-          raisedProofUrl: inv.raisedProofUrl,
-          raisedProofName: inv.raisedProofName,
-          isReceived: isActuallyReceived,
-          dateReceived: inv.dateReceived,
-          receivedProofUrl: inv.receivedProofUrl,
-          receivedProofName: inv.receivedProofName,
-          outstandingAmount: pendingBal,
-          isRaisedInPeriod,
-          isReceivedInPeriod,
-          isPendingInPeriod: isActuallyRaised && !isActuallyReceived,
-          status,
-          invoiceType: inv.invoiceType,
-          remarks: inv.remarks,
-          gaInvoiceCode: inv.gaInvoiceCode,
-          printed: inv.printed,
-          tdsStatus: inv.tdsStatus,
-          project: proj,
-        });
+      // 1. Strict bifurcation according to Date in Column K (inv.dateRaised)
+      const isDateMatched = isDateInPeriod(inv.dateRaised, period);
+      if (!isDateMatched) {
+        return; // Only invoices whose Column K date falls into this period are included
       }
+
+      const invTypeLower = (inv.invoiceType || "").toLowerCase().trim();
+      const invStatusLower = (inv.status || "").toLowerCase().trim();
+      const invDateReceived = (inv.dateReceived || "").trim();
+
+      // Received / collected. Whole-word match so "unpaid" or "not received" do not count.
+      const statusSaysReceived =
+        /\b(received|recieved|paid|collected)\b/.test(invStatusLower) &&
+        !/\b(not|yet|pending|unpaid)\b/.test(invStatusLower);
+
+      const isActuallyReceived = Boolean(
+        inv.isReceived || statusSaysReceived || invDateReceived.length > 0
+      );
+
+      // "if status is raised or processed then it will show it"
+      const statusSaysRaised =
+        /\b(raised|processed|processing)\b/.test(invStatusLower) &&
+        !/\bnot\b/.test(invStatusLower);
+
+      const isRaisedOrProcessed = Boolean(
+        inv.isRaised ||
+          statusSaysRaised ||
+          invTypeLower.includes("raise") ||
+          invTypeLower.includes("process")
+      );
+
+      // Only show invoices that are explicitly Raised, Processed, or Received
+      if (!isRaisedOrProcessed && !isActuallyReceived) {
+        return;
+      }
+
+      let status: "Received" | "Pending Payment" | "Unraised" = "Unraised";
+      if (isActuallyReceived) {
+        status = "Received";
+      } else if (isRaisedOrProcessed) {
+        status = "Pending Payment";
+      }
+
+      const milestoneAmt = inv.amountRaised || inv.amount || 0;
+      const pendingBal = isActuallyReceived ? 0 : milestoneAmt;
+
+      raisedCount++;
+      raisedAmount += milestoneAmt;
+
+      if (isActuallyReceived) {
+        receivedCount++;
+        receivedAmount += milestoneAmt;
+      } else {
+        // Raised or Processed = Outstanding
+        outstandingCount++;
+        outstandingAmount += pendingBal;
+      }
+
+      items.push({
+        // Always include the project so ids are unique across projects
+        id: `${proj.id}::${inv.id || idx + 1}`,
+        projectId: proj.id,
+        collegeName: proj.college_name,
+        projectCode: proj.project_code,
+        academicYear: proj.academic_year,
+        passingYear: proj.passing_year,
+        paymentType: proj.payment_type,
+        invoiceNumber: inv.invoiceNumber || idx + 1,
+        invoiceCode: inv.invoiceCode || `INV-${String(idx + 1).padStart(2, "0")}`,
+        label: inv.label || `Milestone ${idx + 1}`,
+        percentage: inv.percentage || 100 / projectInvoices.length,
+        amount: inv.amount,
+        amountFromMou: inv.amountFromMou,
+        amountRaised: inv.amountRaised || milestoneAmt,
+        isRaised: true,
+        dateRaised: inv.dateRaised,
+        raisedProofUrl: inv.raisedProofUrl,
+        raisedProofName: inv.raisedProofName,
+        isReceived: isActuallyReceived,
+        dateReceived: inv.dateReceived,
+        receivedProofUrl: inv.receivedProofUrl,
+        receivedProofName: inv.receivedProofName,
+        outstandingAmount: pendingBal,
+        isRaisedInPeriod: isDateMatched,
+        isReceivedInPeriod: isActuallyReceived,
+        isPendingInPeriod: !isActuallyReceived && pendingBal > 0,
+        status,
+        invoiceType: inv.invoiceType,
+        remarks: inv.remarks,
+        gaInvoiceCode: inv.gaInvoiceCode,
+        printed: inv.printed,
+        tdsStatus: inv.tdsStatus,
+        project: proj,
+      });
     });
   });
 
@@ -364,17 +401,14 @@ export function calculatePeriodOutstanding(
 }
 
 /**
- * Creates default period (e.g. current active month or default Q4 2026)
+ * Default period: the current financial year (April to March).
  */
 export function getDefaultPeriod(): OutstandingPeriod {
   const now = new Date();
-  const currentMonth = now.getMonth() + 1; // 1-12
-  const monthMeta = ALL_MONTHS.find((m) => m.num === currentMonth) || ALL_MONTHS[2]; // Default March
-
+  const fy = getFiscalYear({ year: now.getFullYear(), month: now.getMonth() + 1 });
   return {
-    type: "month",
-    year: 2026,
-    month: monthMeta.num,
-    label: `${monthMeta.name} 2026`,
+    type: "all",
+    year: fy,
+    label: `${fiscalYearLabel(fy)} (Apr – Mar)`,
   };
 }

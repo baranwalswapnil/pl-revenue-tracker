@@ -301,7 +301,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
                 id="gsheetUrlInput"
                 type="text"
                 className="styled-input-control"
-                placeholder="https://docs.google.com/spreadsheets/d/1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw/edit"
+                placeholder="https://docs.google.com/spreadsheets/d/1aUlKfxXgeXJ6HWQMmy6RG5ITUBGQ-2nRVMoEnxwFN9k/edit?gid=1630818274#gid=1630818274"
                 value={sheetUrl}
                 onChange={(e) => setSheetUrl(e.target.value)}
               />
@@ -313,13 +313,13 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
             <div className="form-field-group">
               <label className="field-label-text" htmlFor="gsheetTabInput">
                 <FileSpreadsheet size={15} className="label-icon" />
-                <span>Sheet Tab Name (Optional, e.g. College Training or Sheet1)</span>
+                <span>Sheet Tab Name (Optional, e.g. Business Data 26-27 or Invoice Tracker)</span>
               </label>
               <input
                 id="gsheetTabInput"
                 type="text"
                 className="styled-input-control"
-                placeholder="College Training"
+                placeholder="Business Data 26-27"
                 value={sheetName}
                 onChange={(e) => setSheetName(e.target.value)}
               />
@@ -472,7 +472,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
               </h4>
               <ol style={{ paddingLeft: "20px", margin: "0 0 12px 0", fontSize: "13px", lineHeight: "1.7", color: "var(--text-secondary)" }}>
                 <li>
-                  Open your <a href={sheetUrl || "https://docs.google.com/spreadsheets/d/1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw/edit"} target="_blank" rel="noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>Google Spreadsheet</a> and click <strong>Extensions &gt; Apps Script</strong> in the top menu.
+                  Open your <a href={sheetUrl || "https://docs.google.com/spreadsheets/d/1aUlKfxXgeXJ6HWQMmy6RG5ITUBGQ-2nRVMoEnxwFN9k/edit?gid=1630818274#gid=1630818274"} target="_blank" rel="noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>Google Spreadsheet</a> and click <strong>Extensions &gt; Apps Script</strong> in the top menu.
                 </li>
                 <li>
                   Delete any existing code in the editor, click the <strong>"Copy Apps Script Code"</strong> button below, paste it into the editor, and click <strong>Save</strong> (💾 icon).

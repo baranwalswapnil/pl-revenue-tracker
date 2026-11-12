@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import type { Project, ProjectDraft } from "./lib/models";
 import { createEmptyDraft, computeAttpDetails } from "./lib/mockData";
 import {
   loadCachedSheetItems,
   loadCachedMOUItems,
-  loadCachedCollegeTrainingItems,
-  saveCachedCollegeTrainingItems,
+  loadCachedInvoiceTrackerItems,
+  saveCachedInvoiceTrackerItems,
   loadSavedSheetConfig,
   fetchGoogleSheetData,
   fetchInvoiceTrackerData,
@@ -21,6 +21,11 @@ import {
   type GoogleSheetInvoiceTrackerItem,
   type GoogleSheetMOUItem,
 } from "./lib/googleSheetsService";
+import {
+  loadCachedProjectDataItems,
+  saveCachedProjectDataItems,
+  fetchProjectDataItems,
+} from "./lib/projectDataService";
 import { getAllEnrichedTimelines } from "./lib/collegeTimelineService";
 import { Header } from "./components/Header";
 import { Step1_Dashboard } from "./components/Step1_Dashboard";
@@ -63,25 +68,38 @@ const VALID_APP_VIEWS: AppView[] = [
 export function App() {
   // Load initial projects from localStorage (filtering out legacy sample mock items)
   const [projects, setProjects] = useState<Project[]>(() => {
+    let initialList: Project[] = [];
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          const filtered = parsed.filter(
+          initialList = parsed.filter(
             (p: any) =>
               p &&
               typeof p === "object" &&
-              (!p.id || !String(p.id).startsWith("proj-"))
+              (!p.id || !/^proj-\d+$/.test(String(p.id)))
           );
-          return filtered;
         }
       }
     } catch (e) {
       console.error("Error reading localStorage", e);
     }
-    return [];
+
+    // Merge cached Invoice Tracker items immediately so Step 6 has live data on first render
+    const cachedInvoiceTracker = loadCachedInvoiceTrackerItems();
+    if (cachedInvoiceTracker && cachedInvoiceTracker.length > 0) {
+      return buildProjectsFromInvoiceTracker(cachedInvoiceTracker, initialList);
+    }
+
+    return initialList;
   });
+
+  // Always-current copy of projects for event listeners (avoids stale closures)
+  const projectsRef = useRef<Project[]>(projects);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
 
   // Save to localStorage whenever projects change
   useEffect(() => {
@@ -108,8 +126,9 @@ export function App() {
   const [mouItems, setMouItems] = useState<GoogleSheetMOUItem[]>(() =>
     loadCachedMOUItems()
   );
+  // Timeline data now comes from the "Project Data" worksheet
   const [collegeTrainingItems, setCollegeTrainingItems] = useState<GoogleSheetCollegeItem[]>(() =>
-    loadCachedCollegeTrainingItems()
+    loadCachedProjectDataItems()
   );
   const [isGoogleSheetModalOpen, setIsGoogleSheetModalOpen] = useState(false);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
@@ -137,13 +156,16 @@ export function App() {
         let invoiceTrackerItems: GoogleSheetInvoiceTrackerItem[] = [];
         try {
           invoiceTrackerItems = await fetchInvoiceTrackerData(config.sheetUrl, "Invoice Tracker");
+          if (!isCancelled && invoiceTrackerItems && invoiceTrackerItems.length > 0) {
+            saveCachedInvoiceTrackerItems(invoiceTrackerItems);
+          }
         } catch (invErr) {
           // Tab might not exist or have different name, ignore gracefully
         }
 
-        // 3. Try fetching 'MOUs 26-27' tab data for TCV page
+        // 3. Try fetching 'Business Data 26-27' tab data for TCV page
         try {
-          const mouData = await fetchMOUData(config.sheetUrl, "MOUs 26-27");
+          const mouData = await fetchMOUData(config.sheetUrl, "Business Data 26-27");
           if (!isCancelled && mouData && mouData.length > 0) {
             setMouItems(mouData);
             saveCachedMOUItems(mouData);
@@ -152,16 +174,7 @@ export function App() {
           // Tab might not exist or network error, ignore gracefully
         }
 
-        // 4. Fetch 'College Training' tab data exclusively for Step 8 Timeline
-        try {
-          const trainingData = await fetchCollegeTrainingData(config.sheetUrl);
-          if (!isCancelled && trainingData && trainingData.length > 0) {
-            setCollegeTrainingItems(trainingData);
-            saveCachedCollegeTrainingItems(trainingData);
-          }
-        } catch (ctErr) {
-          // Tab might not exist or network error, ignore gracefully
-        }
+        // (Timeline data is synced separately from the 'Project Data' worksheet below)
 
         // Auto-merge latest sheet figures & Invoice Tracker milestones into registered projects
         setProjects((prev) => {
@@ -225,6 +238,33 @@ export function App() {
     };
   }, []);
 
+  // Independent background sync for the 'Project Data' worksheet (Step 8 timeline)
+  useEffect(() => {
+    let cancelled = false;
+
+    const syncProjectData = async () => {
+      try {
+        const data = await fetchProjectDataItems();
+        if (!cancelled && data && data.length > 0) {
+          setCollegeTrainingItems(data);
+          saveCachedProjectDataItems(data);
+        }
+      } catch {
+        // Keep cached data if the sheet is unreachable
+      }
+    };
+
+    syncProjectData();
+    window.addEventListener("focus", syncProjectData);
+    const intervalId = setInterval(syncProjectData, 60000);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", syncProjectData);
+      clearInterval(intervalId);
+    };
+  }, []);
+
   // Current active view in the sequential flow (persisted across page refreshes via hash & localStorage)
   const [currentView, setCurrentView] = useState<AppView>(() => {
     try {
@@ -282,7 +322,7 @@ export function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Synchronize with Browser Back / Forward buttons and page refresh
+  // Initial view sync on page load (runs ONCE, so background syncs never reset the view)
   useEffect(() => {
     const currentHash = window.location.hash.replace("#", "") as AppView;
 
@@ -306,7 +346,10 @@ export function App() {
         window.history.replaceState({ view: "dashboard" }, "", window.location.pathname);
       }
     }
+  }, []);
 
+  // Browser Back / Forward support (reads projects through a ref, so it never needs re-subscribing)
+  useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
       const targetView = event.state?.view || (window.location.hash.replace("#", "") as AppView) || "dashboard";
       if (VALID_APP_VIEWS.includes(targetView)) {
@@ -315,7 +358,7 @@ export function App() {
           localStorage.setItem("company_finance_active_view", targetView);
         } catch (e) {}
         if (event.state?.projectId) {
-          const found = projects.find((p) => p.id === event.state.projectId);
+          const found = projectsRef.current.find((p) => p.id === event.state.projectId);
           if (found) setActiveProject(found);
         }
       } else {
@@ -325,7 +368,7 @@ export function App() {
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [projects]);
+  }, []);
 
   const handleOpenOutstanding = (period?: OutstandingPeriod) => {
     if (period) {
@@ -338,6 +381,26 @@ export function App() {
     navigateTo("tcv");
   };
 
+  const handleRefreshOutstandingData = async () => {
+    const config = loadSavedSheetConfig();
+    if (!config.sheetUrl || !config.sheetUrl.trim()) {
+      showToast("Please configure Google Sheet URL in sync settings first.", "warning");
+      return;
+    }
+    try {
+      const fetched = await fetchInvoiceTrackerData(config.sheetUrl, "Invoice Tracker");
+      if (fetched && fetched.length > 0) {
+        saveCachedInvoiceTrackerItems(fetched);
+        setProjects((prev) => buildProjectsFromInvoiceTracker(fetched, prev));
+        showToast(`Successfully synced ${fetched.length} invoices from Invoice Tracker!`, "success");
+      } else {
+        showToast("No invoices found in Invoice Tracker sheet.", "warning");
+      }
+    } catch (err: any) {
+      showToast(`Error refreshing Invoice Tracker: ${err.message || err}`, "error");
+    }
+  };
+
   const handleRefreshTCVData = async () => {
     const config = loadSavedSheetConfig();
     if (!config.sheetUrl || !config.sheetUrl.trim()) {
@@ -345,16 +408,16 @@ export function App() {
       return;
     }
     try {
-      const fetched = await fetchMOUData(config.sheetUrl, "MOUs 26-27");
+      const fetched = await fetchMOUData(config.sheetUrl, "Business Data 26-27");
       if (fetched && fetched.length > 0) {
         setMouItems(fetched);
         saveCachedMOUItems(fetched);
-        showToast(`Successfully synced ${fetched.length} MOU records from MOUs 26-27!`, "success");
+        showToast(`Successfully synced ${fetched.length} records from Business Data 26-27!`, "success");
       } else {
-        showToast("No MOU records found in MOUs 26-27 sheet.", "warning");
+        showToast("No records found in Business Data 26-27 sheet.", "warning");
       }
     } catch (err: any) {
-      showToast(`Error refreshing MOU data: ${err.message || err}`, "error");
+      showToast(`Error refreshing Business Data: ${err.message || err}`, "error");
     }
   };
 
@@ -510,24 +573,27 @@ export function App() {
 
     setActiveProject(newProj);
 
-    // Two-way sync with Google Spreadsheet
-    syncProjectToGoogleSheet(isExisting ? "update" : "add", newProj).then((syncRes) => {
-      if (syncRes.success) {
-        showToast(
-          openHealthReport
-            ? `Training Phase submitted & synced to Google Sheet!`
-            : `College "${newProj.college_name}" added to register & Google Sheet!`,
-          "success"
-        );
-      }
-    });
+    // Two-way sync with Google Spreadsheet (failures must not cause unhandled rejections)
+    syncProjectToGoogleSheet(isExisting ? "update" : "add", newProj)
+      .then((syncRes) => {
+        if (syncRes.success) {
+          showToast(
+            openHealthReport
+              ? `Training Phase submitted & synced to Google Sheet!`
+              : `College "${newProj.college_name}" added to register & Google Sheet!`,
+            "success"
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn("Google Sheet sync failed:", err);
+        showToast("Saved locally, but Google Sheet sync failed.", "warning");
+      });
 
     if (openHealthReport) {
       navigateTo("health-report", newProj);
-      showToast("Training Phase submitted! Showing Health Report.", "success");
     } else {
       navigateTo("dashboard", newProj);
-      showToast(`College "${newProj.college_name}" added to register!`, "success");
     }
   };
 
@@ -560,13 +626,17 @@ export function App() {
     setDraft(createEmptyDraft(updated));
 
     // Two-way sync update to Google Spreadsheet
-    syncProjectToGoogleSheet("update", updated).then((syncRes) => {
-      if (syncRes.success) {
-        showToast(`Project "${updated.college_name}" updated & saved in Google Sheet!`, "success");
-      }
-    });
+    syncProjectToGoogleSheet("update", updated)
+      .then((syncRes) => {
+        if (syncRes.success) {
+          showToast(`Project "${updated.college_name}" updated & saved in Google Sheet!`, "success");
+        }
+      })
+      .catch((err) => {
+        console.warn("Google Sheet sync failed:", err);
+        showToast("Updated locally, but Google Sheet sync failed.", "warning");
+      });
 
-    showToast(`Project "${updated.college_name}" updated! Showing Health Report.`, "success");
     navigateTo("health-report", updated);
   };
 
@@ -578,14 +648,15 @@ export function App() {
   };
 
   const handleDeleteProject = (projectId: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    const remaining = projectsRef.current.filter((p) => p.id !== projectId);
+    setProjects(remaining);
     showToast("Project deleted successfully.", "info");
     if (activeProject?.id === projectId) {
-      setActiveProject(projects.find((p) => p.id !== projectId) || null);
+      setActiveProject(remaining[0] || null);
     }
   };
 
-  // Timeline count & handlers (computed exclusively from College Training sheet)
+  // Timeline count & handlers (computed from the 'Project Data' worksheet)
   const activeTimelineCount = useMemo(() => {
     const list = getAllEnrichedTimelines(collegeTrainingItems);
     return list.filter((item) => item.status === "Active" || item.status === "Upcoming").length;
@@ -604,27 +675,32 @@ export function App() {
     setProjects((prev) => {
       const matchIdx = prev.findIndex(
         (p) =>
-          (p.project_code && p.project_code.toLowerCase() === record.project_code.toLowerCase()) ||
-          (p.college_name && p.college_name.toLowerCase() === record.college_name.toLowerCase())
+          (p.project_code && record.project_code && p.project_code.toLowerCase() === record.project_code.toLowerCase()) ||
+          (p.college_name && record.college_name && p.college_name.toLowerCase() === record.college_name.toLowerCase())
       );
       if (matchIdx !== -1) {
         const updated = [...prev];
         const p = updated[matchIdx];
-        const updatedPhases = p.phases && p.phases.length > 0 ? [...p.phases] : [{
-          phase: "Phase 1" as const,
+        const updatedPhases =
+          p.phases && p.phases.length > 0
+            ? [...p.phases]
+            : [
+                {
+                  phase: "Phase 1" as const,
+                  startDate: record.start_date,
+                  endDate: record.end_date,
+                  hoursPlanned: p.hours_planned || 40,
+                  hoursGiven: p.hours_given || 0,
+                  trainingCost: p.training_cost || 0,
+                  paymentType: p.payment_type || "ATP",
+                  invoiceCount: p.invoice_count || 1,
+                },
+              ];
+        updatedPhases[0] = {
+          ...updatedPhases[0],
           startDate: record.start_date,
-          endDate: record.end_date,
-          hoursPlanned: p.hours_planned || 40,
-          hoursGiven: p.hours_given || 0,
-          paymentType: p.payment_type || "ATP",
-        }];
-        if (updatedPhases.length > 0) {
-          updatedPhases[0] = {
-            ...updatedPhases[0],
-            startDate: record.start_date,
-            endDate: record.end_date || updatedPhases[0].endDate,
-          };
-        }
+          endDate: record.end_date || updatedPhases[0].endDate,
+        };
         updated[matchIdx] = {
           ...p,
           college_name: record.college_name || p.college_name,
@@ -668,7 +744,7 @@ export function App() {
 
       {/* Main Container Body */}
       <main className="app-main-content-wrap">
-        {/* Step 1: Main Dashboard Screen (Add College card, Update College card, Outstanding card, TCV card, Excel Table) */}
+        {/* Step 1: Main Dashboard Screen */}
         {currentView === "dashboard" && (
           <Step1_Dashboard
             projects={projects}
@@ -684,7 +760,7 @@ export function App() {
           />
         )}
 
-        {/* Step 2: New Entry Page (College & Project details, auto-calc boxes) */}
+        {/* Step 2: New Entry Page */}
         {currentView === "new-entry" && (
           <Step2_NewEntry
             draft={draft}
@@ -698,7 +774,7 @@ export function App() {
           />
         )}
 
-        {/* Step 3: Training Phase Entry Page (Phase & Timeline, Details, Payment Plan) */}
+        {/* Step 3: Training Phase Entry Page */}
         {currentView === "training-phase" && (
           <Step3_TrainingPhase
             draft={draft}
@@ -714,7 +790,7 @@ export function App() {
           />
         )}
 
-        {/* Step 4: Health Report & Project Overview (Circular Donut Gauge & Financials) */}
+        {/* Step 4: Health Report & Project Overview */}
         {currentView === "health-report" && (activeProject || projects[0]) && (
           <Step4_HealthReport
             project={(activeProject || projects[0])!}
@@ -754,10 +830,11 @@ export function App() {
             onViewProject={handleViewProjectHealth}
             onEditProject={handleEditProjectFromDashboard}
             onOpenGoogleSheetSync={handleOpenGoogleSheetSync}
+            onRefreshData={handleRefreshOutstandingData}
           />
         )}
 
-        {/* Step 7: TCV (Total Contract Value) Explorer & MOUs 26-27 Analytics Screen */}
+        {/* Step 7: TCV Explorer & MOUs 26-27 Analytics Screen */}
         {currentView === "tcv" && (
           <Step7_TCVPage
             mouItems={mouItems}
