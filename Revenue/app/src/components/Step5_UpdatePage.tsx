@@ -14,6 +14,7 @@ import {
   Save,
   Check,
   Plus,
+  Square,
   Trash2,
   ArrowLeft,
   Info,

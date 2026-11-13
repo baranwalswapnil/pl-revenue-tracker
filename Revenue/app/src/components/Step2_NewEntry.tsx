@@ -12,6 +12,7 @@ import {
   Edit2,
   RotateCcw,
   Save,
+  Check,
   ArrowRight,
   FileSpreadsheet,
   Sparkles,

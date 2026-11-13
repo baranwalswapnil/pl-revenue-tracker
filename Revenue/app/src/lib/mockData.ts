@@ -14,6 +14,37 @@ export const formatNumber = (val: number | string | null | undefined): string =>
   return new Intl.NumberFormat("en-IN").format(num);
 };
 
+export const normalizePassingYear = (
+  value: string | number | null | undefined,
+  fallback = "2026"
+): string => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return fallback;
+
+  const range = raw.match(/^((?:19|20)\d{2})\s*[-/–]\s*(\d{2}|(?:19|20)\d{2})$/);
+  if (range) {
+    const startYear = Number(range[1]);
+    let endYear = Number(range[2]);
+    if (range[2].length === 2) {
+      endYear += Math.floor(startYear / 100) * 100;
+      if (endYear <= startYear) endYear += 100;
+    }
+    return String(endYear);
+  }
+
+  const year = raw.match(/(?:19|20)\d{2}/);
+  if (year) return year[0];
+
+  if (/^\d{2}$/.test(raw)) return `20${raw}`;
+
+  const serial = Number(raw);
+  if (Number.isInteger(serial) && serial >= 30000 && serial <= 80000) {
+    return String(new Date((serial - 25569) * 86400000).getUTCFullYear());
+  }
+
+  return raw;
+};
+
 export const computeAttpDetails = (input: string | number | undefined | null): {
   normalizedPercentage: string;
   invoiceCount: number;
@@ -291,7 +322,7 @@ export const createEmptyDraft = (existingProject?: Project): ProjectDraft => {
       collegeName: existingProject.college_name || "",
       projectCode: existingProject.project_code || "",
       academicYear: existingProject.academic_year || "3rd Year",
-      passingYear: existingProject.passing_year || "2026",
+      passingYear: normalizePassingYear(existingProject.passing_year),
       studentCount: String(existingProject.student_count || 0),
       costPerStudent: String(existingProject.cost_per_student || 0),
       totalCostValue: String(existingProject.total_cost_value || 0),

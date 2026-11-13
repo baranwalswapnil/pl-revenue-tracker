@@ -25,6 +25,9 @@ export type InvoiceMilestone = {
   amount: number;
   amountFromMou?: number;
   amountRaised?: number;
+  amountReceived?: number;
+  totalContractValue?: number;
+  paymentTerm?: string;
   isRaised: boolean;
   dateRaised?: string;
   raisedProofUrl?: string;

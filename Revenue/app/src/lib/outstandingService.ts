@@ -114,10 +114,12 @@ export interface EnrichedInvoiceItem {
   invoiceNumber: number;
   invoiceCode: string;
   label: string;
-  percentage: number;
+  percentage?: number;
+  paymentTerm?: string;
   amount: number;
   amountFromMou?: number;
   amountRaised?: number;
+  amountReceived?: number;
   isRaised: boolean;
   dateRaised?: string;
   raisedProofUrl?: string;
@@ -280,14 +282,28 @@ export function calculatePeriodOutstanding(
       const invTypeLower = (inv.invoiceType || "").toLowerCase().trim();
       const invStatusLower = (inv.status || "").toLowerCase().trim();
       const invDateReceived = (inv.dateReceived || "").trim();
+      const milestoneAmt = inv.amountRaised || inv.amount || 0;
+      const invoiceReceivedAmount =
+        inv.amountReceived ?? (inv.isReceived ? milestoneAmt : 0);
 
       // Received / collected. Whole-word match so "unpaid" or "not received" do not count.
       const statusSaysReceived =
         /\b(received|recieved|paid|collected)\b/.test(invStatusLower) &&
         !/\b(not|yet|pending|unpaid)\b/.test(invStatusLower);
+      const statusSaysPending =
+        /\b(pending|raised|processed|processing)\b/.test(invStatusLower) &&
+        !/\bnot\b/.test(invStatusLower);
+      const hasPartialReceipt =
+        invoiceReceivedAmount > 0 &&
+        milestoneAmt > 0 &&
+        invoiceReceivedAmount < milestoneAmt;
 
       const isActuallyReceived = Boolean(
-        inv.isReceived || statusSaysReceived || invDateReceived.length > 0
+        statusSaysReceived ||
+          (!statusSaysPending &&
+            !hasPartialReceipt &&
+            (invDateReceived.length > 0 ||
+              (milestoneAmt > 0 && invoiceReceivedAmount >= milestoneAmt)))
       );
 
       // "if status is raised or processed then it will show it"
@@ -298,8 +314,10 @@ export function calculatePeriodOutstanding(
       const isRaisedOrProcessed = Boolean(
         inv.isRaised ||
           statusSaysRaised ||
+          statusSaysPending ||
           invTypeLower.includes("raise") ||
-          invTypeLower.includes("process")
+          invTypeLower.includes("process") ||
+          (inv.totalContractValue !== undefined && Boolean(inv.dateRaised))
       );
 
       // Only show invoices that are explicitly Raised, Processed, or Received
@@ -314,15 +332,24 @@ export function calculatePeriodOutstanding(
         status = "Pending Payment";
       }
 
-      const milestoneAmt = inv.amountRaised || inv.amount || 0;
-      const pendingBal = isActuallyReceived ? 0 : milestoneAmt;
+      const pendingBal = isActuallyReceived
+        ? 0
+        : statusSaysPending && !hasPartialReceipt
+        ? milestoneAmt
+        : Math.max(0, milestoneAmt - invoiceReceivedAmount);
+      const contractTcv =
+        inv.totalContractValue || proj.gst_cost || proj.total_cost_value;
+      const raisedSharePct =
+        contractTcv > 0
+          ? Number(((invoiceReceivedAmount / contractTcv) * 100).toFixed(2))
+          : undefined;
 
       raisedCount++;
       raisedAmount += milestoneAmt;
+      receivedAmount += Math.min(invoiceReceivedAmount, milestoneAmt);
 
       if (isActuallyReceived) {
         receivedCount++;
-        receivedAmount += milestoneAmt;
       } else {
         // Raised or Processed = Outstanding
         outstandingCount++;
@@ -341,10 +368,12 @@ export function calculatePeriodOutstanding(
         invoiceNumber: inv.invoiceNumber || idx + 1,
         invoiceCode: inv.invoiceCode || `INV-${String(idx + 1).padStart(2, "0")}`,
         label: inv.label || `Milestone ${idx + 1}`,
-        percentage: inv.percentage || 100 / projectInvoices.length,
+        percentage: raisedSharePct,
+        paymentTerm: inv.paymentTerm || proj.payment_type,
         amount: inv.amount,
         amountFromMou: inv.amountFromMou,
         amountRaised: inv.amountRaised || milestoneAmt,
+        amountReceived: invoiceReceivedAmount,
         isRaised: true,
         dateRaised: inv.dateRaised,
         raisedProofUrl: inv.raisedProofUrl,

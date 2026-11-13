@@ -17,7 +17,11 @@ import {
 } from "lucide-react";
 import { type GoogleSheetMOUItem, parseMOUDateMonth } from "../lib/googleSheetsService";
 import { formatINR } from "../lib/mockData";
-import { ALL_QUARTERS } from "../lib/outstandingService";
+import {
+  ALL_QUARTERS,
+  calendarYearForMonth,
+  getFiscalYear,
+} from "../lib/outstandingService";
 
 export interface Step7TCVPageProps {
   mouItems: GoogleSheetMOUItem[];
@@ -176,93 +180,31 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     };
   }, [mouItems, selectedCollege]);
 
-  // Helper function to check if an MOU item matches the selected Period (Col AR)
+  // Helper function to check if an MOU item matches its signed-date period.
   const matchesPeriod = (item: GoogleSheetMOUItem): boolean => {
-    if (periodMode === "all") return true;
-
-    const parsed = parseMOUDateMonth(item.month || "");
-    const itemMonthNum = parsed.monthNum;
-    const itemYear = parsed.year;
-    const monthStr = (parsed.display || item.month || "").toLowerCase().trim();
-    const mouDate = (item.mouSignedDate || "").toLowerCase().trim();
-
-    if (periodMode === "quarter") {
-      const qMeta = ALL_QUARTERS.find((q) => q.key === selectedQuarter);
-      if (!qMeta) return true;
-
-      // 1. Direct month number match
-      if (itemMonthNum > 0 && qMeta.months.includes(itemMonthNum)) {
-        return true;
-      }
-
-      // 2. Text month name match
-      const matchesMonthName = qMeta.months.some((mNum) => {
-        const mMeta = CALENDAR_MONTHS.find((m) => m.num === mNum);
-        if (!mMeta) return false;
-        return (
-          monthStr.includes(mMeta.name.toLowerCase()) ||
-          monthStr.includes(mMeta.short.toLowerCase())
-        );
-      });
-
-      if (matchesMonthName) return true;
-
-      // 3. Fallback check on MOU signed date (e.g. DD/MM/YYYY)
-      const dateParts = mouDate.split(/[-/]/);
-      if (dateParts.length >= 2) {
-        const monthPart = parseInt(dateParts[1], 10);
-        if (!isNaN(monthPart) && qMeta.months.includes(monthPart)) {
-          return true;
-        }
-      }
-
+    const monthPeriod = parseMOUDateMonth(item.month || "");
+    const parsed =
+      monthPeriod.monthNum > 0
+        ? monthPeriod
+        : parseMOUDateMonth(item.mouSignedDate || "");
+    if (parsed.monthNum < 1 || parsed.year < 1) return false;
+    if (getFiscalYear({ month: parsed.monthNum, year: parsed.year }) !== selectedYear) {
       return false;
     }
 
+    if (periodMode === "all") return true;
+
+    if (periodMode === "quarter") {
+      const qMeta = ALL_QUARTERS.find((q) => q.key === selectedQuarter);
+      return qMeta ? qMeta.months.includes(parsed.monthNum) : false;
+    }
+
     if (periodMode === "month") {
-      if (selectedMonthNum === null) {
-        // If "All Months of Year" is chosen
-        if (itemYear > 0) return itemYear === selectedYear;
-        return true;
-      }
-
-      // 1. Direct month number & year match
-      if (itemMonthNum > 0) {
-        if (itemYear > 0) {
-          return itemMonthNum === selectedMonthNum && itemYear === selectedYear;
-        }
-        return itemMonthNum === selectedMonthNum;
-      }
-
-      const mMeta = CALENDAR_MONTHS.find((m) => m.num === selectedMonthNum);
-      if (!mMeta) return true;
-
-      // 2. Text month & year match
-      if (
-        monthStr.includes(mMeta.name.toLowerCase()) ||
-        monthStr.includes(mMeta.short.toLowerCase())
-      ) {
-        if (monthStr.includes(String(selectedYear))) {
-          return true;
-        }
-        return true;
-      }
-
-      // 3. Fallback check on MOU signed date
-      const dateParts = mouDate.split(/[-/]/);
-      if (dateParts.length >= 2) {
-        const monthPart = parseInt(dateParts[1], 10);
-        const yearPart = dateParts.length >= 3 ? parseInt(dateParts[2], 10) : 0;
-        if (!isNaN(monthPart) && monthPart === selectedMonthNum) {
-          if (yearPart > 0) {
-            const fullYear = yearPart < 100 ? 2000 + yearPart : yearPart;
-            return fullYear === selectedYear;
-          }
-          return true;
-        }
-      }
-
-      return false;
+      if (selectedMonthNum === null) return true;
+      return (
+        parsed.monthNum === selectedMonthNum &&
+        parsed.year === calendarYearForMonth(selectedYear, selectedMonthNum)
+      );
     }
 
     return true;
@@ -364,7 +306,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     if (periodMode === "month") {
       if (selectedMonthNum === null) return `All Months of ${selectedYear}`;
       const mMeta = CALENDAR_MONTHS.find((m) => m.num === selectedMonthNum);
-      return `${mMeta?.name || "Month"} ${selectedYear}`;
+      return `${mMeta?.name || "Month"} ${calendarYearForMonth(selectedYear, selectedMonthNum)}`;
     }
     return `Full Year ${selectedYear}`;
   }, [periodMode, selectedQuarter, selectedMonthNum, selectedYear]);
@@ -383,7 +325,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
       "Cost Per Student (INR)",
       "Total Contract Value without GST (INR)",
       "Total Contract Value with GST (INR)",
-      "Payment Type",
+      "Payment Term",
       "Course/Stream",
       "Domain of Training",
     ];
@@ -400,7 +342,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
       item.costPerStudent || 0,
       item.totalContractValue || 0,
       item.totalContractValueGst || 0,
-      item.paymentType || "",
+      item.paymentType || item.rawRow?.[18] || "",
       item.courseStream || "",
       item.domainOfTraining || "",
     ]);
@@ -427,7 +369,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
     XLSX.utils.book_append_sheet(wb, ws, "TCV MOUs Report");
     XLSX.writeFile(
       wb,
-      `TCV_MOUs_26_27_Report_${currentPeriodLabel.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`
+      `TCV_MOUs_Report_${currentPeriodLabel.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`
     );
   };
 
@@ -457,7 +399,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
             <ChevronRight size={14} className="crumb-separator" />
             <span className="crumb-item">TCV (Total Contract Value)</span>
             <ChevronRight size={14} className="crumb-separator" />
-            <span className="crumb-active">MOUs 26-27</span>
+            <span className="crumb-active">MOUs</span>
           </div>
         </div>
 
@@ -471,7 +413,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                 Total Contract Value (TCV) Explorer
               </h1>
               <p className="outstanding-page-sub-title">
-                Sourced from <strong>Business Data 26-27</strong> sheet • Project Code (Col D), College Name (Col E), Stream (Col G), Students (Col H), Rate (Col I), TCV without GST (Col J), TCV incl GST (Col K)
+                Sourced from the <strong>MOUs</strong> tab • Project Code (B), College (C), Signed Date (K), Stream (F), Students (N), Cost/Student (O), TCV (P), TCV incl. GST (Q), Payment Type (S)
               </p>
             </div>
           </div>
@@ -483,7 +425,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                 className={`outstanding-refresh-btn ${isLocalRefreshing ? "spinning" : ""}`}
                 onClick={handleRefreshClick}
                 disabled={isLocalRefreshing}
-                title="Sync latest data from Business Data 26-27 sheet"
+                title="Sync latest data from the MOUs tab"
               >
                 <RefreshCw size={15} />
                 <span>{isLocalRefreshing ? "Syncing..." : "Sync Sheet"}</span>
@@ -697,7 +639,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                       setPeriodMode("month");
                       setSelectedMonthNum(m.num);
                     }}
-                    title={`${m.name} ${selectedYear}`}
+                    title={`${m.name} ${calendarYearForMonth(selectedYear, m.num)}`}
                   >
                     <span className="month-name-text">{m.short}</span>
                   </button>
@@ -719,13 +661,15 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
             <span className="summary-label">Selected Period:</span>
             <strong className="summary-val">{currentPeriodLabel}</strong>
           </div>
-          {(selectedCollege !== "all" || periodMode !== "all") && (
+          {(selectedCollege !== "all" || periodMode !== "all" || selectedYear !== 2026) && (
             <button
               type="button"
               className="tcv-reset-filters-btn"
               onClick={() => {
                 setSelectedCollege("all");
                 setPeriodMode("all");
+                setSelectedYear(2026);
+                setSelectedMonthNum(null);
                 setTableSearchTerm("");
               }}
             >
@@ -850,7 +794,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
 
           <div className="tcv-record-counter-badge">
             Showing <strong>{filteredItems.length}</strong> of{" "}
-            <strong>{mouItems.length}</strong> records from Business Data 26-27
+            <strong>{mouItems.length}</strong> records from MOUs
           </div>
         </div>
 
@@ -878,7 +822,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
               <h3>No Records Found</h3>
               <p>
                 {mouItems.length === 0
-                  ? "No MOU records are currently loaded. Click below to sync latest data directly from the Business Data 26-27 sheet."
+                  ? "No MOU records are currently loaded. Click below to sync the MOUs tab."
                   : "There are no records matching the selected College or Period. Try adjusting your filters above."}
               </p>
               {mouItems.length === 0 && onRefreshData && (
@@ -890,7 +834,7 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                   disabled={isLocalRefreshing}
                 >
                   <RefreshCw size={15} className={isLocalRefreshing ? "spinning" : ""} />
-                  <span>{isLocalRefreshing ? "Syncing..." : "Sync Business Data 26-27"}</span>
+                  <span>{isLocalRefreshing ? "Syncing..." : "Sync MOUs"}</span>
                 </button>
               )}
             </div>
@@ -899,17 +843,18 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
               <thead>
                 <tr>
                   <th style={{ width: "45px" }}>#</th>
-                  <th>College Name (Col E) & Project Code (Col D)</th>
+                  <th>College Name & Project Code</th>
                   <th>Date & Month</th>
+                  <th>Payment Term</th>
                   <th className="text-center th-highlight-students">
-                    Students (Col H) & Rate (Col I)
+                    Students & Rate
                   </th>
                   <th className="text-right">
-                    TCV without GST (₹) [Col J]
+                    TCV without GST (₹)
                   </th>
-                  <th className="text-right th-highlight-tcv">Total with GST (₹) [Col K]</th>
+                  <th className="text-right th-highlight-tcv">Total with GST (₹)</th>
                   <th className="text-right">GST Amount (₹)</th>
-                  <th className="text-center">Stream (Col G)</th>
+                  <th className="text-center">Stream</th>
                 </tr>
               </thead>
               <tbody>
@@ -961,6 +906,11 @@ export const Step7_TCVPage: React.FC<Step7TCVPageProps> = ({
                             </span>
                           )}
                         </div>
+                      </td>
+                      <td className="text-center">
+                        {item.paymentType || item.rawRow?.[18] || (
+                          <span className="missing-data-text">Missing data</span>
+                        )}
                       </td>
                       <td className="text-center td-highlight-students">
                         <div className="tcv-students-cell">

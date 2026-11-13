@@ -163,9 +163,9 @@ export function App() {
           // Tab might not exist or have different name, ignore gracefully
         }
 
-        // 3. Try fetching 'Business Data 26-27' tab data for TCV page
+        // 3. Try fetching the 'MOUs' tab data for TCV page
         try {
-          const mouData = await fetchMOUData(config.sheetUrl, "Business Data 26-27");
+          const mouData = await fetchMOUData(config.sheetUrl, "MOUs");
           if (!isCancelled && mouData && mouData.length > 0) {
             setMouItems(mouData);
             saveCachedMOUItems(mouData);
@@ -408,16 +408,16 @@ export function App() {
       return;
     }
     try {
-      const fetched = await fetchMOUData(config.sheetUrl, "Business Data 26-27");
+      const fetched = await fetchMOUData(config.sheetUrl, "MOUs");
       if (fetched && fetched.length > 0) {
         setMouItems(fetched);
         saveCachedMOUItems(fetched);
-        showToast(`Successfully synced ${fetched.length} records from Business Data 26-27!`, "success");
+        showToast(`Successfully synced ${fetched.length} records from the MOUs tab!`, "success");
       } else {
-        showToast("No records found in Business Data 26-27 sheet.", "warning");
+        showToast("No records found in the MOUs tab.", "warning");
       }
     } catch (err: any) {
-      showToast(`Error refreshing Business Data: ${err.message || err}`, "error");
+      showToast(`Error refreshing MOUs: ${err.message || err}`, "error");
     }
   };
 
@@ -834,7 +834,7 @@ export function App() {
           />
         )}
 
-        {/* Step 7: TCV Explorer & MOUs 26-27 Analytics Screen */}
+        {/* Step 7: TCV Explorer & MOUs Analytics Screen */}
         {currentView === "tcv" && (
           <Step7_TCVPage
             mouItems={mouItems}

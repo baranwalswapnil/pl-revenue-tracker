@@ -52,11 +52,28 @@ type StatusFilter = "all" | "pending" | "received";
 /* Helpers (single source of truth for rules used in several places)   */
 /* ------------------------------------------------------------------ */
 
-// Pending = not received yet and has positive pending amount or status is Pending Payment.
-const isPendingItem = (i: EnrichedInvoiceItem): boolean =>
-  !i.isReceived && ((i.outstandingAmount ?? 0) > 0 || i.status === "Pending Payment");
-const isReceivedItem = (i: EnrichedInvoiceItem): boolean =>
-  Boolean(i.isReceived || i.status === "Received" || (i.outstandingAmount === 0 && (i.amountRaised || i.amount)));
+type InvoiceBucket = "pending" | "received" | "other";
+
+// Single source of truth: Invoice Tracker column N (item.status)
+//   Received            -> "received"
+//   Pending / Raised / Processed -> "pending"
+//   anything else       -> "other" (visible only under "All Invoices")
+const getBucket = (i: EnrichedInvoiceItem): InvoiceBucket => {
+  const s = String(i.status ?? "").trim().toLowerCase();
+  if (s === "received") return "received";
+  if (
+    s === "pending" ||
+    s === "pending payment" ||
+    s === "raised" ||
+    s === "processed"
+  ) {
+    return "pending";
+  }
+  return "other";
+};
+
+const isPendingItem = (i: EnrichedInvoiceItem): boolean => getBucket(i) === "pending";
+const isReceivedItem = (i: EnrichedInvoiceItem): boolean => getBucket(i) === "received";
 
 // Invoice amount used for display and totals (falls back to `amount`).
 const getInvoiceAmount = (i: EnrichedInvoiceItem): number | undefined | null =>
@@ -268,7 +285,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
         ? isPendingItem(i)
         : statusFilter === "received"
         ? isReceivedItem(i)
-        : true;
+        : true; // "all" = every invoice, whatever its status
 
     const matchesSearch = (i: EnrichedInvoiceItem) => {
       if (!term) return true;
@@ -280,7 +297,8 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
         (!!i.gaInvoiceCode && i.gaInvoiceCode.toLowerCase().includes(term)) ||
         (!!i.invoiceType && i.invoiceType.toLowerCase().includes(term)) ||
         (!!i.remarks && i.remarks.toLowerCase().includes(term)) ||
-        (!!i.tdsStatus && i.tdsStatus.toLowerCase().includes(term))
+        (!!i.tdsStatus && i.tdsStatus.toLowerCase().includes(term)) ||
+        (!!i.status && String(i.status).toLowerCase().includes(term))
       );
     };
 
@@ -293,13 +311,19 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
       );
   }, [summary.items, searchTerm, statusFilter]);
 
-  // Footer totals, computed once
+  // Footer totals, computed once (based on the same status rule as the tabs)
   const totals = useMemo(() => {
     const raised = filteredItems.reduce((sum, i) => sum + getInvoiceAmountNum(i), 0);
-    const received = filteredItems
-      .filter(isReceivedItem)
-      .reduce((sum, i) => sum + getInvoiceAmountNum(i), 0);
-    const outstanding = filteredItems.reduce((sum, i) => sum + (i.outstandingAmount || 0), 0);
+    const received = filteredItems.reduce(
+      (sum, i) =>
+        sum + (isReceivedItem(i) ? i.amountReceived ?? getInvoiceAmountNum(i) : 0),
+      0
+    );
+    const outstanding = filteredItems.reduce(
+      (sum, i) =>
+        sum + (isPendingItem(i) ? i.outstandingAmount ?? getInvoiceAmountNum(i) : 0),
+      0
+    );
     const pct = raised > 0 ? (received / raised) * 100 : 0;
     return { raised, received, outstanding, pct };
   }, [filteredItems]);
@@ -411,11 +435,11 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
       "GA Invoice Code",
       "Invoice Type",
       "Milestone Label",
-      "Share %",
+      "Percentage",
+      "Payment Term",
       "Amount from MOU (INR)",
       "Invoice Amount Raised (INR)",
-      "Raised Status",
-      "Date of Raised",
+      "Raised Date",
       "Raised Proof URL",
       "Received Status",
       "Date of Received",
@@ -437,6 +461,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
       item.invoiceType || "",
       item.label || "",
       item.percentage !== undefined && item.percentage !== null ? `${item.percentage}%` : "",
+      item.paymentTerm || "",
       item.amountFromMou ?? 0,
       getInvoiceAmountNum(item),
       item.isRaised ? "Raised" : "Pending",
@@ -462,17 +487,14 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
       { wch: 25 },
       { wch: 15 },
       { wch: 20 },
-      { wch: 10 },
+      { wch: 12 },
+      { wch: 20 },
       { wch: 22 },
       { wch: 25 },
       { wch: 14 },
       { wch: 14 },
       { wch: 30 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 30 },
-      { wch: 24 },
-      { wch: 16 },
+      { wch: 18 },
       { wch: 14 },
       { wch: 16 },
       { wch: 30 },
@@ -1033,12 +1055,11 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                 <tr>
                   <th style={{ width: "45px" }}>#</th>
                   <th>College Name & Project Code</th>
-                  <th>Milestone Code</th>
-                  <th>Share (%)</th>
+                  <th>Remarks</th>
+                  <th>Percentage</th>
+                  <th>Payment Term</th>
                   <th className="text-right">Invoice Amount (₹)</th>
-                  <th>Tick Raised</th>
-                  <th>Tick Received</th>
-                  <th className="text-right">Outstanding (₹)</th>
+                  <th>Raised date</th>
                   <th className="text-center">Status</th>
                   <th className="text-center" style={{ width: "110px" }}>
                     Actions
@@ -1050,11 +1071,12 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                   const amount = getInvoiceAmount(item);
                   const showMouAmount =
                     !!item.amountFromMou && item.amountFromMou !== (amount ?? 0);
+                  const bucket = getBucket(item);
 
                   return (
                     <tr
                       key={`${item.id ?? ""}|${item.projectCode ?? ""}|${item.invoiceCode ?? ""}|${idx}`}
-                      className={item.isReceived ? "row-received" : "row-pending"}
+                      className={bucket === "received" ? "row-received" : "row-pending"}
                     >
                       {/* Running row number for the current view */}
                       <td className="text-muted font-mono">{idx + 1}</td>
@@ -1077,30 +1099,13 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                         </div>
                       </td>
                       <td>
-                        <div className="milestone-code-cell">
-                          <div className="milestone-badge-row">
-                            <span className="invoice-code-badge">{item.invoiceCode || "INV"}</span>
-                            {item.gaInvoiceCode && (
-                              <span
-                                className="ga-code-badge"
-                                title={`GA Invoice Code / Tally ERP: ${item.gaInvoiceCode}`}
-                              >
-                                GA: {item.gaInvoiceCode}
-                              </span>
-                            )}
-                            {item.invoiceType && (
-                              <span className="invoice-type-tag" title="Invoice Type">
-                                {item.invoiceType}
-                              </span>
-                            )}
-                          </div>
-                          <span className="milestone-sub-label">{item.label}</span>
-                          {item.remarks && (
-                            <span className="milestone-remarks-pill" title={item.remarks}>
-                              💬 {item.remarks}
-                            </span>
-                          )}
-                        </div>
+                        {item.remarks ? (
+                          <span className="milestone-remarks-pill" title={item.remarks}>
+                            {item.remarks}
+                          </span>
+                        ) : (
+                          <span className="missing-data-text">No remarks</span>
+                        )}
                       </td>
                       <td>
                         <span className="share-pct-pill">
@@ -1111,6 +1116,7 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                           )}
                         </span>
                       </td>
+                      <td>{item.paymentTerm || <span className="missing-data-text">Missing data</span>}</td>
                       <td className="text-right">
                         <div className="amount-cell-wrap">
                           <span className="font-semibold text-main">
@@ -1129,13 +1135,13 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                       </td>
                       <td>
                         <div className="proof-cell-wrap">
-                          {item.isRaised ? (
+                          {item.dateRaised ? (
                             <span className="status-indicator-badge raised-badge">
-                              ✓ Raised {item.dateRaised ? `(${formatDate(item.dateRaised)})` : ""}
+                              {formatDate(item.dateRaised)}
                             </span>
                           ) : (
                             <span className="status-indicator-badge unraised-badge">
-                              Pending Raise
+                              Pending
                             </span>
                           )}
                           {item.raisedProofUrl && (
@@ -1151,48 +1157,17 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
                           )}
                         </div>
                       </td>
-                      <td>
-                        <div className="proof-cell-wrap">
-                          {item.isReceived ? (
-                            <span className="status-indicator-badge received-badge">
-                              ✓ Received{" "}
-                              {item.dateReceived ? `(${formatDate(item.dateReceived)})` : ""}
-                            </span>
-                          ) : (
-                            <span className="status-indicator-badge pending-received-badge">
-                              Pending
-                            </span>
-                          )}
-                          {item.receivedProofUrl && (
-                            <a
-                              href={item.receivedProofUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="proof-link-pill received-proof-link"
-                              title="View Received Invoice Proof in Google Drive"
-                            >
-                              📄 View Proof
-                            </a>
-                          )}
-                        </div>
-                      </td>
-                      <td className="text-right">
-                        {item.outstandingAmount > 0 ? (
-                          <span className="pending-balance-text">
-                            {formatINR(item.outstandingAmount)}
-                          </span>
-                        ) : (
-                          <span className="cleared-balance-text">₹0 (Cleared)</span>
-                        )}
-                      </td>
                       <td className="text-center">
                         <div className="status-cell-wrap">
-                          {item.isReceived ? (
+                          {/* Badge uses the same bucket rule as the tabs */}
+                          {bucket === "received" ? (
                             <span className="status-pill-badge paid-pill">✓ Paid</span>
-                          ) : item.isRaised ? (
+                          ) : bucket === "pending" ? (
                             <span className="status-pill-badge pending-pill">⏳ Pending</span>
                           ) : (
-                            <span className="status-pill-badge unraised-pill">Not Raised</span>
+                            <span className="status-pill-badge unraised-pill">
+                              {item.status || "Not Raised"}
+                            </span>
                           )}
                           {item.tdsStatus && (
                             <span className="tds-status-tag" title={`TDS Status: ${item.tdsStatus}`}>
@@ -1235,22 +1210,19 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
               {/* Totals for the rows currently shown (respects search + status filter) */}
               <tfoot>
                 <tr className="table-totals-row">
-                  <td colSpan={4} className="font-bold">
+                  <td colSpan={5} className="font-bold">
                     {hasActiveFilters ? "Filtered total" : "Total"} for {currentPeriod.label} (
                     {filteredItems.length} Invoices)
                   </td>
                   <td className="text-right font-bold text-blue-600">
                     {formatINR(totals.raised)}
                   </td>
-                  <td colSpan={2} className="text-center font-semibold text-emerald-600">
-                    Received: {formatINR(totals.received)}
+                  <td />
+                  <td className="text-center text-muted font-medium">
+                    Received: {formatINR(totals.received)} ({totals.pct.toFixed(1)}% collected)
+                    {" • "}Outstanding: {formatINR(totals.outstanding)}
                   </td>
-                  <td className="text-right font-bold text-amber-600">
-                    {formatINR(totals.outstanding)}
-                  </td>
-                  <td colSpan={2} className="text-center text-muted font-medium">
-                    {totals.pct.toFixed(1)}% Collected
-                  </td>
+                  <td />
                 </tr>
               </tfoot>
             </table>

@@ -304,7 +304,7 @@ export const Step1_Dashboard: React.FC<Step1DashboardProps> = ({
               <div className="action-card-text">
                 <h2 className="action-card-title">TCV (Total Contract Value)</h2>
                 <p className="action-card-desc">
-                  MOU analytics by College, Quarter & Month from MOUs 26-27.
+                  MOU analytics by College, Quarter & Month from the MOUs tab.
                 </p>
               </div>
             </div>

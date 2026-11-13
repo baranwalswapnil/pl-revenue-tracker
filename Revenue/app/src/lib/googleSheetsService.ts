@@ -43,6 +43,7 @@ export interface GoogleSheetInvoiceTrackerItem {
   project_code: string;
   college_name: string;
   invoice_no: number;
+  payment_term: string;
   payment_type: PaymentType;
   student_count: number;
   cost_per_student: number;
@@ -93,7 +94,7 @@ export interface GoogleSheetMOUItem {
 const STORAGE_CONFIG_KEY = "google_sheet_sync_config_v1";
 const STORAGE_CACHED_ITEMS_KEY = "google_sheet_cached_colleges_v1";
 const STORAGE_CACHED_INVOICE_TRACKER_KEY = "google_sheet_cached_invoice_tracker_v1";
-const STORAGE_CACHED_MOUS_KEY = "google_sheet_cached_mous_26_27_v1";
+const STORAGE_CACHED_MOUS_KEY = "google_sheet_cached_mous_tab_v1";
 
 export const KNOWN_TAB_GIDS: Record<string, string> = {
   "college training": "701648829",
@@ -216,6 +217,27 @@ function parseCleanNumber(val: any, fallback = 0): number {
   const str = rawStr.replace(/[₹$,\s%]/g, "").trim();
   const num = parseFloat(str);
   return isNaN(num) ? fallback : num;
+}
+
+function normalizeInvoiceSequence(value: any, fallback: number): number {
+  if (value === null || value === undefined || value === "") return fallback;
+
+  const raw = String(value).trim();
+  const numericMatch = raw.match(/\d+/);
+  if (numericMatch) {
+    return parseInt(numericMatch[0], 10) || fallback;
+  }
+
+  const letters = raw.replace(/[^A-Za-z]/g, "").toUpperCase();
+  if (letters) {
+    let sequence = 0;
+    for (const ch of letters) {
+      sequence = sequence * 26 + (ch.charCodeAt(0) - 64);
+    }
+    return sequence || fallback;
+  }
+
+  return fallback;
 }
 
 /**
@@ -466,13 +488,7 @@ export function parseReceivedValue(
 
   const lower = str.toLowerCase();
   if (
-    lower === "yes" ||
-    lower === "true" ||
-    lower === "received" ||
-    lower === "paid" ||
-    lower === "cleared" ||
-    lower === "done" ||
-    lower === "y"
+    /^(yes|true|received|recieved|paid|cleared|done|y)$/.test(lower)
   ) {
     return { isReceived: true, receivedAmount: amountRaised, dateReceived: "" };
   }
@@ -487,19 +503,37 @@ export function parseReceivedValue(
     return { isReceived: false, receivedAmount: 0, dateReceived: "" };
   }
 
-  // Check if it is a formatted date (e.g. 2026-02-15 or 15/02/2026)
-  const parsedDate = normalizeDate(str);
+  // Only treat explicit date formats as dates; five-digit receipt amounts can
+  // otherwise be mistaken for Excel serial dates by normalizeDate.
+  const isExplicitDate =
+    /^\d{4}-\d{2}-\d{2}$/.test(str) ||
+    /^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}$/.test(str) ||
+    /^\d{1,2}[\s.-][A-Za-z]{3,9}[\s.-]\d{4}$/.test(str);
+  const parsedDate = isExplicitDate ? normalizeDate(str) : "";
   if (parsedDate && parsedDate.length === 10) {
     return { isReceived: true, receivedAmount: amountRaised, dateReceived: parsedDate };
   }
 
   // Check if it is a number/currency amount (e.g. 150000 or ₹1,50,000)
-  const num = parseCleanNumber(str, -1);
+  const lakhMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:lakhs?|lacs?|l)\b/i);
+  const croreMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:crores?|cr)\b/i);
+  const numericMatch = str.match(/[\d,]+(?:\.\d+)?/);
+  const num = lakhMatch
+    ? Number(lakhMatch[1]) * 100000
+    : croreMatch
+    ? Number(croreMatch[1]) * 10000000
+    : numericMatch
+    ? parseCleanNumber(numericMatch[0], -1)
+    : -1;
   if (num > 0) {
-    return { isReceived: true, receivedAmount: num, dateReceived: "" };
+    return {
+      isReceived: num >= amountRaised,
+      receivedAmount: num,
+      dateReceived: "",
+    };
   }
 
-  return { isReceived: Boolean(str), receivedAmount: amountRaised, dateReceived: "" };
+  return { isReceived: false, receivedAmount: 0, dateReceived: "" };
 }
 
 /**
@@ -553,11 +587,15 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
 
     if (!projectCode && !collegeName) continue;
 
-    const invoiceNo = parseCleanNumber(colInvoiceNo !== -1 ? row[colInvoiceNo] : "", r);
-    const payType = normalizePaymentType(colPayType !== -1 ? row[colPayType] : "");
+    const invoiceNo = normalizeInvoiceSequence(colInvoiceNo !== -1 ? row[colInvoiceNo] : "", r);
+    const paymentTerm = (row[3] || (colPayType !== -1 ? row[colPayType] : "") || "").trim();
+    const payType = normalizePaymentType(paymentTerm);
     const studentCount = parseCleanNumber(colStudents !== -1 ? row[colStudents] : "", 0);
     const costPerStudent = parseCleanNumber(colCostPerStudent !== -1 ? row[colCostPerStudent] : "", 0);
-    let totalContractValue = parseCleanNumber(colTotalVal !== -1 ? row[colTotalVal] : "", 0);
+    let totalContractValue = parseCleanNumber(
+      row[6] || (colTotalVal !== -1 ? row[colTotalVal] : ""),
+      0
+    );
 
     const payPct = parseCleanNumber(colPayPct !== -1 ? row[colPayPct] : "", 0);
     const amountFromMou = parseCleanNumber(colMouAmt !== -1 ? row[colMouAmt] : "", 0);
@@ -581,7 +619,7 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
     const remarks = colRemarks !== -1 ? (row[colRemarks] || "").trim() : "";
     const gaInvoiceCode = colGaCode !== -1 ? (row[colGaCode] || "").trim() : "";
     const printed = colPrinted !== -1 ? (row[colPrinted] || "").trim() : "";
-    const rawReceived = colReceived !== -1 ? (row[colReceived] || "").trim() : "";
+    const rawReceived = (row[8] || (colReceived !== -1 ? row[colReceived] : "") || "").trim();
     const tdsStatus = colTdsStatus !== -1 ? (row[colTdsStatus] || "").trim() : "";
 
     const typeLower = (invoiceType || "").toLowerCase();
@@ -589,31 +627,33 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
     const recLower = (rawReceived || "").toLowerCase();
 
     const parsedRec = parseReceivedValue(rawReceived, amountRaised);
-    const parsedRawReceivedNum = parseCleanNumber(rawReceived, 0);
+    const statusSaysReceived =
+      /\b(received|recieved|paid|collected)\b/.test(statusLower) &&
+      !/\b(not|yet|pending|unpaid)\b/.test(statusLower);
 
-    // 1. Check if Received / Collected (supports "received", "paid", etc.)
-    const isReceived = Boolean(
-      statusLower.includes("rec") ||
-      statusLower.includes("paid") ||
-      statusLower.includes("clear") ||
-      typeLower.includes("rec") ||
-      typeLower.includes("paid") ||
-      recLower.includes("rec") ||
-      recLower.includes("paid") ||
-      recLower.includes("clear") ||
-      recLower.includes("yes") ||
-      recLower === "y" ||
-      recLower === "true" ||
-      parsedRec.isReceived ||
-      parsedRawReceivedNum > 0
-    );
+    const hasPartialReceipt =
+      parsedRec.receivedAmount > 0 &&
+      amountRaised > 0 &&
+      parsedRec.receivedAmount < amountRaised;
+    const isReceived = hasPartialReceipt
+      ? false
+      : Boolean(
+          statusSaysReceived ||
+          typeLower.includes("rec") ||
+          typeLower.includes("paid") ||
+          recLower.includes("rec") ||
+          recLower.includes("paid") ||
+          recLower.includes("clear") ||
+          recLower.includes("yes") ||
+          recLower === "y" ||
+          recLower === "true" ||
+          parsedRec.isReceived
+        );
 
-    const finalReceivedAmount = isReceived
-      ? parsedRawReceivedNum > 0
-        ? parsedRawReceivedNum
-        : parsedRec.receivedAmount > 0
-        ? parsedRec.receivedAmount
-        : amountRaised || amountFromMou
+    const finalReceivedAmount = parsedRec.receivedAmount > 0
+      ? parsedRec.receivedAmount
+      : isReceived
+      ? parsedRec.receivedAmount || amountRaised || amountFromMou
       : 0;
 
     const dateReceived = parsedRec.dateReceived || (isReceived ? dateRaised : "");
@@ -639,6 +679,7 @@ export function mapInvoiceTrackerRowsToItems(rows: string[][]): GoogleSheetInvoi
       project_code: projectCode,
       college_name: collegeName,
       invoice_no: invoiceNo,
+      payment_term: paymentTerm,
       payment_type: payType,
       student_count: studentCount,
       cost_per_student: costPerStudent,
@@ -716,6 +757,19 @@ export function buildProjectsFromInvoiceTracker(
     groupMap.get(key)!.push(item);
   });
 
+  groupMap.forEach((group, key) => {
+    group.sort((a, b) => {
+      const aSeq = normalizeInvoiceSequence(a.invoice_no ?? a.invoice_code, Number.MAX_SAFE_INTEGER);
+      const bSeq = normalizeInvoiceSequence(b.invoice_no ?? b.invoice_code, Number.MAX_SAFE_INTEGER);
+      if (aSeq !== bSeq) return aSeq - bSeq;
+      if ((a.date_raised || "").localeCompare(b.date_raised || "") !== 0) {
+        return (a.date_raised || "").localeCompare(b.date_raised || "");
+      }
+      return (a.id || "").localeCompare(b.id || "");
+    });
+    groupMap.set(key, group);
+  });
+
   const mergedProjects: Project[] = [];
 
   groupMap.forEach((invList, key) => {
@@ -756,6 +810,9 @@ export function buildProjectsFromInvoiceTracker(
         amount: invAmt,
         amountFromMou: inv.amount_from_mou,
         amountRaised: inv.amount_raised,
+        amountReceived: inv.received_amount,
+        totalContractValue: inv.total_contract_value,
+        paymentTerm: inv.payment_term,
         isRaised: inv.is_raised,
         dateRaised: inv.date_raised,
         isReceived: inv.is_received,
@@ -1907,16 +1964,7 @@ export function parseMOUDateMonth(raw: string): { monthNum: number; year: number
 }
 
 /**
- * Maps raw spreadsheet rows from 'Business Data 26-27' tab into GoogleSheetMOUItem[]
- * Per user specification:
- * - Col D (idx 3): Project Code
- * - Col E (idx 4): College Name
- * - Col F (idx 5): MOU signed date
- * - Col G (idx 6): Stream
- * - Col H (idx 7): Student Count
- * - Col I (idx 8): Cost Per Student
- * - Col J (idx 9): TCV without GST
- * - Col K (idx 10): TCV incl GST (Sum of TCV incl GST only)
+ * Maps raw spreadsheet rows from the 'MOUs' tab into GoogleSheetMOUItem[].
  */
 export function mapMOURowsToItems(rows: string[][]): GoogleSheetMOUItem[] {
   if (!rows || rows.length < 2) return [];
@@ -1946,6 +1994,7 @@ export function mapMOURowsToItems(rows: string[][]): GoogleSheetMOUItem[] {
   const colCostPerStudent = findColumnIndex(headers, "cost per student", "cost/student");
   const colTotalValue = findColumnIndex(headers, "total contract value ex.gst", "total contract value", "tcv without gst", "without gst", "contract value");
   const colGstValue = findColumnIndex(headers, "total contract value", "total contract value (incl gst)", "total contract value (incl. gst)", "tcv with gst", "tcv incl gst", "incl gst", "with gst");
+  const colPaymentType = findColumnIndex(headers, "payment type", "payment term");
   const colMonth = findColumnIndex(headers, "month", "date & month", "date and month");
 
   const items: GoogleSheetMOUItem[] = [];
@@ -1954,22 +2003,28 @@ export function mapMOURowsToItems(rows: string[][]): GoogleSheetMOUItem[] {
     const row = rows[r];
     if (!row || row.length === 0) continue;
 
-    // Col D (idx 3): Project code
-    const projectCode = (row[3] || (colProjCode !== -1 ? row[colProjCode] : "")).trim();
-    // Col E (idx 4): College name
-    const collegeName = (row[4] || (colCollegeName !== -1 ? row[colCollegeName] : "")).trim();
-    // Col F (idx 5): MOU signed date
-    const mouDate = (row[5] || (colMouDate !== -1 ? row[colMouDate] : "") || row[20] || "").trim();
-    // Col G (idx 6): Stream
-    const stream = (row[6] || (colCourse !== -1 ? row[colCourse] : "")).trim();
-    // Col H (idx 7): Student count
-    const studentCount = parseCleanNumber(row[7] !== undefined && row[7] !== "" ? row[7] : (colStudents !== -1 ? row[colStudents] : 0), 0);
-    // Col I (idx 8): Cost per student
-    const costPerStudent = parseCleanNumber(row[8] !== undefined && row[8] !== "" ? row[8] : (colCostPerStudent !== -1 ? row[colCostPerStudent] : 0), 0);
-    // Col J (idx 9): TCV without GST
-    let tcvWithoutGst = parseCleanNumber(row[9] !== undefined && row[9] !== "" ? row[9] : (colTotalValue !== -1 ? row[colTotalValue] : 0), 0);
-    // Col K (idx 10): TCV incl GST
-    let tcvWithGst = parseCleanNumber(row[10] !== undefined && row[10] !== "" ? row[10] : (colGstValue !== -1 ? row[colGstValue] : 0), 0);
+    // MOUs tab: B project code, C college, F stream, K signed date,
+    // N students, O cost per student, P/Q TCV values, and S payment type.
+    const projectCode = (row[1] || (colProjCode !== -1 ? row[colProjCode] : "")).trim();
+    const collegeName = (row[2] || (colCollegeName !== -1 ? row[colCollegeName] : "")).trim();
+    const mouDate = (row[10] || (colMouDate !== -1 ? row[colMouDate] : "") || "").trim();
+    const stream = (row[5] || (colCourse !== -1 ? row[colCourse] : "")).trim();
+    const studentCount = parseCleanNumber(
+      row[13] !== undefined && row[13] !== "" ? row[13] : (colStudents !== -1 ? row[colStudents] : 0),
+      0
+    );
+    const costPerStudent = parseCleanNumber(
+      row[14] !== undefined && row[14] !== "" ? row[14] : (colCostPerStudent !== -1 ? row[colCostPerStudent] : 0),
+      0
+    );
+    let tcvWithoutGst = parseCleanNumber(
+      row[15] !== undefined && row[15] !== "" ? row[15] : (colTotalValue !== -1 ? row[colTotalValue] : 0),
+      0
+    );
+    let tcvWithGst = parseCleanNumber(
+      row[16] !== undefined && row[16] !== "" ? row[16] : (colGstValue !== -1 ? row[colGstValue] : 0),
+      0
+    );
 
     // Filter out form/data-entry header text and empty junk rows
     const colLower = collegeName.toLowerCase();
@@ -2003,11 +2058,11 @@ export function mapMOURowsToItems(rows: string[][]): GoogleSheetMOUItem[] {
     const monthVal = parsedMonth.display || mouDate || "";
 
     const academicYear = (row[25] || (colAcademicYear !== -1 ? row[colAcademicYear] : "") || "26-27").trim();
-    const paymentType = (row[11] || row[14] || "").trim();
+    const paymentType = (row[18] || (colPaymentType !== -1 ? row[colPaymentType] : "") || "").trim();
 
     items.push({
       id: `tcv-${r}-${(projectCode || collegeName).toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
-      contractType: (colContractType !== -1 ? row[colContractType] : row[2] || row[0] || "New").trim(),
+      contractType: (colContractType !== -1 ? row[colContractType] : "New").trim(),
       sNo: r,
       projectCode: projectCode || `PRJ-${r}`,
       collegeName: collegeName || `College ${r}`,
@@ -2035,20 +2090,13 @@ export function mapMOURowsToItems(rows: string[][]): GoogleSheetMOUItem[] {
 }
 
 /**
- * Fetches Google Sheet CSV for 'Business Data 26-27' tab directly via browser fetch()
+ * Fetches Google Sheet CSV from the 'MOUs' tab directly via browser fetch()
  */
 export async function fetchMOUData(
   sheetUrlOrId: string,
-  tabName = "Business Data 26-27"
+  tabName = "MOUs"
 ): Promise<GoogleSheetMOUItem[]> {
-  const tabsToTry = [
-    tabName,
-    "Business Data 26-27",
-    "business data 26-27",
-    "Business Data",
-    "MOUs",
-    "MOUs 26-27",
-  ].filter((v, i, a) => v && a.indexOf(v) === i);
+  const tabsToTry = [tabName];
   let lastError: any = null;
 
   for (const tab of tabsToTry) {
@@ -2085,7 +2133,7 @@ export async function fetchMOUData(
     }
   }
 
-  throw lastError || new Error(`Failed to fetch Business Data / MOU data.`);
+  throw lastError || new Error(`Failed to fetch MOUs tab data.`);
 }
 
 export function loadCachedMOUItems(): GoogleSheetMOUItem[] {
