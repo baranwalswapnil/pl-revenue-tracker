@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import * as XLSX from "xlsx";
 import {
   ArrowLeft,
   Calendar,
@@ -81,6 +80,59 @@ const getInvoiceAmount = (i: EnrichedInvoiceItem): number | undefined | null =>
 
 const getInvoiceAmountNum = (i: EnrichedInvoiceItem): number =>
   getInvoiceAmount(i) || 0;
+
+const formatPaymentTermForExport = (item: EnrichedInvoiceItem): string => {
+  const paymentTerm = (item.paymentTerm || "").trim();
+
+  if (/\bEMI\b/i.test(paymentTerm)) {
+    const emiRemark = (item.remarks || "").match(
+      /\b(\d{1,2})(?:st|nd|rd|th)?[\s,-]+(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b/i
+    );
+    if (emiRemark) {
+      const emiNumber = Number(emiRemark[1]);
+      const suffix =
+        emiNumber % 100 >= 11 && emiNumber % 100 <= 13
+          ? "th"
+          : emiNumber % 10 === 1
+          ? "st"
+          : emiNumber % 10 === 2
+          ? "nd"
+          : emiNumber % 10 === 3
+          ? "rd"
+          : "th";
+      const months: Record<string, string> = {
+        jan: "January",
+        feb: "February",
+        mar: "March",
+        apr: "April",
+        may: "May",
+        jun: "June",
+        jul: "July",
+        aug: "August",
+        sep: "September",
+        sept: "September",
+        oct: "October",
+        nov: "November",
+        dec: "December",
+      };
+      const month = months[emiRemark[2].slice(0, 3).toLowerCase()];
+      return `${emiNumber}${suffix} EMI, ${month}`;
+    }
+    return paymentTerm;
+  }
+
+  if (/^(?:AT|AP)$/i.test(paymentTerm)) {
+    if (item.invoiceNumber === 1) return "50% advance";
+    if (item.invoiceNumber === 2) return "50% after training";
+    return paymentTerm;
+  }
+
+  if (item.percentage !== undefined && item.percentage !== null) {
+    return `${Number(item.percentage.toFixed(2))}% received`;
+  }
+
+  return paymentTerm;
+};
 
 const isPrinted = (printed: unknown): boolean => {
   if (typeof printed === "string") {
@@ -425,80 +477,80 @@ export const Step6_OutstandingPage: React.FC<Step6OutstandingPageProps> = ({
   };
 
   // Export to Excel (.xlsx format with formatted column widths)
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await import("xlsx-js-style");
     const headers = [
       "#",
       "Project Code",
       "College Name",
-      "Academic Year",
+      "Payment Terms",
       "Invoice Code",
-      "GA Invoice Code",
-      "Invoice Type",
-      "Milestone Label",
-      "Percentage",
-      "Payment Term",
-      "Amount from MOU (INR)",
       "Invoice Amount Raised (INR)",
-      "Raised Date",
-      "Raised Proof URL",
-      "Received Status",
-      "Date of Received",
-      "Received Proof URL",
-      "Outstanding Amount (INR)",
-      "Payment Status",
-      "TDS Status",
-      "Printed Hardcopy",
-      "Remarks",
     ];
 
     const rows = filteredItems.map((item, index) => [
       index + 1,
       item.projectCode || "",
       item.collegeName || "",
-      item.academicYear || "",
+      formatPaymentTermForExport(item),
       item.invoiceCode || "",
-      item.gaInvoiceCode || "",
-      item.invoiceType || "",
-      item.label || "",
-      item.percentage !== undefined && item.percentage !== null ? `${item.percentage}%` : "",
-      item.paymentTerm || "",
-      item.amountFromMou ?? 0,
       getInvoiceAmountNum(item),
-      item.isRaised ? "Raised" : "Pending",
-      item.dateRaised || "",
-      item.raisedProofUrl || "",
-      item.isReceived ? "Received" : "Pending",
-      item.dateReceived || "",
-      item.receivedProofUrl || "",
-      item.outstandingAmount || 0,
-      item.status || "",
-      item.tdsStatus || "",
-      isPrinted(item.printed) ? "Yes" : "No",
-      item.remarks || "",
     ]);
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const totalRow = rows.length + 2;
+    const totalRaised = filteredItems.reduce(
+      (sum, item) => sum + getInvoiceAmountNum(item),
+      0
+    );
+    const ws = XLSX.utils.aoa_to_sheet([
+      headers,
+      ...rows,
+      ["", "", "", "", "Total", totalRaised],
+    ]);
+
     ws["!cols"] = [
       { wch: 6 },
-      { wch: 25 },
-      { wch: 35 },
-      { wch: 15 },
-      { wch: 18 },
-      { wch: 25 },
-      { wch: 15 },
-      { wch: 20 },
-      { wch: 12 },
-      { wch: 20 },
-      { wch: 22 },
-      { wch: 25 },
-      { wch: 14 },
-      { wch: 14 },
       { wch: 30 },
-      { wch: 18 },
-      { wch: 14 },
-      { wch: 16 },
-      { wch: 30 },
+      { wch: 42 },
+      { wch: 48 },
+      { wch: 20 },
+      { wch: 25 },
     ];
+    ws["!rows"] = Array.from({ length: totalRow }, () => ({ hpt: 20 }));
+
+    const border = {
+      top: { style: "thin", color: { rgb: "000000" } },
+      bottom: { style: "thin", color: { rgb: "000000" } },
+      left: { style: "thin", color: { rgb: "000000" } },
+      right: { style: "thin", color: { rgb: "000000" } },
+    };
+    const headerStyle = {
+      fill: { patternType: "solid", fgColor: { rgb: "B4C7E7" } },
+      font: { bold: true },
+      alignment: { horizontal: "center", vertical: "center" },
+      border,
+    };
+    const cellStyle = {
+      alignment: { horizontal: "center", vertical: "center" },
+      border,
+    };
+
+    for (let row = 0; row < totalRow; row++) {
+      for (let col = 0; col < headers.length; col++) {
+        const address = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!ws[address]) ws[address] = { t: "s", v: "" };
+        ws[address].s = row === 0 ? headerStyle : cellStyle;
+      }
+    }
+
+    for (const address of ["E" + totalRow, "F" + totalRow]) {
+      ws[address].s = {
+        fill: { patternType: "solid", fgColor: { rgb: "8DB4E2" } },
+        font: { bold: true },
+        alignment: { horizontal: "center", vertical: "center" },
+        border,
+      };
+    }
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Outstanding Report");
