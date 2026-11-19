@@ -304,8 +304,8 @@ function normalizeDate(raw: any): string {
   return str;
 }
 
-export const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1aUlKfxXgeXJ6HWQMmy6RG5ITUBGQ-2nRVMoEnxwFN9k/edit?gid=1630818274#gid=1630818274";
-export const DEFAULT_SHEET_NAME = "Business Data 26-27";
+export const DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1u5D68_acjQlyIIdyw4bm7dCUPLTg1gZkmATwIswwHfs/edit?gid=165241076#gid=165241076";
+export const DEFAULT_SHEET_NAME = "";
 
 /**
  * Normalizes payment types (FNF, ATP, ATTP, EMI) from sheet notations like AT, AP, ATT, ATTT, EMI-8
@@ -1825,7 +1825,10 @@ export function loadSavedSheetConfig(): GoogleSheetConfig {
     if (raw) {
       const parsed = JSON.parse(raw);
       // Automatically migrate legacy default sheet config
-      const isLegacyUrl = parsed.sheetUrl && parsed.sheetUrl.includes("1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw");
+      const isLegacyUrl =
+        parsed.sheetUrl &&
+        (parsed.sheetUrl.includes("1JbDE4KDkwcQ72t7IJi-2siU46jUaK-m4BlYP1NjdJJw") ||
+          parsed.sheetUrl.includes("1aUlKfxXgeXJ6HWQMmy6RG5ITUBGQ-2nRVMoEnxwFN9k"));
       const url = isLegacyUrl || !parsed.sheetUrl ? envUrl : parsed.sheetUrl;
       const sheet = isLegacyUrl || !parsed.sheetName || parsed.sheetName === "College Training" || parsed.sheetName === "MOUs" ? envSheetName : parsed.sheetName;
 

@@ -16,6 +16,7 @@ import {
   Save,
 } from "lucide-react";
 import {
+  DEFAULT_SHEET_URL,
   fetchGoogleSheetData,
   fetchInvoiceTrackerData,
   mapRowsToCollegeItems,
@@ -301,7 +302,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
                 id="gsheetUrlInput"
                 type="text"
                 className="styled-input-control"
-                placeholder="https://docs.google.com/spreadsheets/d/1aUlKfxXgeXJ6HWQMmy6RG5ITUBGQ-2nRVMoEnxwFN9k/edit?gid=1630818274#gid=1630818274"
+                placeholder={DEFAULT_SHEET_URL}
                 value={sheetUrl}
                 onChange={(e) => setSheetUrl(e.target.value)}
               />
@@ -472,7 +473,7 @@ export const GoogleSheetSyncModal: React.FC<GoogleSheetSyncModalProps> = ({
               </h4>
               <ol style={{ paddingLeft: "20px", margin: "0 0 12px 0", fontSize: "13px", lineHeight: "1.7", color: "var(--text-secondary)" }}>
                 <li>
-                  Open your <a href={sheetUrl || "https://docs.google.com/spreadsheets/d/1aUlKfxXgeXJ6HWQMmy6RG5ITUBGQ-2nRVMoEnxwFN9k/edit?gid=1630818274#gid=1630818274"} target="_blank" rel="noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>Google Spreadsheet</a> and click <strong>Extensions &gt; Apps Script</strong> in the top menu.
+                  Open your <a href={sheetUrl || DEFAULT_SHEET_URL} target="_blank" rel="noreferrer" style={{ color: "var(--color-primary)", textDecoration: "underline" }}>Google Spreadsheet</a> and click <strong>Extensions &gt; Apps Script</strong> in the top menu.
                 </li>
                 <li>
                   Delete any existing code in the editor, click the <strong>"Copy Apps Script Code"</strong> button below, paste it into the editor, and click <strong>Save</strong> (💾 icon).
